@@ -20,11 +20,9 @@ fn pause() {
 
 #[tokio::main]
 async fn main() {
-    println!("Init...");
+    println!("Streamer Application Initializaion...");
 
     let client = IpfsClient::default();
-
-    let _res = client.pubsub_sub("live_like", true);
 
     let (tx, rx) = channel();
 
@@ -33,7 +31,7 @@ async fn main() {
     //rename it .ts when done writing to it.
     let mut watcher = match raw_watcher(tx) {
         Ok(watcher) => {
-            println!("Watcher started...");
+            println!("File Watcher Started...");
             watcher
         }
         Err(e) => {
@@ -95,14 +93,16 @@ async fn main() {
             }
         };
 
+        let cid_v0 = &response.hash;
+
         //TODO create dag node with link to previous and current hash
-        //that way the entire stream is linked together
+        //that way the entire video stream is linked together
 
         //previous_hash = response.hash;
 
-        println!("Path: {:?} Hash: {}", &path, response.hash);
+        println!("Path: {:#?} Hash: {:#?}", &path, cid_v0);
 
-        if let Err(e) = client.pubsub_pub("live_like", &response.hash).await {
+        if let Err(e) = client.pubsub_pub("live_like", cid_v0).await {
             eprintln!("Can't publish a message Error: {}", e);
             pause();
             return;
