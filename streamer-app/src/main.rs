@@ -55,8 +55,6 @@ async fn main() {
     println!("Initialization Complete!");
 
     while let Ok(event) = rx.recv() {
-        //println!("{:?}", event);
-
         match event.op {
             Ok(op) => {
                 if op != RENAME {
@@ -71,9 +69,7 @@ async fn main() {
             None => continue,
         };
 
-        if !(path.extension() == Some(OsStr::new("ts"))
-            || path.extension() == Some(OsStr::new("m3u8")))
-        {
+        if path.extension() != Some(OsStr::new("ts")) {
             continue;
         }
 
@@ -105,43 +101,6 @@ async fn main() {
         let mut output_string = String::from_utf8(output.stdout).expect("Invalid UTF8");
         output_string.pop(); //remove last char, a null termination
 
-        //println!("{:#?}", output_string);
-
-        /* let file = match File::open(&path).await {
-            Ok(file) => file.into_std().await,
-            Err(e) => {
-                eprintln!("Can't open file {}", e);
-                pause();
-                return;
-            }
-        }; */
-
-        /* let response = match client.add(file).await {
-            Ok(res) => res,
-            Err(e) => {
-                eprintln!("Can't add file {}", e);
-                pause();
-                return;
-            }
-        }; */
-
-        /* let mut path = response.hash;
-        path.insert_str(0, "/ipfs/");
-        if let Err(e) = client.files_cp(&path, "/live_like/").await {
-            eprintln!("Can't copy file to MFS {}", e);u
-            pause();
-            return;
-        }
-
-        let response = match client.files_stat("/live_like/").await {
-            Ok(res) => res,
-            Err(e) => {
-                eprintln!("Can't get file stats {}", e);
-                pause();
-                return;
-            }
-        }; */
-
         let cid_v0 = &output_string;
 
         //TODO create dag node with link to previous and current hash
@@ -149,9 +108,8 @@ async fn main() {
         //previous_hash = response.hash;
 
         if let Err(e) = client.pubsub_pub(PUBSUB_TOPIC_VIDEO, cid_v0).await {
-            eprintln!("Can't publish a message. {}", e);
-            pause();
-            return;
+            eprintln!("Can't publish message. {}", e);
+            continue;
         }
 
         println!("File: {:#?} CID: {:#?}", file_name, cid_v0);

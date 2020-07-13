@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 futures = "0.3"
+futures-util = "0.3"
 tokio = { version = "0.2", features = ["full"] }
 ipfs-api = "0.7"
 hyper = "0.13"

@@ -1648,6 +1648,7 @@ version = "0.1.0"
 dependencies = [
  "cid",
  "futures",
+ "futures-util",
  "hyper",
  "ipfs-api",
  "multibase",
