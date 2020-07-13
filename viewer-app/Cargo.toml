@@ -8,8 +8,9 @@ edition = "2018"
 
 [dependencies]
 futures = "0.3"
-tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
+tokio = { version = "0.2", features = ["full"] }
 ipfs-api = "0.7"
+hyper = "0.13"
 cid = "0.5"
 multihash = "0.11"
 multibase = "0.8"

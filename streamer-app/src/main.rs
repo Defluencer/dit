@@ -1,10 +1,14 @@
 use ipfs_api::IpfsClient;
 use notify::{op::RENAME, raw_watcher, RecursiveMode, Watcher};
 use std::ffi::OsStr;
-use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::process::Command;
 use std::sync::mpsc::channel;
+
+const PUBSUB_TOPIC_VIDEO: &str = "live_like_video";
+
+const LOCAL_FOLDER: &str = "./";
 
 fn pause() {
     let mut stdin = std::io::stdin();
@@ -20,47 +24,38 @@ fn pause() {
 
 #[tokio::main]
 async fn main() {
-    println!("Streamer Application Initializaion...");
+    println!("Streamer Application Initialization...");
 
     let client = IpfsClient::default();
 
     let (tx, rx) = channel();
 
     //Raw watcher is used to minimize latency,
-    //it work well with ffmpeg option to write a .tmp file first and then
-    //rename it .ts when done writing to it.
+    //it work well with ffmpeg option to write a .tmp file first then
+    //rename it when done writing.
     let mut watcher = match raw_watcher(tx) {
-        Ok(watcher) => {
-            println!("File Watcher Started...");
-            watcher
-        }
+        Ok(watcher) => watcher,
         Err(e) => {
-            eprintln!("Can't start watcher Error: {}", e);
+            eprintln!("Can't start file watcher {}", e);
             pause();
             return;
         }
     };
 
-    let watch_path = Path::new("./Live-Like/");
+    let watch_path = Path::new(LOCAL_FOLDER);
 
-    match watcher.watch(watch_path, RecursiveMode::NonRecursive) {
-        Ok(_) => println!("Watching {:?}", watch_path),
-        Err(e) => {
-            eprintln!("Can't watch Error: {}", e);
-            pause();
-            return;
-        }
+    if let Err(e) = watcher.watch(watch_path, RecursiveMode::NonRecursive) {
+        eprintln!("Can't watch local folder {}", e);
+        pause();
+        return;
     }
 
     //let mut previous_hash = String::new();
 
+    println!("Initialization Complete!");
+
     while let Ok(event) = rx.recv() {
         //println!("{:?}", event);
-
-        let path = match event.path {
-            Some(path) => path,
-            None => continue,
-        };
 
         match event.op {
             Ok(op) => {
@@ -71,41 +66,94 @@ async fn main() {
             Err(_) => continue,
         }
 
-        if path.extension() != Some(OsStr::new("ts")) {
+        let path = match event.path {
+            Some(path) => path,
+            None => continue,
+        };
+
+        if !(path.extension() == Some(OsStr::new("ts"))
+            || path.extension() == Some(OsStr::new("m3u8")))
+        {
             continue;
         }
 
-        let file = match File::open(&path) {
-            Ok(file) => file,
-            Err(e) => {
-                eprintln!("Can't open file Error: {}", e);
-                pause();
-                return;
+        let file_name = match path.file_name() {
+            Some(result) => match result.to_str() {
+                Some(name) => name,
+                None => {
+                    eprintln!("Can't form file name str from OsStr");
+                    continue;
+                }
+            },
+            None => {
+                eprintln!("Can't get file name from path");
+                continue;
             }
         };
 
-        let response = match client.add(file).await {
+        let output = match Command::new("ipfs")
+            .args(&["add", "-Q", "--pin=false", file_name])
+            .output()
+        {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("ipfs add command failed. {}", e);
+                continue;
+            }
+        };
+
+        let mut output_string = String::from_utf8(output.stdout).expect("Invalid UTF8");
+        output_string.pop(); //remove last char, a null termination
+
+        //println!("{:#?}", output_string);
+
+        /* let file = match File::open(&path).await {
+            Ok(file) => file.into_std().await,
+            Err(e) => {
+                eprintln!("Can't open file {}", e);
+                pause();
+                return;
+            }
+        }; */
+
+        /* let response = match client.add(file).await {
             Ok(res) => res,
             Err(e) => {
-                eprintln!("Can't add file Error: {}", e);
+                eprintln!("Can't add file {}", e);
                 pause();
                 return;
             }
-        };
+        }; */
 
-        let cid_v0 = &response.hash;
-
-        //TODO create dag node with link to previous and current hash
-        //that way the entire video stream is linked together
-
-        //previous_hash = response.hash;
-
-        println!("Path: {:#?} Hash: {:#?}", &path, cid_v0);
-
-        if let Err(e) = client.pubsub_pub("live_like", cid_v0).await {
-            eprintln!("Can't publish a message Error: {}", e);
+        /* let mut path = response.hash;
+        path.insert_str(0, "/ipfs/");
+        if let Err(e) = client.files_cp(&path, "/live_like/").await {
+            eprintln!("Can't copy file to MFS {}", e);u
             pause();
             return;
         }
+
+        let response = match client.files_stat("/live_like/").await {
+            Ok(res) => res,
+            Err(e) => {
+                eprintln!("Can't get file stats {}", e);
+                pause();
+                return;
+            }
+        }; */
+
+        let cid_v0 = &output_string;
+
+        //TODO create dag node with link to previous and current hash
+        //that way the entire video stream is linked together
+        //previous_hash = response.hash;
+
+        if let Err(e) = client.pubsub_pub(PUBSUB_TOPIC_VIDEO, cid_v0).await {
+            eprintln!("Can't publish a message. {}", e);
+            pause();
+            return;
+        }
+
+        println!("File: {:#?} CID: {:#?}", file_name, cid_v0);
     }
 }
