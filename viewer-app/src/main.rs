@@ -1,17 +1,18 @@
 use cid::Cid;
 use futures_util::future::join;
 use hyper::service::{make_service_fn, service_fn};
-use hyper::Error;
-use hyper::{Body, Request, Response, Server};
-use hyper::{Method, StatusCode};
+use hyper::{Body, Error, Method, Request, Response, Server, StatusCode};
 use ipfs_api::IpfsClient;
 use multibase::Base;
 use std::collections::VecDeque;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use tokio::stream::StreamExt;
+
+const SERVER_PORT: u16 = 3000;
+const REQUEST_URI_PATH: &str = "/live/playlist.m3u8";
 
 const PUBSUB_TOPIC_VIDEO: &str = "live_like_video";
 
@@ -38,66 +39,54 @@ impl Playlist {
         }
     }
 
-    fn add_segment(&mut self, cid: Cid) {
-        if self.sequences.len() > self.max_seq as usize {
-            self.sequences.pop_front();
+    fn add_segment(&mut self, cid: Cid) -> Option<Cid> {
+        if self.sequences.len() < self.max_seq as usize {
+            self.sequences.push_back(cid);
+
+            return None;
         }
+
+        let result = self.sequences.pop_front();
+
+        self.media_sequence += 1;
 
         self.sequences.push_back(cid);
 
-        self.media_sequence += 1;
+        result
     }
 
     fn to_str(&self) -> String {
-        format!(
+        let mut result = format!(
             "#EXTM3U
 #EXT-X-VERSION:{ver}
 #EXT-X-TARGETDURATION:{dur}
-#EXT-X-MEDIA-SEQUENCE:{seq}
-#EXTINF:4.000000,
-http://localhost:8080/ipfs/{cid_0}
-#EXTINF:4.000000,
-http://localhost:8080/ipfs/{cid_1}
-#EXTINF:4.000000,
-http://localhost:8080/ipfs/{cid_2}
-#EXTINF:4.000000,
-http://localhost:8080/ipfs/{cid_3}
-#EXTINF:4.000000,
-http://localhost:8080/ipfs/{cid_4}",
+#EXT-X-MEDIA-SEQUENCE:{seq}",
             ver = self.version,
             dur = self.target_duration,
             seq = self.media_sequence,
-            cid_0 = self
-                .sequences
-                .get(0)
-                .unwrap()
-                .to_string_of_base(Base::Base58Btc)
-                .unwrap(),
-            cid_1 = self
-                .sequences
-                .get(1)
-                .unwrap()
-                .to_string_of_base(Base::Base58Btc)
-                .unwrap(),
-            cid_2 = self
-                .sequences
-                .get(2)
-                .unwrap()
-                .to_string_of_base(Base::Base58Btc)
-                .unwrap(),
-            cid_3 = self
-                .sequences
-                .get(3)
-                .unwrap()
-                .to_string_of_base(Base::Base58Btc)
-                .unwrap(),
-            cid_4 = self
-                .sequences
-                .get(4)
-                .unwrap()
-                .to_string_of_base(Base::Base58Btc)
-                .unwrap(),
-        )
+        );
+
+        for i in 0..self.max_seq as usize {
+            match self.sequences.get(i) {
+                Some(cid) => {
+                    let cid = cid
+                        .to_string_of_base(Base::Base58Btc)
+                        .expect("Can't get string from cid");
+
+                    let segment = format!(
+                        "
+#EXTINF:4.000000,
+http://localhost:8080/ipfs/{}",
+                        cid
+                    );
+
+                    result.push_str(&segment);
+                }
+                None => break,
+            }
+        }
+
+        result
     }
 }
 
@@ -107,14 +96,17 @@ async fn get_file(
 ) -> Result<Response<Body>, hyper::Error> {
     let mut response = Response::new(Body::empty());
 
-    match (req.method(), req.uri().path()) {
-        (&Method::GET, "/live/playlist.m3u8") => {
-            *response.body_mut() = Body::from(data.read().unwrap().to_str());
+    if let (&Method::GET, REQUEST_URI_PATH) = (req.method(), req.uri().path()) {
+        match data.read() {
+            Ok(playlist) => *response.body_mut() = Body::from(playlist.to_str()),
+            Err(e) => {
+                eprintln!("Lock poisoned. {}", e);
+                *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            }
         }
-        _ => {
-            *response.status_mut() = StatusCode::NOT_FOUND;
-        }
-    };
+    } else {
+        *response.status_mut() = StatusCode::NOT_FOUND;
+    }
 
     Ok(response)
 }
@@ -181,9 +173,9 @@ async fn pubsub_sub(playlist: Arc<RwLock<Playlist>>) {
 
             println!("CID: {}", cid_v0);
 
-            /* if let Err(e) = client.pin_add(&cid_v0, true).await {
+            if let Err(e) = client.pin_add(&cid_v0, true).await {
                 eprintln!("Can't pin cid. {}", e);
-            } */
+            }
 
             let cid_v0 = match Cid::from_str(cid_v0) {
                 Ok(cid) => cid,
@@ -194,25 +186,39 @@ async fn pubsub_sub(playlist: Arc<RwLock<Playlist>>) {
             };
 
             match playlist.write() {
-                Ok(mut playlist) => playlist.add_segment(cid_v0),
-                Err(e) => eprintln!("Lock poisoned. {}", e),
+                Ok(mut playlist) => {
+                    if let Some(extra) = playlist.add_segment(cid_v0) {
+                        let cid = extra
+                            .to_string_of_base(Base::Base58Btc)
+                            .expect("Can't get string from cid");
+
+                        if let Err(e) = client.pin_rm(&cid, true).await {
+                            eprintln!("Can't unpin cid. {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Lock poisoned. {}", e);
+                    return;
+                }
             }
         }
     }
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Error> {
     println!("Viewer Application Initialization...");
+
+    let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SERVER_PORT);
 
     let playlist = Arc::new(RwLock::new(Playlist::new()));
 
-    let server_addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-
     let playlist_clone = playlist.clone();
 
-    //TODO try understand this....
     let make_service = make_service_fn(move |_| {
+        //TODO try understand this mess...
+
         let playlist_clone = playlist_clone.clone();
 
         async move {
@@ -226,7 +232,9 @@ async fn main() {
 
     let server = Server::bind(&server_addr).serve(make_service);
 
-    let _res = join(pubsub_sub(playlist), server).await;
+    let (_, result) = join(pubsub_sub(playlist), server).await;
+
+    result
 }
 
 #[cfg(test)]
