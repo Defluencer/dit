@@ -88,7 +88,7 @@ async fn main() {
         };
 
         let output = match Command::new("ipfs")
-            .args(&["add", "-Q", "--pin=false", file_name])
+            .args(&["add", "-Q", "--pin=false", "--cid-version=1", file_name])
             .output()
         {
             Ok(result) => result,
@@ -101,17 +101,17 @@ async fn main() {
         let mut output_string = String::from_utf8(output.stdout).expect("Invalid UTF8");
         output_string.pop(); //remove last char, a null termination
 
-        let cid_v0 = &output_string;
+        let cid_v1 = &output_string;
 
         //TODO create dag node with link to previous and current hash
         //that way the entire video stream is linked together
         //previous_hash = response.hash;
 
-        if let Err(e) = client.pubsub_pub(PUBSUB_TOPIC_VIDEO, cid_v0).await {
+        if let Err(e) = client.pubsub_pub(PUBSUB_TOPIC_VIDEO, cid_v1).await {
             eprintln!("Can't publish message. {}", e);
             continue;
         }
 
-        println!("File: {:#?} CID: {:#?}", file_name, cid_v0);
+        println!("File: {:#?} CID: {:#?}", file_name, cid_v1);
     }
 }

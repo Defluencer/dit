@@ -69,15 +69,11 @@ impl Playlist {
         for i in 0..self.max_seq as usize {
             match self.sequences.get(i) {
                 Some(cid) => {
-                    let cid = cid
-                        .to_string_of_base(Base::Base58Btc)
-                        .expect("Can't get string from cid");
-
                     let segment = format!(
                         "
 #EXTINF:4.000000,
-http://localhost:8080/ipfs/{}",
-                        cid
+http://{}.ipfs.localhost:8080",
+                        cid.to_string()
                     );
 
                     result.push_str(&segment);
@@ -163,7 +159,7 @@ async fn pubsub_sub(playlist: Arc<RwLock<Playlist>>) {
                 }
             };
 
-            let cid_v0 = match str::from_utf8(&decoded) {
+            let cid_v1_string = match str::from_utf8(&decoded) {
                 Ok(cid) => cid,
                 Err(e) => {
                     eprintln!("Invalid UTF-8 {}", e);
@@ -171,13 +167,13 @@ async fn pubsub_sub(playlist: Arc<RwLock<Playlist>>) {
                 }
             };
 
-            println!("CID: {}", cid_v0);
+            println!("CID: {}", cid_v1_string);
 
-            if let Err(e) = client.pin_add(&cid_v0, true).await {
+            if let Err(e) = client.pin_add(&cid_v1_string, true).await {
                 eprintln!("Can't pin cid. {}", e);
             }
 
-            let cid_v0 = match Cid::from_str(cid_v0) {
+            let cid = match Cid::from_str(cid_v1_string) {
                 Ok(cid) => cid,
                 Err(e) => {
                     eprintln!("Can't get cid from str. {}", e);
@@ -187,12 +183,8 @@ async fn pubsub_sub(playlist: Arc<RwLock<Playlist>>) {
 
             match playlist.write() {
                 Ok(mut playlist) => {
-                    if let Some(extra) = playlist.add_segment(cid_v0) {
-                        let cid = extra
-                            .to_string_of_base(Base::Base58Btc)
-                            .expect("Can't get string from cid");
-
-                        if let Err(e) = client.pin_rm(&cid, true).await {
+                    if let Some(extra) = playlist.add_segment(cid) {
+                        if let Err(e) = client.pin_rm(&extra.to_string(), true).await {
                             eprintln!("Can't unpin cid. {}", e);
                         }
                     }
@@ -288,23 +280,23 @@ mod tests {
     fn playlist_formatting() {
         let mut playlist = Playlist::new();
 
-        let cid = Cid::from_str("QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD")
+        let cid = Cid::from_str("bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4")
             .expect("Can't get cid from str");
         playlist.add_segment(cid);
 
-        let cid = Cid::from_str("QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD")
+        let cid = Cid::from_str("bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4")
             .expect("Can't get cid from str");
         playlist.add_segment(cid);
 
-        let cid = Cid::from_str("QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD")
+        let cid = Cid::from_str("bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4")
             .expect("Can't get cid from str");
         playlist.add_segment(cid);
 
-        let cid = Cid::from_str("QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD")
+        let cid = Cid::from_str("bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4")
             .expect("Can't get cid from str");
         playlist.add_segment(cid);
 
-        let cid = Cid::from_str("QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD")
+        let cid = Cid::from_str("bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4")
             .expect("Can't get cid from str");
         playlist.add_segment(cid);
 
@@ -316,17 +308,17 @@ mod tests {
             "#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:4
-#EXT-X-MEDIA-SEQUENCE:5
+#EXT-X-MEDIA-SEQUENCE:0
 #EXTINF:4.000000,
-http://localhost:8080/ipfs/QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD
+http://bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4.ipfs.localhost:8080
 #EXTINF:4.000000,
-http://localhost:8080/ipfs/QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD
+http://bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4.ipfs.localhost:8080
 #EXTINF:4.000000,
-http://localhost:8080/ipfs/QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD
+http://bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4.ipfs.localhost:8080
 #EXTINF:4.000000,
-http://localhost:8080/ipfs/QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD
+http://bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4.ipfs.localhost:8080
 #EXTINF:4.000000,
-http://localhost:8080/ipfs/QmQrj21qtpNyx5hH8YTWMMja3Tuhwd4Y6XUmk3V6UJ5rhD",
+http://bafybeiaeyyvl3kjmelqgo5byyfdqy76xabfgymbpjz7szmnocreo6graw4.ipfs.localhost:8080",
             &output
         );
     }
