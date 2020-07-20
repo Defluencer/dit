@@ -1,96 +1,75 @@
-use ipfs_api::IpfsClient;
-use notify::{op::RENAME, raw_watcher, RecursiveMode, Watcher};
 use std::ffi::OsStr;
-use std::io::{Read, Write};
-use std::path::Path;
-use std::process::Command;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::Receiver;
 
-const LOCAL_FOLDER: &str = "./";
+use tokio::process::Command;
 
-fn pause() {
-    let mut stdin = std::io::stdin();
-    let mut stdout = std::io::stdout();
+use notify::{op::RENAME, RawEvent};
 
-    // We want the cursor to stay at the end of the line, so we print without a newline and flush manually.
-    write!(stdout, "Press enter to exit...").unwrap();
-    stdout.flush().unwrap();
+use ipfs_api::IpfsClient;
 
-    // Read a single byte and discard
-    let _ = stdin.read(&mut [0u8]).unwrap();
-}
+const PUBSUB_TOPIC_1080_60: &str = "livelike/video/1080_60";
+const PUBSUB_TOPIC_720_60: &str = "livelike/video/720_60";
+const PUBSUB_TOPIC_720_30: &str = "livelike/video/720_30";
+const PUBSUB_TOPIC_480_30: &str = "livelike/video/480_30";
 
-async fn file_watch() {
-    let (tx, rx) = channel();
-
-    //Raw watcher is used to minimize latency,
-    //it work well with ffmpeg option to write a .tmp file first then
-    //rename it when done writing.
-    let mut watcher = match raw_watcher(tx) {
-        Ok(watcher) => watcher,
-        Err(e) => {
-            eprintln!("Can't start file watcher {}", e);
-            pause();
-            return;
-        }
-    };
-
-    let watch_path = Path::new(LOCAL_FOLDER);
-
-    if let Err(e) = watcher.watch(watch_path, RecursiveMode::NonRecursive) {
-        eprintln!("Can't watch local folder {}", e);
-        pause();
-        return;
-    }
-
-    //println!("Initialization Complete!");
-
+pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
     while let Ok(event) = rx.recv() {
-        match event.op {
-            Ok(op) => {
-                if op != RENAME {
-                    continue;
-                }
+        let op = match event.op {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("Watcher Op Error. {}", e);
+                continue;
             }
-            Err(_) => continue,
+        };
+
+        //Files are written to .tmp then renamed to .ts
+        if op != RENAME {
+            continue;
         }
 
         let path = match event.path {
-            Some(path) => path,
-            None => continue,
+            Some(result) => result,
+            None => {
+                eprintln!("Event Path Not Found");
+                continue;
+            }
         };
 
+        //Ignore .m3u8 files
         if path.extension() != Some(OsStr::new("ts")) {
             continue;
         }
 
-        let file_name = match path.file_name() {
-            Some(result) => match result.to_str() {
-                Some(name) => name,
-                None => {
-                    eprintln!("Can't form file name str from OsStr");
-                    continue;
-                }
-            },
+        let path_str = match path.to_str() {
+            Some(result) => result,
             None => {
-                eprintln!("Can't get file name from path");
+                eprintln!("Path Invalid UTF8");
                 continue;
             }
         };
 
         let output = match Command::new("ipfs")
-            .args(&["add", "-Q", "--pin=false", "--cid-version=1", file_name])
+            .args(&["add", "-Q", "--pin=false", "--cid-version=1", path_str])
             .output()
+            .await
         {
             Ok(result) => result,
             Err(e) => {
-                eprintln!("ipfs add command failed. {}", e);
+                eprintln!("IPFS Add Command Failed. {}", e);
                 continue;
             }
         };
 
-        let mut output_string = String::from_utf8(output.stdout).expect("Invalid UTF8");
-        output_string.pop(); //remove last char, a null termination
+        let output_string = match String::from_utf8(output.stdout) {
+            Ok(mut result) => {
+                result.pop(); //remove last char, a null termination
+                result
+            }
+            Err(e) => {
+                eprintln!("Command Output Invalid UTF8. {}", e);
+                continue;
+            }
+        };
 
         let cid_v1 = &output_string;
 
@@ -98,11 +77,50 @@ async fn file_watch() {
         //that way the entire video stream is linked together
         //previous_hash = response.hash;
 
-        if let Err(e) = client.pubsub_pub(PUBSUB_TOPIC_VIDEO, cid_v1).await {
+        let parent = match path.parent() {
+            Some(result) => result,
+            None => {
+                eprintln!("Orphan Path");
+                continue;
+            }
+        };
+
+        let topic = if parent.ends_with("1080_60") {
+            PUBSUB_TOPIC_1080_60
+        } else if parent.ends_with("720_60") {
+            PUBSUB_TOPIC_720_60
+        } else if parent.ends_with("720_30") {
+            PUBSUB_TOPIC_720_30
+        } else if parent.ends_with("480_30") {
+            PUBSUB_TOPIC_480_30
+        } else {
+            eprintln!("Can't deduce topic from path.");
+            continue;
+        };
+
+        if let Err(e) = client.pubsub_pub(topic, cid_v1).await {
             eprintln!("Can't publish message. {}", e);
             continue;
         }
 
-        println!("File: {:#?} CID: {:#?}", file_name, cid_v1);
+        println!("IPFS Add {:#?} => {:#?}", path, cid_v1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn path_parent() {
+        let string = "D:/Videos/Live-Like/1080_60/1920x1080_60_0.ts";
+        let path = Path::new(string);
+
+        let folder = Path::new("1080_60");
+
+        let result = path.parent().unwrap().ends_with(folder);
+
+        assert_eq!(result, true);
     }
 }
