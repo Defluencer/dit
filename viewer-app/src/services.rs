@@ -1,16 +1,17 @@
-use crate::playlist::Playlist;
+use crate::playlist::Playlists;
 use hyper::{Body, Error, Method, Request, Response, StatusCode};
 use std::sync::{Arc, RwLock};
 
 const REQUEST_URI_PATH_MASTER: &str = "/live/master.m3u8";
 
-const REQUEST_URI_PATH_1080P: &str = "/live/1080p/index.m3u8";
-const REQUEST_URI_PATH_720P: &str = "/live/720p/index.m3u8";
-const REQUEST_URI_PATH_480P: &str = "/live/480p/index.m3u8";
+pub const REQUEST_URI_PATH_1080_60: &str = "/live/1080_60/index.m3u8";
+pub const REQUEST_URI_PATH_720_60: &str = "/live/720_60/index.m3u8";
+pub const REQUEST_URI_PATH_720_30: &str = "/live/720_30/index.m3u8";
+pub const REQUEST_URI_PATH_480_30: &str = "/live/480_30/index.m3u8";
 
 pub async fn get_requests(
     req: Request<Body>,
-    data: Arc<RwLock<Playlist>>,
+    data: Arc<RwLock<Playlists>>,
 ) -> Result<Response<Body>, Error> {
     let mut response = Response::new(Body::empty());
 
@@ -19,24 +20,38 @@ pub async fn get_requests(
         return Ok(response);
     }
 
+    let playlists = data.read().expect("Lock Poisoned");
+
+    let mut buf: Vec<u8> = Vec::new();
+
     match req.uri().path() {
-        //TODO output master playlist
-        REQUEST_URI_PATH_MASTER => *response.body_mut() = Body::from("master playlist"),
-        REQUEST_URI_PATH_1080P => get_playlist(&mut response, data),
-        REQUEST_URI_PATH_720P => get_playlist(&mut response, data),
-        REQUEST_URI_PATH_480P => get_playlist(&mut response, data),
-        _ => *response.status_mut() = StatusCode::NOT_FOUND,
-    }
+        REQUEST_URI_PATH_MASTER => playlists
+            .master
+            .write_to(&mut buf)
+            .expect("Can't write to buffer"),
+        REQUEST_URI_PATH_1080_60 => playlists
+            .playlist_1080_60
+            .write_to(&mut buf)
+            .expect("Can't write to buffer"),
+        REQUEST_URI_PATH_720_60 => playlists
+            .playlist_720_60
+            .write_to(&mut buf)
+            .expect("Can't write to buffer"),
+        REQUEST_URI_PATH_720_30 => playlists
+            .playlist_720_30
+            .write_to(&mut buf)
+            .expect("Can't write to buffer"),
+        REQUEST_URI_PATH_480_30 => playlists
+            .playlist_480_30
+            .write_to(&mut buf)
+            .expect("Can't write to buffer"),
+        _ => {
+            *response.status_mut() = StatusCode::NOT_FOUND;
+            return Ok(response);
+        }
+    };
+
+    *response.body_mut() = Body::from(buf);
 
     Ok(response)
-}
-
-fn get_playlist(response: &mut Response<Body>, data: Arc<RwLock<Playlist>>) {
-    match data.read() {
-        Ok(playlist) => *response.body_mut() = Body::from(playlist.to_str()),
-        Err(e) => {
-            eprintln!("Lock poisoned. {}", e);
-            *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        }
-    }
 }

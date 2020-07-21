@@ -1,22 +1,29 @@
-use crate::playlist::Playlist;
-use cid::Cid;
-use ipfs_api::IpfsClient;
-use multibase::Base;
 use std::str;
-use std::str::FromStr;
 use std::sync::{Arc, RwLock};
+
+use ipfs_api::IpfsClient;
+
+use multibase::Base;
+
 use tokio::stream::StreamExt;
 
-pub async fn pubsub_sub(topic: &str, playlist: Arc<RwLock<Playlist>>) {
+use m3u8_rs::playlist::MediaSegment;
+
+use crate::playlist::Playlists;
+
+const PUBSUB_TOPIC_VIDEO: &str = "live_like_video";
+
+pub async fn pubsub_sub(playlists: Arc<RwLock<Playlists>>) {
     let client = IpfsClient::default();
 
-    let mut stream = client.pubsub_sub(topic, true);
+    let mut stream = client.pubsub_sub(PUBSUB_TOPIC_VIDEO, true);
 
-    //println!("Initialization Complete!");
+    println!("Initialization Complete!");
 
     while let Some(result) = stream.next().await {
         if let Ok(response) = result {
-            //println!("{:#?}", response);
+            #[cfg(debug_assertions)]
+            println!("Message => {:#?}", response);
 
             //TODO match sender id VS streamer is
             /* let sender = match response.from {
@@ -69,7 +76,25 @@ pub async fn pubsub_sub(topic: &str, playlist: Arc<RwLock<Playlist>>) {
 
             println!("CID: {}", cid_v1_string);
 
-            let cid = match Cid::from_str(cid_v1_string) {
+            //TODO ipfs dag get hash/1080_60 => latest segment hash
+
+            let mut playlists = playlists.write().expect("Lock Poisoned");
+
+            let segment = MediaSegment {
+                uri: format!("http://{cid}.ipfs.localhost:8080", cid = "hash"),
+                duration: 4.0,
+                title: None,
+                byte_range: None,
+                discontinuity: false,
+                key: None,
+                map: None,
+                program_date_time: None,
+                daterange: None,
+            };
+
+            playlists.playlist_1080_60.segments.push(segment);
+
+            /* let cid = match Cid::from_str(cid_v1_string) {
                 Ok(cid) => cid,
                 Err(e) => {
                     eprintln!("Can't get cid from str. {}", e);
@@ -86,7 +111,7 @@ pub async fn pubsub_sub(topic: &str, playlist: Arc<RwLock<Playlist>>) {
                     eprintln!("Lock poisoned. {}", e);
                     return;
                 }
-            }
+            } */
         }
     }
 }

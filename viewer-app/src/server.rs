@@ -9,13 +9,13 @@ use hyper::service::Service;
 use hyper::{Body, Error, Request, Response, Server};
 use tokio::signal::ctrl_c;
 
-use crate::playlist::Playlist;
+use crate::playlist::Playlists;
 use crate::services::get_requests;
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
 struct LiveLikeClientService {
-    playlist: Arc<RwLock<Playlist>>,
+    playlist: Arc<RwLock<Playlists>>,
 }
 
 impl Service<Request<Body>> for LiveLikeClientService {
@@ -33,11 +33,11 @@ impl Service<Request<Body>> for LiveLikeClientService {
 }
 
 struct MakeLiveLikeClientService {
-    playlist: Arc<RwLock<Playlist>>,
+    playlist: Arc<RwLock<Playlists>>,
 }
 
 impl MakeLiveLikeClientService {
-    fn new(playlist: Arc<RwLock<Playlist>>) -> Self {
+    fn new(playlist: Arc<RwLock<Playlists>>) -> Self {
         Self { playlist }
     }
 }
@@ -66,12 +66,10 @@ async fn shutdown_signal() {
         .expect("failed to install CTRL+C signal handler");
 }
 
-const SERVER_PORT: u16 = 2525;
+pub const SERVER_PORT: u16 = 2525;
 
-pub async fn start_server() {
+pub async fn start_server(playlist: Arc<RwLock<Playlists>>) {
     let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SERVER_PORT);
-
-    let playlist = Arc::new(RwLock::new(Playlist::new(3, 4, 5)));
 
     let service = MakeLiveLikeClientService::new(playlist);
 

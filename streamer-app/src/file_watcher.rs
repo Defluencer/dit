@@ -1,4 +1,6 @@
 use std::ffi::OsStr;
+use std::fs::File;
+use std::io::Write;
 use std::sync::mpsc::Receiver;
 
 use tokio::process::Command;
@@ -10,6 +12,8 @@ use ipfs_api::IpfsClient;
 use serde::Serialize;
 
 const PUBSUB_TOPIC_VIDEO: &str = "live_like_video";
+
+const JSON_DAG_NODE: &str = "dagnode.json";
 
 #[derive(Serialize)]
 struct DagNode {
@@ -137,12 +141,18 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
 
         let json_string = serde_json::to_string(&dag_node).expect("Can't serialize dag node");
 
-        #[cfg(debug_assertions)]
-        println!("Input => {:#?}", json_string);
+        let mut file = File::create(JSON_DAG_NODE).expect("Can't create file");
 
-        //TODO the command accept a file only
+        file.write_all(json_string.as_bytes())
+            .expect("Can't write to file");
+
+        file.flush().expect("Can't flush buffer");
+
+        #[cfg(debug_assertions)]
+        println!("Input => {}", json_string);
+
         let output = match Command::new("ipfs")
-            .args(&["dag", "put", &json_string])
+            .args(&["dag", "put", JSON_DAG_NODE])
             .output()
             .await
         {
