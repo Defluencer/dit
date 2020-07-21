@@ -1,24 +1,24 @@
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::task::{Context, Poll};
 
 use hyper::service::Service;
 use hyper::{Body, Error, Request, Response, Server};
-use ipfs_api::IpfsClient;
 use tokio::signal::ctrl_c;
 
-mod services;
-
-use crate::services::put_requests;
+use crate::playlist::Playlist;
+use crate::services::get_requests;
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
-struct IPFSClientService {
-    client: IpfsClient,
+struct LiveLikeClientService {
+    playlist: Arc<RwLock<Playlist>>,
 }
 
-impl Service<Request<Body>> for IPFSClientService {
+impl Service<Request<Body>> for LiveLikeClientService {
     type Response = Response<Body>;
     type Error = Error;
     type Future = FutureWrapper<Self::Response, Self::Error>;
@@ -28,24 +28,22 @@ impl Service<Request<Body>> for IPFSClientService {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        Box::pin(put_requests(req, self.client.clone()))
+        Box::pin(get_requests(req, self.playlist.clone()))
     }
 }
 
-struct MakeIPFSClientService {
-    client: IpfsClient,
+struct MakeLiveLikeClientService {
+    playlist: Arc<RwLock<Playlist>>,
 }
 
-impl MakeIPFSClientService {
-    fn new() -> Self {
-        Self {
-            client: IpfsClient::default(),
-        }
+impl MakeLiveLikeClientService {
+    fn new(playlist: Arc<RwLock<Playlist>>) -> Self {
+        Self { playlist }
     }
 }
 
-impl<T> Service<T> for MakeIPFSClientService {
-    type Response = IPFSClientService;
+impl<T> Service<T> for MakeLiveLikeClientService {
+    type Response = LiveLikeClientService;
     type Error = Error;
     type Future = FutureWrapper<Self::Response, Self::Error>;
 
@@ -54,9 +52,9 @@ impl<T> Service<T> for MakeIPFSClientService {
     }
 
     fn call(&mut self, _: T) -> Self::Future {
-        let client = self.client.clone();
+        let playlist = self.playlist.clone();
 
-        let fut = async move { Ok(IPFSClientService { client }) };
+        let fut = async move { Ok(LiveLikeClientService { playlist }) };
 
         Box::pin(fut)
     }
@@ -68,12 +66,14 @@ async fn shutdown_signal() {
         .expect("failed to install CTRL+C signal handler");
 }
 
-const SERVER_PORT: u16 = 2424;
+const SERVER_PORT: u16 = 2525;
 
-async fn start_server() {
+pub async fn start_server() {
     let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SERVER_PORT);
 
-    let service = MakeIPFSClientService::new();
+    let playlist = Arc::new(RwLock::new(Playlist::new(3, 4, 5)));
+
+    let service = MakeLiveLikeClientService::new(playlist);
 
     let server = Server::bind(&server_addr).serve(service);
 

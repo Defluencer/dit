@@ -12,7 +12,7 @@ pub async fn pubsub_sub(topic: &str, playlist: Arc<RwLock<Playlist>>) {
 
     let mut stream = client.pubsub_sub(topic, true);
 
-    println!("Initialization Complete!");
+    //println!("Initialization Complete!");
 
     while let Some(result) = stream.next().await {
         if let Ok(response) = result {
@@ -133,5 +133,21 @@ mod tests {
         println!("Output Message: {:#?}", output);
 
         assert_eq!(input, output);
+    }
+
+    use ipfs_api::IpfsClient;
+    use tokio::runtime::Runtime;
+
+    #[test]
+    fn dag_get() {
+        let input = "bafyreig67d575ald2neuzdoqjlxjnesvqsbdujv5fwvn6dvere3uaf26ju/1080_60";
+
+        let client = IpfsClient::default();
+
+        let mut rt = Runtime::new().unwrap();
+
+        let out = rt.block_on(client.dag_get(input));
+
+        println!("{:#?}", out)
     }
 }

@@ -4,10 +4,10 @@ use notify::{raw_watcher, RecursiveMode, Watcher};
 
 use ipfs_api::IpfsClient;
 
-//mod ffmpeg_transcoding;
+mod ffmpeg_transcoding;
 mod file_watcher;
 
-const LOCAL_FOLDER: &str = "./";
+const LOCAL_FOLDER: &str = "\\";
 
 #[tokio::main]
 async fn main() {
@@ -26,9 +26,5 @@ async fn main() {
         .watch(LOCAL_FOLDER, RecursiveMode::Recursive)
         .expect("Can't watch folder.");
 
-    println!("File Watcher Started! Do not modify files while the process is running.");
-
-    //tokio::join!(ffmpeg_transcoding::start(), file_watcher::start(rx, client));
-
-    file_watcher::start(rx, client).await;
+    tokio::join!(ffmpeg_transcoding::start(), file_watcher::start(rx, client));
 }

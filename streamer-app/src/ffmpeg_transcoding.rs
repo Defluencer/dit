@@ -6,8 +6,9 @@ const PATH_720_30: &str = "720_30/playlist.m3u8";
 const PATH_480_30: &str = "480_30/playlist.m3u8";
 
 pub async fn start() {
-    let _ = Command::new("ffmpeg")
-        .kill_on_drop(true)
+    let handle = match Command::new("ffmpeg")
+        .kill_on_drop(true) //https://docs.rs/tokio/0.2.21/tokio/process/struct.Command.html#method.kill_on_drop
+        .creation_flags(0x00000010) //https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
         .args(&["-i", "udp://localhost:2525?fifo_size=114688"])
         .args(&["-c:v", "copy", "-c:a", "copy"])
         .args(&[
@@ -24,7 +25,7 @@ pub async fn start() {
             "-strftime",
             "1",
             "-strftime_mkdir",
-            "1"
+            "1",
             PATH_1080_60,
         ])
         .args(&[
@@ -61,7 +62,7 @@ pub async fn start() {
             "-strftime",
             "1",
             "-strftime_mkdir",
-            "1"
+            "1",
             PATH_720_60,
         ])
         .args(&[
@@ -98,7 +99,7 @@ pub async fn start() {
             "-strftime",
             "1",
             "-strftime_mkdir",
-            "1"
+            "1",
             PATH_720_30,
         ])
         .args(&[
@@ -135,9 +136,24 @@ pub async fn start() {
             "-strftime",
             "1",
             "-strftime_mkdir",
-            "1"
+            "1",
             PATH_480_30,
         ])
-        .status()
-        .await;
+        .spawn()
+    {
+        Ok(result) => {
+            println!("Transcoding Starting...");
+            println!("Do not close the windows while streaming");
+
+            result
+        }
+        Err(e) => {
+            eprintln!("FFMPEG command failed to start. {}", e);
+            return;
+        }
+    };
+
+    if let Err(e) = handle.await {
+        eprintln!("FFMPEG command failed to run. {}", e);
+    }
 }
