@@ -1692,6 +1692,8 @@ dependencies = [
  "m3u8-rs",
  "multibase",
  "multihash",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

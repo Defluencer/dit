@@ -11,7 +11,7 @@ use ipfs_api::IpfsClient;
 
 use serde::Serialize;
 
-const PUBSUB_TOPIC_VIDEO: &str = "live_like_video";
+const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
 
 const JSON_DAG_NODE: &str = "dagnode.json";
 

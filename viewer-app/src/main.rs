@@ -16,7 +16,5 @@ async fn main() {
 
     let playlist = Arc::new(RwLock::new(Playlists::new()));
 
-    let clone = playlist.clone();
-
-    tokio::join!(pubsub_sub(playlist), start_server(clone));
+    tokio::join!(start_server(playlist.clone()), pubsub_sub(playlist));
 }

@@ -2,12 +2,12 @@ use crate::playlist::Playlists;
 use hyper::{Body, Error, Method, Request, Response, StatusCode};
 use std::sync::{Arc, RwLock};
 
-const REQUEST_URI_PATH_MASTER: &str = "/live/master.m3u8";
+const PATH_MASTER: &str = "/livelike/master.m3u8";
 
-pub const REQUEST_URI_PATH_1080_60: &str = "/live/1080_60/index.m3u8";
-pub const REQUEST_URI_PATH_720_60: &str = "/live/720_60/index.m3u8";
-pub const REQUEST_URI_PATH_720_30: &str = "/live/720_30/index.m3u8";
-pub const REQUEST_URI_PATH_480_30: &str = "/live/480_30/index.m3u8";
+pub const PATH_1080_60: &str = "/livelike/1080p60/index.m3u8";
+pub const PATH_720_60: &str = "/livelike/720p60/index.m3u8";
+pub const PATH_720_30: &str = "/livelike/720p30/index.m3u8";
+pub const PATH_480_30: &str = "/livelike/480p30/index.m3u8";
 
 pub async fn get_requests(
     req: Request<Body>,
@@ -25,23 +25,23 @@ pub async fn get_requests(
     let mut buf: Vec<u8> = Vec::new();
 
     match req.uri().path() {
-        REQUEST_URI_PATH_MASTER => playlists
+        PATH_MASTER => playlists
             .master
             .write_to(&mut buf)
             .expect("Can't write to buffer"),
-        REQUEST_URI_PATH_1080_60 => playlists
+        PATH_1080_60 => playlists
             .playlist_1080_60
             .write_to(&mut buf)
             .expect("Can't write to buffer"),
-        REQUEST_URI_PATH_720_60 => playlists
+        PATH_720_60 => playlists
             .playlist_720_60
             .write_to(&mut buf)
             .expect("Can't write to buffer"),
-        REQUEST_URI_PATH_720_30 => playlists
+        PATH_720_30 => playlists
             .playlist_720_30
             .write_to(&mut buf)
             .expect("Can't write to buffer"),
-        REQUEST_URI_PATH_480_30 => playlists
+        PATH_480_30 => playlists
             .playlist_480_30
             .write_to(&mut buf)
             .expect("Can't write to buffer"),
@@ -51,7 +51,9 @@ pub async fn get_requests(
         }
     };
 
-    *response.body_mut() = Body::from(buf);
+    let string = String::from_utf8(buf).expect("Invalid UTF8");
+
+    *response.body_mut() = Body::from(string);
 
     Ok(response)
 }
