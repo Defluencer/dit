@@ -118,13 +118,13 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
         };
 
         //TODO use match???
-        if parent.ends_with("1080_60") {
+        if parent.ends_with("1080p60") {
             dag_node.latest_1080_60 = Some(cid_v1);
-        } else if parent.ends_with("720_60") {
+        } else if parent.ends_with("720p60") {
             dag_node.latest_720_60 = Some(cid_v1);
-        } else if parent.ends_with("720_30") {
+        } else if parent.ends_with("720p30") {
             dag_node.latest_720_30 = Some(cid_v1);
-        } else if parent.ends_with("480_30") {
+        } else if parent.ends_with("480p30") {
             dag_node.latest_480_30 = Some(cid_v1);
         } else {
             eprintln!("Can't deduce segment quality from path. Fix folder structure");

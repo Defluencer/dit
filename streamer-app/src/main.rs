@@ -26,5 +26,7 @@ async fn main() {
         .watch(LOCAL_FOLDER, RecursiveMode::Recursive)
         .expect("Can't watch folder.");
 
+    //file_watcher::start(rx, client).await;
+
     tokio::join!(ffmpeg_transcoding::start(), file_watcher::start(rx, client));
 }

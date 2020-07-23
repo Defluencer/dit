@@ -17,7 +17,6 @@ use crate::playlist::Playlists;
 
 const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
 
-//TODO create config common to both streamer and viewer apps
 #[derive(Deserialize)]
 struct DagNode {
     #[serde(rename = "1080_60")]
@@ -41,7 +40,7 @@ pub async fn pubsub_sub(playlists: Arc<RwLock<Playlists>>) {
 
     let mut stream = client.pubsub_sub(PUBSUB_TOPIC_VIDEO, true);
 
-    println!("Now listening on topic => {}", PUBSUB_TOPIC_VIDEO);
+    println!("Now listening to topic => {}", PUBSUB_TOPIC_VIDEO);
 
     //previously received dag node cid
     let mut previous_cid = None;
@@ -78,7 +77,6 @@ async fn process_response(
         }
     };
 
-    #[cfg(debug_assertions)]
     println!("CID => {}", &cid_v1);
 
     let dag_node = match get_dag_node(&cid_v1).await {
