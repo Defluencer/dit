@@ -1,9 +1,8 @@
 use std::ffi::OsStr;
-use std::fs::File;
-use std::io::Write;
+use std::io::Cursor;
 use std::sync::mpsc::Receiver;
 
-use tokio::process::Command;
+use tokio::fs::File;
 
 use notify::{op::RENAME, RawEvent};
 
@@ -13,7 +12,6 @@ use serde::Serialize;
 
 //Hard-coded for now...
 const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
-const JSON_DAG_NODE: &str = "dagnode.json";
 
 #[derive(Serialize)]
 struct DagNode {
@@ -87,25 +85,33 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
         #[cfg(debug_assertions)]
         println!("Path => {:#?}", path_str);
 
-        let output = match Command::new("ipfs")
-            .args(&["add", "-Q", "--pin=false", "--cid-version=1", path_str])
-            .output()
-            .await
-        {
+        let file = match File::open(path_str).await {
             Ok(result) => result,
             Err(e) => {
-                eprintln!("IPFS Add Command Failed. {}", e);
+                eprintln!("error opening file {}", e);
                 continue;
             }
         };
 
-        let cid_v1 = match String::from_utf8(output.stdout) {
-            Ok(mut result) => {
-                result.pop(); //remove last char, a null termination
-                result
-            }
+        let file = file.into_std().await;
+
+        let add = ipfs_api::request::Add {
+            trickle: None,
+            only_hash: None,
+            wrap_with_directory: None,
+            chunker: None,
+            pin: Some(false),
+            raw_leaves: None,
+            cid_version: Some(1),
+            hash: None,
+            inline: None,
+            inline_limit: None,
+        };
+
+        let cid_v1 = match client.add_with_options(file, add).await {
+            Ok(result) => result.hash,
             Err(e) => {
-                eprintln!("Command Output Invalid UTF8. {}", e);
+                eprintln!("IPFS Add Command Failed. {}", e);
                 continue;
             }
         };
@@ -145,35 +151,13 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
 
         let json_string = serde_json::to_string(&dag_node).expect("Can't serialize dag node");
 
-        let mut file = File::create(JSON_DAG_NODE).expect("Can't create file");
-
-        file.write_all(json_string.as_bytes())
-            .expect("Can't write to file");
-
-        file.flush().expect("Can't flush buffer");
-
         #[cfg(debug_assertions)]
         println!("Dag Node => {}", json_string);
 
-        let output = match Command::new("ipfs")
-            .args(&["dag", "put", JSON_DAG_NODE])
-            .output()
-            .await
-        {
-            Ok(result) => result,
+        let cid_v1 = match client.dag_put(Cursor::new(json_string)).await {
+            Ok(response) => response.cid.cid_string,
             Err(e) => {
-                eprintln!("IPFS Dag Put Command Failed. {}", e);
-                continue;
-            }
-        };
-
-        let cid_v1 = match String::from_utf8(output.stdout) {
-            Ok(mut result) => {
-                result.pop(); //remove last char, a null termination
-                result
-            }
-            Err(e) => {
-                eprintln!("Command Output Invalid UTF8. {}", e);
+                eprintln!("error adding dag node {}", e);
                 continue;
             }
         };

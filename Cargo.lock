@@ -173,7 +173,7 @@ checksum = "8709d481fb78b9808f34a1b4b4fadd08a15a0971052c18bc2b751faefaed595e"
 dependencies = [
  "multibase",
  "multihash",
- "unsigned-varint",
+ "unsigned-varint 0.3.3",
 ]
 
 [[package]]
@@ -285,6 +285,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13aea89a5c93364a98e9b37b2fa237effbb694d5cfe01c5b70941f7eb087d5e3"
 dependencies = [
  "cfg-if",
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "142995ed02755914747cc6ca76fc7e4583cd18578746716d0508ea6ed558b9ff"
+dependencies = [
  "dirs-sys",
 ]
 
@@ -693,19 +702,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9e7fbfe5c8cb04c27fe20bf2624354f4d102652fd465a297a924c24e60aba4a"
 dependencies = [
  "bytes",
- "dirs",
+ "dirs 2.0.2",
  "failure",
  "futures",
  "http",
  "hyper",
  "hyper-multipart-rfc7578",
  "hyper-tls",
- "parity-multiaddr",
+ "parity-multiaddr 0.7.3",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "tokio",
  "tokio-util 0.2.0",
+ "walkdir",
+]
+
+[[package]]
+name = "ipfs-api"
+version = "0.8.0-rc"
+source = "git+https://github.com/SionoiS/rust-ipfs-api?branch=dag#5578f9b3cdf91e4f6c736ee9c2bbc3b408890149"
+dependencies = [
+ "bytes",
+ "dirs 3.0.1",
+ "failure",
+ "futures",
+ "http",
+ "hyper",
+ "hyper-multipart-rfc7578",
+ "hyper-tls",
+ "parity-multiaddr 0.9.1",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "tokio",
+ "tokio-util 0.3.1",
  "walkdir",
 ]
 
@@ -917,7 +948,7 @@ dependencies = [
  "sha-1",
  "sha2",
  "sha3",
- "unsigned-varint",
+ "unsigned-varint 0.3.3",
 ]
 
 [[package]]
@@ -1043,7 +1074,25 @@ dependencies = [
  "percent-encoding",
  "serde",
  "static_assertions",
- "unsigned-varint",
+ "unsigned-varint 0.3.3",
+ "url",
+]
+
+[[package]]
+name = "parity-multiaddr"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc20af3143a62c16e7c9e92ea5c6ae49f7d271d97d4d8fe73afc28f0514a3d0f"
+dependencies = [
+ "arrayref",
+ "bs58",
+ "byteorder",
+ "data-encoding",
+ "multihash",
+ "percent-encoding",
+ "serde",
+ "static_assertions",
+ "unsigned-varint 0.4.0",
  "url",
 ]
 
@@ -1059,7 +1108,7 @@ dependencies = [
  "sha-1",
  "sha2",
  "sha3",
- "unsigned-varint",
+ "unsigned-varint 0.3.3",
 ]
 
 [[package]]
@@ -1451,7 +1500,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "streamer-app"
 version = "1.0.0"
 dependencies = [
- "ipfs-api",
+ "ipfs-api 0.8.0-rc",
  "notify",
  "serde",
  "serde_json",
@@ -1638,6 +1687,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f67332660eb59a6f1eb24ff1220c9e8d01738a8503c6002e30bcfe4bd9f2b4a9"
 
 [[package]]
+name = "unsigned-varint"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "669d776983b692a906c881fcd0cfb34271a48e197e4d6cb8df32b05bfc3d3fa5"
+
+[[package]]
 name = "url"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1668,7 +1723,7 @@ dependencies = [
  "futures",
  "futures-util",
  "hyper",
- "ipfs-api",
+ "ipfs-api 0.7.2",
  "m3u8-rs",
  "multibase",
  "serde",
