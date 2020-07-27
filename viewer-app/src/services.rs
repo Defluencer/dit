@@ -1,9 +1,11 @@
-use crate::playlist::Playlists;
-use hyper::{Body, Error, Method, Request, Response, StatusCode};
 use std::sync::{Arc, RwLock};
 
-const PATH_MASTER: &str = "/livelike/master.m3u8";
+use hyper::{Body, Error, Method, Request, Response, StatusCode};
 
+use crate::playlist::Playlists;
+
+// Hard-Coded for now...
+pub const PATH_MASTER: &str = "/livelike/master.m3u8";
 pub const PATH_1080_60: &str = "/livelike/1080p60/index.m3u8";
 pub const PATH_720_60: &str = "/livelike/720p60/index.m3u8";
 pub const PATH_720_30: &str = "/livelike/720p30/index.m3u8";

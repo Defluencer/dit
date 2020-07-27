@@ -1,9 +1,11 @@
+use std::convert::TryFrom;
 use std::str;
 use std::sync::{Arc, RwLock};
 
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
+use cid::Cid;
 use multibase::Base;
 
 use tokio::process::Command;
@@ -13,23 +15,25 @@ use m3u8_rs::playlist::{MediaPlaylist, MediaSegment};
 
 use serde::Deserialize;
 
-use crate::playlist::Playlists;
+use crate::playlist::{Playlists, HLS_LIST_SIZE};
 
+// Hard-Coded for now...
 const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
+const STREAMER_PEER_ID: &str = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi";
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 struct DagNode {
-    #[serde(rename = "1080_60")]
-    latest_1080_60: String,
+    #[serde(rename = "1080p60")]
+    latest_1080p60: String,
 
-    #[serde(rename = "720_60")]
-    latest_720_60: String,
+    #[serde(rename = "720p60")]
+    latest_720p60: String,
 
-    #[serde(rename = "720_30")]
-    latest_720_30: String,
+    #[serde(rename = "720p30")]
+    latest_720p30: String,
 
-    #[serde(rename = "480_30")]
-    latest_480_30: String,
+    #[serde(rename = "480p30")]
+    latest_480p30: String,
 
     #[serde(rename = "previous")]
     previous: Option<String>,
@@ -40,6 +44,7 @@ pub async fn pubsub_sub(playlists: Arc<RwLock<Playlists>>) {
 
     let mut stream = client.pubsub_sub(PUBSUB_TOPIC_VIDEO, true);
 
+    #[cfg(debug_assertions)]
     println!("Now listening to topic => {}", PUBSUB_TOPIC_VIDEO);
 
     //previously received dag node cid
@@ -64,12 +69,12 @@ async fn process_response(
     #[cfg(debug_assertions)]
     println!("Message => {:#?}", response);
 
-    if !is_verified_sender(&response) {
+    if !is_verified_sender(response) {
         eprintln!("Unauthorized sender");
         return;
     }
 
-    let cid_v1 = match decode_message(&response) {
+    let cid_v1 = match decode_message(response) {
         Some(data) => data,
         None => {
             eprintln!("Message with no data");
@@ -77,6 +82,7 @@ async fn process_response(
         }
     };
 
+    #[cfg(debug_assertions)]
     println!("CID => {}", &cid_v1);
 
     let dag_node = match get_dag_node(&cid_v1).await {
@@ -94,50 +100,38 @@ async fn process_response(
             dag_node.previous.as_ref().unwrap()
         );
 
-        //TODO missed a message -> rebuild playlists
+        rebuild_playlists(dag_node, playlists, previous_cid).await;
+    } else {
+        update_playlists(dag_node, playlists);
     }
-
-    update_playlists(&dag_node, &playlists);
 
     *previous_cid = Some(cid_v1);
 }
 
-fn is_verified_sender(_response: &PubsubSubResponse) -> bool {
-    //TODO match sender id VS streamer is
+fn is_verified_sender(response: &PubsubSubResponse) -> bool {
+    let encoded = match response.from.as_ref() {
+        Some(sender) => sender,
+        None => return false,
+    };
 
-    /* let sender = match response.from {
-        Some(sender) => {
-            let decoded = match Base::decode(&Base::Base64Pad, sender) {
-                Ok(result) => result,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    continue;
-                }
-            };
+    let decoded = Base::decode(&Base::Base64Pad, encoded).expect("is_verified_sender => ");
 
-            match String::from_utf8(decoded) {
-                Ok(result) => result,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    continue;
-                }
-            }
-        }
-        None => {
-            eprintln!("No Sender");
-            continue;
-        }
-    }; */
+    let cid = Cid::try_from(decoded).expect("is_verified_sender => ");
 
-    true
+    #[cfg(debug_assertions)]
+    println!("Sender => {}", cid.to_string());
+
+    cid.to_string() == STREAMER_PEER_ID
 }
 
 fn decode_message(response: &PubsubSubResponse) -> Option<String> {
     let encoded = response.data.as_ref()?;
 
-    let decoded = Base::decode(&Base::Base64Pad, encoded).expect("Can't decode data");
+    let decoded = Base::decode(&Base::Base64Pad, encoded).expect("decode_message => ");
 
-    Some(String::from_utf8(decoded).expect("Invalid UTF-8"))
+    let message = String::from_utf8(decoded).expect("decode_message => ");
+
+    Some(message)
 }
 
 async fn get_dag_node(cid_v1: &str) -> std::io::Result<DagNode> {
@@ -147,25 +141,75 @@ async fn get_dag_node(cid_v1: &str) -> std::io::Result<DagNode> {
         .await?;
 
     let json = {
-        let mut string = String::from_utf8(output.stdout).expect("Invalid UTF-8");
+        let mut string = String::from_utf8(output.stdout).expect("get_dag_node => ");
 
         string.pop(); //remove last char, a null termination
 
         string
     };
 
-    let result: DagNode = serde_json::from_str(&json).expect("Can't deserialize dag node");
+    let result: DagNode = serde_json::from_str(&json).expect("get_dag_node => ");
 
     Ok(result)
 }
 
-fn update_playlists(dag_node: &DagNode, playlists: &Arc<RwLock<Playlists>>) {
+///Rebuild playlists by folowing the dag node link chain.
+async fn rebuild_playlists(
+    latest_dag_node: DagNode,
+    playlists: &Arc<RwLock<Playlists>>,
+    previous_cid: &Option<String>,
+) {
+    let mut missing_nodes = Vec::with_capacity(HLS_LIST_SIZE);
+
+    missing_nodes.push(latest_dag_node);
+
+    while missing_nodes.last().unwrap().previous != *previous_cid {
+        //Fill the vec with all the missing nodes.
+
+        let cid_v1 = missing_nodes
+            .last()
+            .unwrap()
+            .previous
+            .as_ref()
+            .expect("Dag Node previous link empty while having previously received a node.");
+
+        let dag_node = match get_dag_node(cid_v1).await {
+            Ok(data) => data,
+            Err(error) => {
+                eprintln!("ipfs dag get. {}", error);
+                return;
+            }
+        };
+
+        missing_nodes.push(dag_node);
+
+        if missing_nodes.last().unwrap().previous == None {
+            //Found first node of the stream, stop here.
+            break;
+        }
+
+        if missing_nodes.len() >= HLS_LIST_SIZE {
+            //Found more node than the list size, stop here.
+            break;
+        }
+    }
+
+    for dag_node in missing_nodes.into_iter().rev() {
+        #[cfg(debug_assertions)]
+        println!("Dag Node List => {:#?}", &dag_node);
+
+        update_playlists(dag_node, playlists);
+    }
+}
+
+///Update playlists with the dag node links.
+fn update_playlists(dag_node: DagNode, playlists: &Arc<RwLock<Playlists>>) {
     let mut playlists = playlists.write().expect("Lock Poisoned");
 
-    update_playlist(&dag_node.latest_1080_60, &mut playlists.playlist_1080_60);
-    update_playlist(&dag_node.latest_720_60, &mut playlists.playlist_720_60);
-    update_playlist(&dag_node.latest_720_30, &mut playlists.playlist_720_30);
-    update_playlist(&dag_node.latest_480_30, &mut playlists.playlist_480_30);
+    update_playlist(&dag_node.latest_1080p60, &mut playlists.playlist_1080_60);
+    update_playlist(&dag_node.latest_720p60, &mut playlists.playlist_720_60);
+    update_playlist(&dag_node.latest_720p30, &mut playlists.playlist_720_30);
+    update_playlist(&dag_node.latest_480p30, &mut playlists.playlist_480_30);
 }
 
 fn update_playlist(cid: &str, playlist: &mut MediaPlaylist) {
@@ -181,8 +225,7 @@ fn update_playlist(cid: &str, playlist: &mut MediaPlaylist) {
         daterange: None,
     };
 
-    //5 is hls_list_size
-    if playlist.segments.len() >= 5 {
+    if playlist.segments.len() >= HLS_LIST_SIZE {
         playlist.segments.remove(0);
 
         playlist.media_sequence += 1;
@@ -193,7 +236,6 @@ fn update_playlist(cid: &str, playlist: &mut MediaPlaylist) {
 
 #[cfg(test)]
 mod tests {
-    use cid::Cid;
     use multibase::Base;
     use std::str::FromStr;
 
@@ -249,5 +291,51 @@ mod tests {
         let out = rt.block_on(client.dag_get(input));
 
         println!("{:#?}", out)
+    }
+
+    use cid::Cid;
+    use std::convert::TryFrom;
+
+    #[test]
+    fn decode_sender() {
+        let encoded = "EiCCvg8x8AnKNrYt1bb/816hxWZmzcLKGa33jF5qh9lN5w==";
+
+        println!("Encoded Message: {:#?}", encoded);
+
+        let decoded = Base::decode(&Base::Base64Pad, encoded).expect("decode_sender => ");
+
+        println!("Message Length: {:#?}", decoded.len());
+
+        let cid = Cid::try_from(decoded).expect("decode_sender => ");
+
+        println!("from: {:#?}", cid.to_string());
+    }
+
+    #[test]
+    fn decode_seqno() {
+        let encoded = "FiWcAiAoTRQ=";
+
+        println!("Encoded Message: {:#?}", encoded);
+
+        let decoded = Base::decode(&Base::Base64Pad, encoded).expect("decode_seqno => ");
+
+        println!("Message Length: {:#?}", decoded.len());
+
+        let seqno = {
+            //Fugly but I don't care!!!
+            let mut array = [0u8; 8];
+
+            for (i, byte) in decoded.into_iter().enumerate() {
+                if i > 8 {
+                    break;
+                }
+
+                array[i] = byte;
+            }
+
+            u64::from_ne_bytes(array)
+        };
+
+        println!("seqno: {:#?}", seqno);
     }
 }

@@ -10,7 +10,7 @@ use hyper::{Body, Error, Request, Response, Server};
 use tokio::signal::ctrl_c;
 
 use crate::playlist::Playlists;
-use crate::services::get_requests;
+use crate::services::{get_requests, PATH_MASTER};
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
@@ -66,6 +66,7 @@ async fn shutdown_signal() {
         .expect("failed to install CTRL+C signal handler");
 }
 
+// Hard-Coded for now...
 pub const SERVER_PORT: u16 = 2525;
 
 pub async fn start_server(playlist: Arc<RwLock<Playlists>>) {
@@ -75,7 +76,7 @@ pub async fn start_server(playlist: Arc<RwLock<Playlists>>) {
 
     let server = Server::bind(&server_addr).serve(service);
 
-    println!("Listening on http://{}", server_addr);
+    println!("Watch at http://{}{}", server_addr, PATH_MASTER);
 
     let graceful = server.with_graceful_shutdown(shutdown_signal());
 

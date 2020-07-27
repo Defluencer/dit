@@ -6,7 +6,7 @@ pub async fn start() {
         .creation_flags(0x00000010) //https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
         .args(&[
             "-i",
-            "udp://localhost:2424?fifo_size=114688^&overrun_nonfatal=1",
+            "udp://localhost:2424?fifo_size=114688&overrun_nonfatal=1",
         ])
         .args(&[
             "-map",

@@ -3,6 +3,8 @@ use m3u8_rs::playlist::{MasterPlaylist, MediaPlaylist, VariantStream};
 use crate::server::SERVER_PORT;
 use crate::services::{PATH_1080_60, PATH_480_30, PATH_720_30, PATH_720_60};
 
+pub const HLS_LIST_SIZE: usize = 5;
+
 pub struct Playlists {
     pub master: MasterPlaylist,
 
@@ -19,8 +21,6 @@ impl Playlists {
         let is_i_frame = false;
 
         let independent_segments = true;
-
-        let hls_list_size = 5;
 
         let variant_1080_60 = VariantStream {
             is_i_frame,
@@ -100,7 +100,7 @@ impl Playlists {
             version,
             target_duration: 4.0,
             media_sequence: 0,
-            segments: Vec::with_capacity(hls_list_size),
+            segments: Vec::with_capacity(HLS_LIST_SIZE),
             discontinuity_sequence: 0,
             end_list: false,
             playlist_type: None,

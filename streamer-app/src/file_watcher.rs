@@ -11,23 +11,23 @@ use ipfs_api::IpfsClient;
 
 use serde::Serialize;
 
+//Hard-coded for now...
 const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
-
 const JSON_DAG_NODE: &str = "dagnode.json";
 
 #[derive(Serialize)]
 struct DagNode {
-    #[serde(rename = "1080_60")]
-    latest_1080_60: Option<String>,
+    #[serde(rename = "1080p60")]
+    latest_1080p60: Option<String>,
 
-    #[serde(rename = "720_60")]
-    latest_720_60: Option<String>,
+    #[serde(rename = "720p60")]
+    latest_720p60: Option<String>,
 
-    #[serde(rename = "720_30")]
-    latest_720_30: Option<String>,
+    #[serde(rename = "720p30")]
+    latest_720p30: Option<String>,
 
-    #[serde(rename = "480_30")]
-    latest_480_30: Option<String>,
+    #[serde(rename = "480p30")]
+    latest_480p30: Option<String>,
 
     #[serde(rename = "previous")]
     previous: Option<String>,
@@ -38,10 +38,10 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
     println!("Do not rename .ts files while streaming");
 
     let mut dag_node: DagNode = DagNode {
-        latest_1080_60: None,
-        latest_720_60: None,
-        latest_720_30: None,
-        latest_480_30: None,
+        latest_1080p60: None,
+        latest_720p60: None,
+        latest_720p30: None,
+        latest_480p30: None,
 
         previous: None,
     };
@@ -54,6 +54,9 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
                 continue;
             }
         };
+
+        #[cfg(debug_assertions)]
+        println!("Op => {:#?}", op);
 
         //Files are written to .tmp then renamed to .ts
         if op != RENAME {
@@ -107,6 +110,7 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
             }
         };
 
+        #[cfg(debug_assertions)]
         println!("IPFS Add => {:#?}", &cid_v1);
 
         let parent = match path.parent() {
@@ -119,22 +123,22 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
 
         //TODO use match???
         if parent.ends_with("1080p60") {
-            dag_node.latest_1080_60 = Some(cid_v1);
+            dag_node.latest_1080p60 = Some(cid_v1);
         } else if parent.ends_with("720p60") {
-            dag_node.latest_720_60 = Some(cid_v1);
+            dag_node.latest_720p60 = Some(cid_v1);
         } else if parent.ends_with("720p30") {
-            dag_node.latest_720_30 = Some(cid_v1);
+            dag_node.latest_720p30 = Some(cid_v1);
         } else if parent.ends_with("480p30") {
-            dag_node.latest_480_30 = Some(cid_v1);
+            dag_node.latest_480p30 = Some(cid_v1);
         } else {
             eprintln!("Can't deduce segment quality from path. Fix folder structure");
             continue;
         };
 
-        if dag_node.latest_480_30.is_none()
-            || dag_node.latest_720_30.is_none()
-            || dag_node.latest_720_60.is_none()
-            || dag_node.latest_1080_60.is_none()
+        if dag_node.latest_480p30.is_none()
+            || dag_node.latest_720p30.is_none()
+            || dag_node.latest_720p60.is_none()
+            || dag_node.latest_1080p60.is_none()
         {
             continue;
         }
@@ -149,7 +153,7 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
         file.flush().expect("Can't flush buffer");
 
         #[cfg(debug_assertions)]
-        println!("Input => {}", json_string);
+        println!("Dag Node => {}", json_string);
 
         let output = match Command::new("ipfs")
             .args(&["dag", "put", JSON_DAG_NODE])
@@ -174,17 +178,17 @@ pub async fn start(rx: Receiver<RawEvent>, client: IpfsClient) {
             }
         };
 
-        println!("IPFS Dag Put => {}", cid_v1);
-
         if let Err(e) = client.pubsub_pub(PUBSUB_TOPIC_VIDEO, &cid_v1).await {
             eprintln!("Can't publish message. {}", e);
             continue;
         }
 
-        dag_node.latest_1080_60 = None;
-        dag_node.latest_720_60 = None;
-        dag_node.latest_720_30 = None;
-        dag_node.latest_480_30 = None;
+        println!("IPFS GossipSub Publish => {}", cid_v1);
+
+        dag_node.latest_1080p60 = None;
+        dag_node.latest_720p60 = None;
+        dag_node.latest_720p30 = None;
+        dag_node.latest_480p30 = None;
 
         dag_node.previous = Some(cid_v1);
     }
