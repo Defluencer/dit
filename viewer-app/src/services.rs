@@ -22,7 +22,7 @@ pub async fn get_requests(
         return Ok(response);
     }
 
-    let playlists = data.read().expect("Lock Poisoned");
+    let playlists = data.read().expect("Lock poisoned");
 
     let mut buf: Vec<u8> = Vec::new();
 
@@ -53,7 +53,7 @@ pub async fn get_requests(
         }
     };
 
-    let string = String::from_utf8(buf).expect("Invalid UTF8");
+    let string = String::from_utf8(buf).expect("Invalid UTF-8");
 
     *response.body_mut() = Body::from(string);
 

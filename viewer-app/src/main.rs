@@ -3,8 +3,7 @@ mod pubsub;
 mod server;
 mod services;
 
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use crate::playlist::Playlists;
 use crate::pubsub::pubsub_sub;

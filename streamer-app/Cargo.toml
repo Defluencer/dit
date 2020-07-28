@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "0.2", features = ["fs", "macros"] }
+tokio = { version = "0.2", features = ["fs", "macros", "process", "rt-threaded"] }
 ipfs-api = { git = "https://github.com/SionoiS/rust-ipfs-api", branch = "dag" }
 notify = "4.0"
 serde = { version = "1.0", features = ["derive"] }

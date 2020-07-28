@@ -72,18 +72,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
-name = "blake2"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94cb07b0da6a73955f8fb85d24c466778e70cda767a568229b104f0264089330"
-dependencies = [
- "byte-tools",
- "crypto-mac",
- "digest",
- "opaque-debug",
-]
-
-[[package]]
 name = "blake2b_simd"
 version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -232,16 +220,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crypto-mac"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4434400df11d95d556bac068ddfedd482915eb18fe8bea89bc80b6e4b1c179e5"
-dependencies = [
- "generic-array",
- "subtle",
-]
-
-[[package]]
 name = "data-encoding"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -276,16 +254,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3d0c8c8752312f9713efd397ff63acb9f85585afbf179282e720e7704954dd5"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "dirs"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13aea89a5c93364a98e9b37b2fa237effbb694d5cfe01c5b70941f7eb087d5e3"
-dependencies = [
- "cfg-if",
- "dirs-sys",
 ]
 
 [[package]]
@@ -566,7 +534,16 @@ dependencies = [
  "log",
  "slab",
  "tokio",
- "tokio-util 0.3.1",
+ "tokio-util",
+]
+
+[[package]]
+name = "hermit-abi"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3deed196b6e7f9e44a2ae8d94225d80302d81208b1bb673fd21fe634645c85a9"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -697,46 +674,23 @@ dependencies = [
 
 [[package]]
 name = "ipfs-api"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9e7fbfe5c8cb04c27fe20bf2624354f4d102652fd465a297a924c24e60aba4a"
-dependencies = [
- "bytes",
- "dirs 2.0.2",
- "failure",
- "futures",
- "http",
- "hyper",
- "hyper-multipart-rfc7578",
- "hyper-tls",
- "parity-multiaddr 0.7.3",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "tokio",
- "tokio-util 0.2.0",
- "walkdir",
-]
-
-[[package]]
-name = "ipfs-api"
 version = "0.8.0-rc"
 source = "git+https://github.com/SionoiS/rust-ipfs-api?branch=dag#5578f9b3cdf91e4f6c736ee9c2bbc3b408890149"
 dependencies = [
  "bytes",
- "dirs 3.0.1",
+ "dirs",
  "failure",
  "futures",
  "http",
  "hyper",
  "hyper-multipart-rfc7578",
  "hyper-tls",
- "parity-multiaddr 0.9.1",
+ "parity-multiaddr",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "tokio",
- "tokio-util 0.3.1",
+ "tokio-util",
  "walkdir",
 ]
 
@@ -1010,6 +964,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "num_cpus"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05499f3756671c15885fee9034446956fff3f243d6077b91e5767df161f766b3"
+dependencies = [
+ "hermit-abi",
+ "libc",
+]
+
+[[package]]
 name = "object"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1062,24 +1026,6 @@ dependencies = [
 
 [[package]]
 name = "parity-multiaddr"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f77055f9e81921a8cc7bebeb6cded3d128931d51f1e3dd6251f0770a6d431477"
-dependencies = [
- "arrayref",
- "bs58",
- "byteorder",
- "data-encoding",
- "parity-multihash",
- "percent-encoding",
- "serde",
- "static_assertions",
- "unsigned-varint 0.3.3",
- "url",
-]
-
-[[package]]
-name = "parity-multiaddr"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc20af3143a62c16e7c9e92ea5c6ae49f7d271d97d4d8fe73afc28f0514a3d0f"
@@ -1094,21 +1040,6 @@ dependencies = [
  "static_assertions",
  "unsigned-varint 0.4.0",
  "url",
-]
-
-[[package]]
-name = "parity-multihash"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a1cd2ba02391b81367bec529fb209019d718684fdc8ad6a712c2b536e46f775"
-dependencies = [
- "blake2",
- "bytes",
- "rand 0.7.3",
- "sha-1",
- "sha2",
- "sha3",
- "unsigned-varint 0.3.3",
 ]
 
 [[package]]
@@ -1500,18 +1431,12 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "streamer-app"
 version = "1.0.0"
 dependencies = [
- "ipfs-api 0.8.0-rc",
+ "ipfs-api",
  "notify",
  "serde",
  "serde_json",
  "tokio",
 ]
-
-[[package]]
-name = "subtle"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d67a5a62ba6e01cb2192ff309324cb4875d0c451d55fe2319433abe7a05a8ee"
 
 [[package]]
 name = "syn"
@@ -1582,6 +1507,7 @@ dependencies = [
  "mio",
  "mio-named-pipes",
  "mio-uds",
+ "num_cpus",
  "pin-project-lite",
  "signal-hook-registry",
  "slab",
@@ -1607,20 +1533,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a70f4fcd7b3b24fb194f837560168208f669ca8cb70d0c4b862944452396343"
 dependencies = [
  "native-tls",
- "tokio",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571da51182ec208780505a32528fc5512a8fe1443ab960b3f2f3ef093cd16930"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-sink",
- "log",
- "pin-project-lite",
  "tokio",
 ]
 
@@ -1720,10 +1632,8 @@ name = "viewer-app"
 version = "1.0.0"
 dependencies = [
  "cid",
- "futures",
- "futures-util",
  "hyper",
- "ipfs-api 0.7.2",
+ "ipfs-api",
  "m3u8-rs",
  "multibase",
  "serde",

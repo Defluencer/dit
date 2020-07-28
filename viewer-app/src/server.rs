@@ -1,8 +1,7 @@
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::pin::Pin;
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 
 use hyper::service::Service;
@@ -76,11 +75,11 @@ pub async fn start_server(playlist: Arc<RwLock<Playlists>>) {
 
     let server = Server::bind(&server_addr).serve(service);
 
-    println!("Watch at http://{}{}", server_addr, PATH_MASTER);
+    println!("Watch live stream at http://{}{}", server_addr, PATH_MASTER);
 
     let graceful = server.with_graceful_shutdown(shutdown_signal());
 
     if let Err(e) = graceful.await {
-        eprintln!("Server error: {}", e);
+        eprintln!("Server error {}", e);
     }
 }

@@ -68,8 +68,7 @@ pub async fn start() {
         .spawn()
     {
         Ok(result) => {
-            println!("Transcoding Starting...");
-            println!("Do not close the windows while streaming");
+            println!("Transcoding Starting... Do not close the windows while streaming!");
 
             result
         }
