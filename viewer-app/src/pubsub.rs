@@ -1,15 +1,14 @@
 use std::convert::TryFrom;
 use std::str;
-use std::sync::{Arc, RwLock};
-
-use ipfs_api::response::PubsubSubResponse;
-use ipfs_api::IpfsClient;
+use std::sync::Arc;
 
 use cid::Cid;
+use ipfs_api::response::{Error, PubsubSubResponse};
+use ipfs_api::IpfsClient;
 use multibase::Base;
 
-use tokio::process::Command;
 use tokio::stream::StreamExt;
+use tokio::sync::RwLock;
 
 use m3u8_rs::playlist::{MediaPlaylist, MediaSegment};
 
@@ -52,7 +51,9 @@ pub async fn pubsub_sub(playlists: Arc<RwLock<Playlists>>) {
 
     while let Some(result) = stream.next().await {
         match result {
-            Ok(response) => process_response(&mut previous_cid, &response, &playlists).await,
+            Ok(response) => {
+                process_response(&mut previous_cid, &response, &playlists, &client).await
+            }
             Err(error) => {
                 eprintln!("{}", error);
                 continue;
@@ -65,16 +66,17 @@ async fn process_response(
     previous_cid: &mut Option<String>,
     response: &PubsubSubResponse,
     playlists: &Arc<RwLock<Playlists>>,
+    client: &IpfsClient,
 ) {
     #[cfg(debug_assertions)]
-    println!("Message => {:#?}", response);
+    println!("{:#?}", response);
 
     if !is_verified_sender(response) {
         eprintln!("Unauthorized sender");
         return;
     }
 
-    let cid_v1 = match decode_message(response) {
+    let dag_node_cid = match decode_message(response) {
         Some(data) => data,
         None => {
             eprintln!("Message with no data");
@@ -82,30 +84,27 @@ async fn process_response(
         }
     };
 
-    #[cfg(debug_assertions)]
-    println!("CID => {}", &cid_v1);
+    println!("DAG node CID => {}", &dag_node_cid);
 
-    let dag_node = match get_dag_node(&cid_v1).await {
+    let dag_node = match get_dag_node(client, &dag_node_cid).await {
         Ok(data) => data,
         Err(error) => {
-            eprintln!("ipfs dag get. {}", error);
+            eprintln!("IPFS dag get failed {}", error);
             return;
         }
     };
 
     if previous_cid.as_ref() != dag_node.previous.as_ref() {
-        #[cfg(debug_assertions)]
-        println!(
-            "Missed an update, previous should be => {}",
-            dag_node.previous.as_ref().unwrap()
-        );
+        println!("Missed an update, rebuilding playlists...");
 
-        rebuild_playlists(dag_node, playlists, previous_cid).await;
+        rebuild_playlists(dag_node, playlists, previous_cid, client).await;
     } else {
-        update_playlists(dag_node, playlists);
+        let mut playlists = playlists.write().await;
+
+        update_playlists(dag_node, &mut playlists);
     }
 
-    *previous_cid = Some(cid_v1);
+    *previous_cid = Some(dag_node_cid);
 }
 
 fn is_verified_sender(response: &PubsubSubResponse) -> bool {
@@ -114,9 +113,9 @@ fn is_verified_sender(response: &PubsubSubResponse) -> bool {
         None => return false,
     };
 
-    let decoded = Base::decode(&Base::Base64Pad, encoded).expect("is_verified_sender => ");
+    let decoded = Base::decode(&Base::Base64Pad, encoded).expect("Decoding sender failed");
 
-    let cid = Cid::try_from(decoded).expect("is_verified_sender => ");
+    let cid = Cid::try_from(decoded).expect("CID from decoded sender failed");
 
     #[cfg(debug_assertions)]
     println!("Sender => {}", cid.to_string());
@@ -127,37 +126,27 @@ fn is_verified_sender(response: &PubsubSubResponse) -> bool {
 fn decode_message(response: &PubsubSubResponse) -> Option<String> {
     let encoded = response.data.as_ref()?;
 
-    let decoded = Base::decode(&Base::Base64Pad, encoded).expect("decode_message => ");
+    let decoded = Base::decode(&Base::Base64Pad, encoded).expect("Decoding message failed");
 
-    let message = String::from_utf8(decoded).expect("decode_message => ");
+    let message = String::from_utf8(decoded).expect("Decoded message invalid UTF-8");
 
     Some(message)
 }
 
-async fn get_dag_node(cid_v1: &str) -> std::io::Result<DagNode> {
-    let output = Command::new("ipfs")
-        .args(&["dag", "get", cid_v1])
-        .output()
-        .await?;
+async fn get_dag_node(client: &IpfsClient, cid_v1: &str) -> Result<DagNode, Error> {
+    let json = client.dag_get(cid_v1).await?;
 
-    let json = {
-        let mut string = String::from_utf8(output.stdout).expect("get_dag_node => ");
-
-        string.pop(); //remove last char, a null termination
-
-        string
-    };
-
-    let result: DagNode = serde_json::from_str(&json).expect("get_dag_node => ");
+    let result: DagNode = serde_json::from_str(&json).expect("Deserializing DAG node failed");
 
     Ok(result)
 }
 
-///Rebuild playlists by folowing the dag node link chain.
+///Rebuild playlists by following the dag node link chain.
 async fn rebuild_playlists(
     latest_dag_node: DagNode,
     playlists: &Arc<RwLock<Playlists>>,
     previous_cid: &Option<String>,
+    client: &IpfsClient,
 ) {
     let mut missing_nodes = Vec::with_capacity(HLS_LIST_SIZE);
 
@@ -166,17 +155,17 @@ async fn rebuild_playlists(
     while missing_nodes.last().unwrap().previous != *previous_cid {
         //Fill the vec with all the missing nodes.
 
-        let cid_v1 = missing_nodes
+        let dag_node_cid = missing_nodes
             .last()
             .unwrap()
             .previous
             .as_ref()
-            .expect("Dag Node previous link empty while having previously received a node.");
+            .expect("DAG node previous link empty");
 
-        let dag_node = match get_dag_node(cid_v1).await {
+        let dag_node = match get_dag_node(client, dag_node_cid).await {
             Ok(data) => data,
             Err(error) => {
-                eprintln!("ipfs dag get. {}", error);
+                eprintln!("IPFS dag get failed {}", error);
                 return;
             }
         };
@@ -194,18 +183,18 @@ async fn rebuild_playlists(
         }
     }
 
+    let mut playlists = playlists.write().await;
+
     for dag_node in missing_nodes.into_iter().rev() {
         #[cfg(debug_assertions)]
-        println!("Dag Node List => {:#?}", &dag_node);
+        println!("Missing {:#?}", &dag_node);
 
-        update_playlists(dag_node, playlists);
+        update_playlists(dag_node, &mut playlists);
     }
 }
 
 ///Update playlists with the dag node links.
-fn update_playlists(dag_node: DagNode, playlists: &Arc<RwLock<Playlists>>) {
-    let mut playlists = playlists.write().expect("Lock Poisoned");
-
+fn update_playlists(dag_node: DagNode, playlists: &mut Playlists) {
     update_playlist(&dag_node.latest_1080p60, &mut playlists.playlist_1080_60);
     update_playlist(&dag_node.latest_720p60, &mut playlists.playlist_720_60);
     update_playlist(&dag_node.latest_720p30, &mut playlists.playlist_720_30);

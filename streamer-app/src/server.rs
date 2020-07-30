@@ -1,25 +1,25 @@
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use hyper::body::Bytes;
 use hyper::service::Service;
 use hyper::{Body, Error, Request, Response, Server};
 
 use tokio::signal::ctrl_c;
-use tokio::sync::RwLock;
+use tokio::sync::mpsc::Sender;
 
-use crate::playlist::Playlists;
-use crate::services::{get_requests, PATH_MASTER};
+use crate::collector::StreamVariants;
+use crate::services::put_requests;
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
-struct LiveLikeClientService {
-    playlist: Arc<RwLock<Playlists>>,
+struct LiveLikeService {
+    collector: Sender<(StreamVariants, Bytes)>,
 }
 
-impl Service<Request<Body>> for LiveLikeClientService {
+impl Service<Request<Body>> for LiveLikeService {
     type Response = Response<Body>;
     type Error = Error;
     type Future = FutureWrapper<Self::Response, Self::Error>;
@@ -29,22 +29,22 @@ impl Service<Request<Body>> for LiveLikeClientService {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        Box::pin(get_requests(req, self.playlist.clone()))
+        Box::pin(put_requests(req, self.collector.clone()))
     }
 }
 
-struct MakeLiveLikeClientService {
-    playlist: Arc<RwLock<Playlists>>,
+struct MakeLiveLikeService {
+    collector: Sender<(StreamVariants, Bytes)>,
 }
 
-impl MakeLiveLikeClientService {
-    fn new(playlist: Arc<RwLock<Playlists>>) -> Self {
-        Self { playlist }
+impl MakeLiveLikeService {
+    fn new(collector: Sender<(StreamVariants, Bytes)>) -> Self {
+        Self { collector }
     }
 }
 
-impl<T> Service<T> for MakeLiveLikeClientService {
-    type Response = LiveLikeClientService;
+impl<T> Service<T> for MakeLiveLikeService {
+    type Response = LiveLikeService;
     type Error = Error;
     type Future = FutureWrapper<Self::Response, Self::Error>;
 
@@ -53,9 +53,9 @@ impl<T> Service<T> for MakeLiveLikeClientService {
     }
 
     fn call(&mut self, _: T) -> Self::Future {
-        let playlist = self.playlist.clone();
+        let collector = self.collector.clone();
 
-        let fut = async move { Ok(LiveLikeClientService { playlist }) };
+        let fut = async move { Ok(LiveLikeService { collector }) };
 
         Box::pin(fut)
     }
@@ -64,20 +64,19 @@ impl<T> Service<T> for MakeLiveLikeClientService {
 async fn shutdown_signal() {
     ctrl_c()
         .await
-        .expect("failed to install CTRL+C signal handler");
+        .expect("Failed to install CTRL+C signal handler");
+    //maybe finalize thing here?
 }
 
 // Hard-Coded for now...
-pub const SERVER_PORT: u16 = 2525;
+pub const SERVER_PORT: u16 = 2425;
 
-pub async fn start_server(playlist: Arc<RwLock<Playlists>>) {
+pub async fn start_server(collector: Sender<(StreamVariants, Bytes)>) {
     let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SERVER_PORT);
 
-    let service = MakeLiveLikeClientService::new(playlist);
+    let service = MakeLiveLikeService::new(collector);
 
     let server = Server::bind(&server_addr).serve(service);
-
-    println!("Watch live stream at http://{}{}", server_addr, PATH_MASTER);
 
     let graceful = server.with_graceful_shutdown(shutdown_signal());
 
