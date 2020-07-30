@@ -3,7 +3,9 @@ mod pubsub;
 mod server;
 mod services;
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
 
 use crate::playlist::Playlists;
 use crate::pubsub::pubsub_sub;
@@ -15,5 +17,5 @@ async fn main() {
 
     let playlist = Arc::new(RwLock::new(Playlists::new()));
 
-    tokio::join!(start_server(playlist.clone()), pubsub_sub(playlist));
+    tokio::join!(pubsub_sub(playlist.clone()), start_server(playlist));
 }

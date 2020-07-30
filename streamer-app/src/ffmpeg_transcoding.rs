@@ -1,12 +1,14 @@
 use tokio::process::Command;
 
+use crate::server::SERVER_PORT;
+
 pub async fn start() {
     let handle = match Command::new("ffmpeg")
         .kill_on_drop(true) //https://docs.rs/tokio/0.2.21/tokio/process/struct.Command.html#method.kill_on_drop
         .creation_flags(0x00000010) //https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
         .args(&[
             "-i",
-            "udp://localhost:2424?fifo_size=114688&overrun_nonfatal=1",
+            "udp://localhost:2424?fifo_size=524288&pkt_size=256&overrun_nonfatal=1",
         ])
         .args(&[
             "-map",
@@ -58,17 +60,23 @@ pub async fn start() {
             "-hls_list_size",
             "5",
             "-hls_flags",
-            "temp_file+delete_segments+independent_segments",
+            "independent_segments",
             "-master_pl_name",
             "master.m3u8",
             "-hls_segment_filename",
-            "%v/%d.ts",
-            "%v/index.m3u8",
+            &format!("http://127.0.0.1:{}/livelike/%v/%d.ts", SERVER_PORT),
+            "-ignore_io_errors",
+            "1",
+            "-http_persistent",
+            "1",
+            "-method",
+            "PUT",
+            &format!("http://127.0.0.1:{}/livelike/%v/index.m3u8", SERVER_PORT),
         ])
         .spawn()
     {
         Ok(result) => {
-            println!("Transcoding Starting... Do not close the windows while streaming!");
+            println!("Local transcoding starting... Do not close the windows while streaming!");
 
             result
         }

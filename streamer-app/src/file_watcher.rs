@@ -13,7 +13,7 @@ use serde::Serialize;
 const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
 
 #[derive(Serialize, Debug)]
-struct DagNode {
+pub struct DagNode {
     #[serde(rename = "1080p60")]
     latest_1080p60: Option<String>,
 
