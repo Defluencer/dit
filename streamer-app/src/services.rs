@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use hyper::body::Bytes;
-use hyper::header::{HeaderValue, CONTENT_LOCATION};
+use hyper::header::{HeaderValue, LOCATION};
 use hyper::{Body, Error, Method, Request, Response, StatusCode};
 
 use tokio::sync::mpsc::Sender;
@@ -9,10 +9,10 @@ use tokio::sync::mpsc::Sender;
 use crate::collector::StreamVariants;
 
 // Hard-Coded for now...
-const PATH_1080_60: &str = "/livelike/1080p60";
-const PATH_720_60: &str = "/livelike/720p60";
-const PATH_720_30: &str = "/livelike/720p30";
-const PATH_480_30: &str = "/livelike/480p30";
+const PATH_1080_60: &str = "/1080p60";
+const PATH_720_60: &str = "/720p60";
+const PATH_720_30: &str = "/720p30";
+const PATH_480_30: &str = "/480p30";
 
 pub async fn put_requests(
     req: Request<Body>,
@@ -21,28 +21,26 @@ pub async fn put_requests(
     #[cfg(debug_assertions)]
     println!("{:#?}", req);
 
-    let mut response = Response::new(Body::empty());
+    let mut res = Response::new(Body::empty());
 
     let (parts, body) = req.into_parts();
 
     if parts.method != Method::PUT {
-        *response.status_mut() = StatusCode::NOT_FOUND;
-        return Ok(response);
+        *res.status_mut() = StatusCode::NOT_FOUND;
+        return Ok(res);
     }
 
     let path = Path::new(parts.uri.path());
 
     //Ignore all except .ts video files
     if path.extension() == None || path.extension().unwrap() != "ts" {
-        *response.status_mut() = StatusCode::NO_CONTENT;
+        *res.status_mut() = StatusCode::NO_CONTENT;
 
         let header_value = HeaderValue::from_str(path.to_str().unwrap()).unwrap();
 
-        response
-            .headers_mut()
-            .insert(CONTENT_LOCATION, header_value);
+        res.headers_mut().insert(LOCATION, header_value);
 
-        return Ok(response);
+        return Ok(res);
     }
 
     let video_data = hyper::body::to_bytes(body).await?;
@@ -64,8 +62,8 @@ pub async fn put_requests(
         PATH_720_30 => variant = StreamVariants::Stream720p30,
         PATH_480_30 => variant = StreamVariants::Stream480p30,
         _ => {
-            *response.status_mut() = StatusCode::NOT_FOUND;
-            return Ok(response);
+            *res.status_mut() = StatusCode::NOT_FOUND;
+            return Ok(res);
         }
     };
 
@@ -73,19 +71,20 @@ pub async fn put_requests(
 
     if let Err(error) = collector.send(msg).await {
         eprintln!("Collector hung up {}", error);
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        return Ok(response);
+        *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        return Ok(res);
     }
 
-    *response.status_mut() = StatusCode::CREATED;
+    *res.status_mut() = StatusCode::CREATED;
 
     let header_value = HeaderValue::from_str(path.to_str().unwrap()).unwrap();
 
-    response
-        .headers_mut()
-        .insert(CONTENT_LOCATION, header_value);
+    res.headers_mut().insert(LOCATION, header_value);
 
-    Ok(response)
+    #[cfg(debug_assertions)]
+    println!("{:#?}", res);
+
+    Ok(res)
 }
 
 #[cfg(test)]

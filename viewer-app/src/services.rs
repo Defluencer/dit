@@ -17,6 +17,9 @@ pub async fn get_requests(
     req: Request<Body>,
     data: Arc<RwLock<Playlists>>,
 ) -> Result<Response<Body>, Error> {
+    #[cfg(debug_assertions)]
+    println!("{:#?}", req);
+
     let mut response = Response::new(Body::empty());
 
     if Method::GET != *req.method() {

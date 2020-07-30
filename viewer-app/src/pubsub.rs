@@ -155,12 +155,13 @@ async fn rebuild_playlists(
     while missing_nodes.last().unwrap().previous != *previous_cid {
         //Fill the vec with all the missing nodes.
 
-        let dag_node_cid = missing_nodes
-            .last()
-            .unwrap()
-            .previous
-            .as_ref()
-            .expect("DAG node previous link empty");
+        let dag_node_cid = match missing_nodes.last().unwrap().previous.as_ref() {
+            Some(cid) => cid,
+            None => {
+                //Found first node of the stream, stop here.
+                break;
+            }
+        };
 
         let dag_node = match get_dag_node(client, dag_node_cid).await {
             Ok(data) => data,
@@ -171,11 +172,6 @@ async fn rebuild_playlists(
         };
 
         missing_nodes.push(dag_node);
-
-        if missing_nodes.last().unwrap().previous == None {
-            //Found first node of the stream, stop here.
-            break;
-        }
 
         if missing_nodes.len() >= HLS_LIST_SIZE {
             //Found more node than the list size, stop here.

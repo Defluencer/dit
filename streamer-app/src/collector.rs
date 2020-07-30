@@ -112,7 +112,6 @@ pub async fn collect_video_data(ipfs: IpfsClient, mut rx: Receiver<(StreamVarian
             continue;
         }
 
-        #[cfg(debug_assertions)]
         println!("GossipSub publish => {}", &cid);
 
         dag_node.latest_1080p60 = None;

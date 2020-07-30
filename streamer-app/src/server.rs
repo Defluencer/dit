@@ -65,11 +65,11 @@ async fn shutdown_signal() {
     ctrl_c()
         .await
         .expect("Failed to install CTRL+C signal handler");
-    //maybe finalize thing here?
+    //TODO finalize thing here
 }
 
 // Hard-Coded for now...
-pub const SERVER_PORT: u16 = 2425;
+pub const SERVER_PORT: u16 = 2526;
 
 pub async fn start_server(collector: Sender<(StreamVariants, Bytes)>) {
     let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SERVER_PORT);

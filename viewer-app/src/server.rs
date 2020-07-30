@@ -68,7 +68,7 @@ async fn shutdown_signal() {
 }
 
 // Hard-Coded for now...
-pub const SERVER_PORT: u16 = 2525;
+pub const SERVER_PORT: u16 = 2527;
 
 pub async fn start_server(playlist: Arc<RwLock<Playlists>>) {
     let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SERVER_PORT);
