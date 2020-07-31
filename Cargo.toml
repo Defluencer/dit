@@ -4,3 +4,25 @@ members = [
     "streamer-app",
     "viewer-app",
 ]
+
+[profile.dev]
+opt-level = 0
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 256
+rpath = false
+
+[profile.release]
+opt-level = 0 # Any opt-level > 0 and ffmpeg complain why???
+debug = false
+debug-assertions = true
+overflow-checks = false
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
