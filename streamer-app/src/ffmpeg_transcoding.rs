@@ -7,7 +7,7 @@ pub async fn start() {
         .creation_flags(0x00000010) //https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
         .args(&[
             "-i",
-            "udp://127.0.0.1:2525?fifo_size=114688&overrun_nonfatal=1",
+            "udp://[::1]:2525?fifo_size=114688&overrun_nonfatal=1",
         ])
         .args(&[
             "-map",
@@ -63,14 +63,14 @@ pub async fn start() {
             "-master_pl_name",
             "master.m3u8",
             "-hls_segment_filename",
-            &format!("http://127.0.0.1:{}/%v/%d.ts", SERVER_PORT),
+            &format!("http://[::1]:{}/%v/%d.ts", SERVER_PORT),
             "-http_persistent",
             "1",
             "-ignore_io_errors",
             "1",
             "-method",
             "PUT",
-            &format!("http://127.0.0.1:{}/%v/index.m3u8", SERVER_PORT),
+            &format!("http://[::1]:{}/%v/index.m3u8", SERVER_PORT),
         ])
         .spawn()
     {
