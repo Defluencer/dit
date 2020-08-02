@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -72,7 +72,7 @@ async fn shutdown_signal() {
 pub const SERVER_PORT: u16 = 2526;
 
 pub async fn start_server(collector: Sender<(StreamVariants, Bytes)>) {
-    let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SERVER_PORT);
+    let server_addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), SERVER_PORT);
 
     let service = MakeLiveLikeService::new(collector);
 
