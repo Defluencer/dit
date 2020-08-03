@@ -17,7 +17,7 @@ codegen-units = 256
 rpath = false
 
 [profile.release]
-opt-level = 0 # Any opt-level > 0 and ffmpeg complain why???
+opt-level = 3 # Any opt-level > 0 and ffmpeg complain why???
 debug = false
 debug-assertions = true
 overflow-checks = false
