@@ -19,7 +19,7 @@ rpath = false
 [profile.release]
 opt-level = 3 # Any opt-level > 0 and ffmpeg complain why???
 debug = false
-debug-assertions = true
+debug-assertions = false
 overflow-checks = false
 lto = false
 panic = 'unwind'

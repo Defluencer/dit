@@ -24,7 +24,7 @@ impl Playlists {
 
         let variant_1080_60 = VariantStream {
             is_i_frame,
-            uri: format!("http://localhost:{}{}", SERVER_PORT, PATH_1080_60),
+            uri: format!("http://[::1]:{}{}", SERVER_PORT, PATH_1080_60),
             bandwidth: "6811200".to_string(),
             average_bandwidth: Some("6000000".to_string()),
             codecs: Some("avc1.42c02a,mp4a.40.2".to_string()),
@@ -39,7 +39,7 @@ impl Playlists {
 
         let variant_720_60 = VariantStream {
             is_i_frame,
-            uri: format!("http://localhost:{}{}", SERVER_PORT, PATH_720_60),
+            uri: format!("http://[::1]:{}{}", SERVER_PORT, PATH_720_60),
             bandwidth: "5161200".to_string(),
             average_bandwidth: Some("4500000".to_string()),
             codecs: Some("avc1.42c020,mp4a.40.2".to_string()),
@@ -54,7 +54,7 @@ impl Playlists {
 
         let variant_720_30 = VariantStream {
             is_i_frame,
-            uri: format!("http://localhost:{}{}", SERVER_PORT, PATH_720_30),
+            uri: format!("http://[::1]:{}{}", SERVER_PORT, PATH_720_30),
             bandwidth: "3511200".to_string(),
             average_bandwidth: Some("3000000".to_string()),
             codecs: Some("avc1.42c01f,mp4a.40.2".to_string()),
@@ -69,7 +69,7 @@ impl Playlists {
 
         let variant_480_30 = VariantStream {
             is_i_frame,
-            uri: format!("http://localhost:{}{}", SERVER_PORT, PATH_480_30),
+            uri: format!("http://[::1]:{}{}", SERVER_PORT, PATH_480_30),
             bandwidth: "2411200".to_string(),
             average_bandwidth: Some("2000000".to_string()),
             codecs: Some("avc1.42c01f,mp4a.40.2".to_string()),

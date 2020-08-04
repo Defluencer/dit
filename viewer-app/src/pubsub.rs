@@ -2,6 +2,8 @@ use std::convert::TryFrom;
 use std::str;
 use std::sync::Arc;
 
+use hyper::body::Bytes;
+
 use cid::Cid;
 use ipfs_api::response::{Error, PubsubSubResponse};
 use ipfs_api::IpfsClient;
@@ -17,8 +19,8 @@ use serde::Deserialize;
 use crate::playlist::{Playlists, HLS_LIST_SIZE};
 
 // Hard-Coded for now...
-const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
-const STREAMER_PEER_ID: &str = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi";
+pub const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
+pub const STREAMER_PEER_ID: &str = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi";
 
 #[derive(Deserialize, Clone, Debug)]
 struct DagNode {
@@ -38,22 +40,15 @@ struct DagNode {
     previous: Option<String>,
 }
 
-pub async fn pubsub_sub(playlists: Arc<RwLock<Playlists>>) {
-    let client = IpfsClient::default();
-
-    let mut stream = client.pubsub_sub(PUBSUB_TOPIC_VIDEO, true);
-
-    #[cfg(debug_assertions)]
-    println!("Now listening to topic => {}", PUBSUB_TOPIC_VIDEO);
+pub async fn pubsub_sub(playlists: Arc<RwLock<Playlists>>, ipfs: IpfsClient) {
+    let mut stream = ipfs.pubsub_sub(PUBSUB_TOPIC_VIDEO, true);
 
     //previously received dag node cid
     let mut previous_cid = None;
 
     while let Some(result) = stream.next().await {
         match result {
-            Ok(response) => {
-                process_response(&mut previous_cid, &response, &playlists, &client).await
-            }
+            Ok(response) => process_response(&mut previous_cid, &response, &playlists, &ipfs).await,
             Err(error) => {
                 eprintln!("{}", error);
                 continue;
@@ -66,7 +61,7 @@ async fn process_response(
     previous_cid: &mut Option<String>,
     response: &PubsubSubResponse,
     playlists: &Arc<RwLock<Playlists>>,
-    client: &IpfsClient,
+    ipfs: &IpfsClient,
 ) {
     #[cfg(debug_assertions)]
     println!("{:#?}", response);
@@ -86,7 +81,7 @@ async fn process_response(
 
     println!("DAG node CID => {}", &dag_node_cid);
 
-    let dag_node = match get_dag_node(client, &dag_node_cid).await {
+    let dag_node = match get_dag_node(ipfs, &dag_node_cid).await {
         Ok(data) => data,
         Err(error) => {
             eprintln!("IPFS dag get failed {}", error);
@@ -97,7 +92,7 @@ async fn process_response(
     if previous_cid.as_ref() != dag_node.previous.as_ref() {
         println!("Missed an update, rebuilding playlists...");
 
-        rebuild_playlists(dag_node, playlists, previous_cid, client).await;
+        rebuild_playlists(dag_node, playlists, previous_cid, ipfs).await;
     } else {
         let mut playlists = playlists.write().await;
 
@@ -133,10 +128,12 @@ fn decode_message(response: &PubsubSubResponse) -> Option<String> {
     Some(message)
 }
 
-async fn get_dag_node(client: &IpfsClient, cid_v1: &str) -> Result<DagNode, Error> {
-    let json = client.dag_get(cid_v1).await?;
+async fn get_dag_node(ipfs: &IpfsClient, cid_v1: &str) -> Result<DagNode, Error> {
+    let buffer: Result<Bytes, Error> = ipfs.dag_get(cid_v1).collect().await;
 
-    let result: DagNode = serde_json::from_str(&json).expect("Deserializing DAG node failed");
+    let buffer = buffer?;
+
+    let result: DagNode = serde_json::from_slice(&buffer).expect("Deserializing DAG node failed");
 
     Ok(result)
 }
@@ -146,7 +143,7 @@ async fn rebuild_playlists(
     latest_dag_node: DagNode,
     playlists: &Arc<RwLock<Playlists>>,
     previous_cid: &Option<String>,
-    client: &IpfsClient,
+    ipfs: &IpfsClient,
 ) {
     let mut missing_nodes = Vec::with_capacity(HLS_LIST_SIZE);
 
@@ -163,7 +160,7 @@ async fn rebuild_playlists(
             }
         };
 
-        let dag_node = match get_dag_node(client, dag_node_cid).await {
+        let dag_node = match get_dag_node(ipfs, dag_node_cid).await {
             Ok(data) => data,
             Err(error) => {
                 eprintln!("IPFS dag get failed {}", error);
@@ -262,10 +259,10 @@ mod tests {
         assert_eq!(input, output);
     }
 
-    use ipfs_api::IpfsClient;
-    use tokio::runtime::Runtime;
+    //use ipfs_api::IpfsClient;
+    //use tokio::runtime::Runtime;
 
-    #[test]
+    /* #[test]
     fn dag_get() {
         let input = "bafyreig67d575ald2neuzdoqjlxjnesvqsbdujv5fwvn6dvere3uaf26ju";
 
@@ -276,7 +273,7 @@ mod tests {
         let out = rt.block_on(client.dag_get(input));
 
         println!("{:#?}", out)
-    }
+    } */
 
     use cid::Cid;
     use std::convert::TryFrom;

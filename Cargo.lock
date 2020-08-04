@@ -623,8 +623,8 @@ dependencies = [
 
 [[package]]
 name = "ipfs-api"
-version = "0.8.0-rc"
-source = "git+https://github.com/SionoiS/rust-ipfs-api?branch=dag#5578f9b3cdf91e4f6c736ee9c2bbc3b408890149"
+version = "0.8.0-rc.1"
+source = "git+https://github.com/SionoiS/rust-ipfs-api?branch=config#6af9cfd1664edf4ad78277d4079700ec53f2206e"
 dependencies = [
  "bytes",
  "dirs",

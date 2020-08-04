@@ -13,6 +13,16 @@ async fn main() {
 
     let ipfs = IpfsClient::default();
 
+    match ipfs.config("Identity.PeerID", None, None, None).await {
+        Ok(peer_id) => {
+            println!("IPFS PeerId: {}", peer_id.value);
+        }
+        Err(_) => {
+            eprintln!("Error! Is IPFS running with PubSub enabled?");
+            return;
+        }
+    }
+
     let (tx, rx) = channel(4);
 
     tokio::join!(

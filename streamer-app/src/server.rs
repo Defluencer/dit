@@ -65,7 +65,8 @@ async fn shutdown_signal() {
     ctrl_c()
         .await
         .expect("Failed to install CTRL+C signal handler");
-    //TODO finalize thing here
+
+    //TODO stamp the last dag node, finalizing the stream.
 }
 
 // Hard-Coded for now...
