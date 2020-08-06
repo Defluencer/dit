@@ -128,16 +128,16 @@ mod tests {
     #[test]
     fn media_playlist_write() {
         let mut playlist = MediaPlaylist {
-            version: 4,
+            version: 6,
             target_duration: 4.0,
-            media_sequence: 15,
+            media_sequence: 1,
             segments: Vec::with_capacity(5),
             discontinuity_sequence: 0,
             end_list: false,
             playlist_type: None,
             i_frames_only: false,
             start: None,
-            independent_segments: false,
+            independent_segments: true,
         };
 
         let segment = MediaSegment {

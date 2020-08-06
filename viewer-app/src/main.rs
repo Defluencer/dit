@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use ipfs_api::IpfsClient;
 
 use crate::playlist::Playlists;
-use crate::pubsub::{pubsub_sub, PUBSUB_TOPIC_VIDEO, STREAMER_PEER_ID};
+use crate::pubsub::{pubsub_sub, PUBSUB_TOPIC, STREAMER_PEER_ID};
 use crate::server::start_server;
 
 #[tokio::main]
@@ -23,7 +23,7 @@ async fn main() {
         Ok(peer_id) => {
             println!("Viewer: {}", peer_id.value);
             println!("Streamer: {}", STREAMER_PEER_ID);
-            println!("Topic: {}", PUBSUB_TOPIC_VIDEO);
+            println!("Topic: {}", PUBSUB_TOPIC);
         }
         Err(_) => {
             eprintln!("Error! Is IPFS running with PubSub enabled?");

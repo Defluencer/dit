@@ -1,152 +1,213 @@
 'use strict'
 
-function sleep(ms = 1000) { return new Promise(resolve => setTimeout(resolve, ms)) }
+const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http', })
 
-function Logger(outEl) {
-    outEl.innerHTML = ''
-    return message => {
-        const container = document.createElement('div')
-        container.innerHTML = message
-        outEl.appendChild(container)
-        outEl.scrollTop = outEl.scrollHeight
-    }
-}
+const topic = "livelike"
 
-function onEnterPress(fn) {
-    return e => {
-        if (event.which == 13 || event.keyCode == 13) {
-            e.preventDefault()
-            fn()
-        }
-    }
-}
+var hls
 
-function catchAndLog(fn, log) {
-    return async (...args) => {
-        try {
-            await fn(...args)
-        } catch (err) {
-            console.error(err)
-            log(`<span class="red">${err.message}</span>`)
-        }
-    }
-}
+const video = document.getElementById('video')
 
 async function main() {
-    const apiUrlInput = document.getElementById('api-url')
-    const nodeConnectBtn = document.getElementById('node-connect')
+    if (!ipfs) throw new Error('Connect to a node first')
 
-    const peerAddrInput = document.getElementById('peer-addr')
-    const peerConnectBtn = document.getElementById('peer-connect')
+    await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg))
 
-    const topicInput = document.getElementById('topic')
-    const subscribeBtn = document.getElementById('subscribe')
+    Hls.DefaultConfig.loader = HlsjsIPFSLoader
+    Hls.DefaultConfig.debug = true
+    Hls.DefaultConfig.liveDurationInfinity = true
+    Hls.DefaultConfig.autoStartLoad = false
+    Hls.DefaultConfig.liveSyncDurationCount = 5
 
-    const messageInput = document.getElementById('message')
-    const sendBtn = document.getElementById('send')
+    if (Hls.isSupported()) {
+        hls = new Hls()
 
-    let log = Logger(document.getElementById('console'))
-    let ipfs
-    let topic
-    let peerId
+        hls.loadSource('master.m3u8')
 
-    async function reset() {
-        if (ipfs && topic) {
-            log(`Unsubscribing from topic ${topic}`)
-            await ipfs.pubsub.unsubscribe(topic)
+        hls.attachMedia(video)
+    }
+}
+
+var mediaSequence = -5
+
+const streamer = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi"
+
+var playlist = ['#EXTM3U',
+    '#EXT-X-VERSION:6',
+    '#EXT-X-TARGETDURATION:4',
+    '#EXT-X-MEDIA-SEQUENCE:0',
+    '#EXT-X-INDEPENDENT-SEGMENTS'];
+
+async function pubsubMessage(msg) {
+    const from = msg.from
+    const data = msg.data
+
+    console.log(`Message Received from ${from} with data ${data}`)
+
+    if (from !== streamer) return
+
+    //TODO get all variants
+    const cid = await dagGet(data, '/1080p60')
+
+    //console.log(`Dag node /1080p60 ${cid}`)
+
+    mediaSequence++
+
+    if (mediaSequence > 0) {
+        playlist.splice(5, 2)
+
+        playlist[4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+    }
+
+    playlist.push('#EXTINF:4.000,')
+    playlist.push(`/${cid}`)
+
+    if (mediaSequence === -4) {
+
+        hls.startLoad()
+
+        video.play()
+
+        console.log('Play video')
+    }
+}
+
+async function dagGet(cid, path) {
+    const result = await ipfs.dag.get(cid, { path })
+
+    return result.value
+}
+
+const master = ['#EXTM3U',
+    '#EXT-X-VERSION:6',
+    '#EXT-X-STREAM-INF:BANDWIDTH=6811200,AVERAGE-BANDWIDTH=6000000,CODECS="avc1.42c02a,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=60.0',
+    'livelike/1080p60/index.m3u8',
+    '#EXT-X-STREAM-INF:BANDWIDTH=5161200,AVERAGE-BANDWIDTH=4500000,CODECS="avc1.42c020,mp4a.40.2",RESOLUTION=1280x720,FRAME-RATE=60.0',
+    'livelike/720p60/index.m3u8',
+    '#EXT-X-STREAM-INF:BANDWIDTH=3511200,AVERAGE-BANDWIDTH=3000000,CODECS="avc1.42c01f,mp4a.40.2",RESOLUTION=1280x720,FRAME-RATE=30.0',
+    'livelike/720p30/index.m3u8',
+    '#EXT-X-STREAM-INF:BANDWIDTH=2411200,AVERAGE-BANDWIDTH=2000000,CODECS="avc1.42c01f,mp4a.40.2",RESOLUTION=854x480,FRAME-RATE=30.0',
+    'livelike/480p30/index.m3u8',
+    '#EXT-X-INDEPENDENT-SEGMENTS'];
+
+class HlsjsIPFSLoader {
+    constructor(config) {
+        if (config.debug === false) {
+            this.debug = function () { }
+        } else if (config.debug === true) {
+            this.debug = console.log
+        } else {
+            this.debug = config.debug
         }
-        log = Logger(document.getElementById('console'))
-        topicInput.value = ''
-        topic = null
-        peerId = null
-        ipfs = null
     }
 
-    async function nodeConnect(url) {
-        await reset()
-        log(`Connecting to ${url}`)
-        ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http', })
-        const { id, agentVersion } = await ipfs.id()
-        peerId = id
-        log(`<span class="green">Success!</span>`)
-        log(`Version ${agentVersion}`)
-        log(`Peer ID ${id}`)
+    load(context, config, callbacks) {
+        this.context = context
+        this.config = config
+        this.callbacks = callbacks
+        this.stats = { trequest: performance.now(), retry: 0 }
+        this.retryDelay = config.retryDelay
+        this.loadInternal()
     }
 
-    async function peerConnect(addr) {
-        if (!addr) throw new Error('Missing peer multiaddr')
-        if (!ipfs) throw new Error('Connect to a node first')
-        log(`Connecting to peer ${addr}`)
-        await ipfs.swarm.connect(addr)
-        log(`<span class="green">Success!</span>`)
-        log('Listing swarm peers...')
-        await sleep()
-        const peers = await ipfs.swarm.peers()
-        peers.forEach(peer => {
-            const fullAddr = `${peer.addr}/ipfs/${peer.peer.toString()}`
-            log(`<span class="${addr.endsWith(peer.peer.toString()) ? 'teal' : ''}">${fullAddr}</span>`)
-        })
-        log(`(${peers.length} peers total)`)
-    }
+    loadInternal() {
+        const { stats, context, callbacks } = this
 
-    async function subscribe(nextTopic) {
-        if (!nextTopic) throw new Error('Missing topic name')
-        if (!ipfs) throw new Error('Connect to a node first')
+        stats.tfirst = Math.max(performance.now(), stats.trequest)
+        stats.loaded = 0
 
-        const lastTopic = topic
+        console.log(`Load ${context.url}`)
 
-        if (topic) {
-            topic = null
-            log(`Unsubscribing from topic ${lastTopic}`)
-            await ipfs.pubsub.unsubscribe(lastTopic)
+        const urlParts = context.url.split("/")
+        var filename = urlParts[urlParts.length - 1]
+
+        //return data when ask for master playlist
+        if (filename === "master.m3u8") {
+            let res = master.join('\n')
+
+            console.log(`${res}`)
+
+            const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
+            const response = { url: context.url, data: data }
+
+            callbacks.onSuccess(response, stats, context)
+
+            return;
         }
 
-        log(`Subscribing to ${nextTopic}...`)
+        //return data when ask for segment playlist
+        if (filename === "index.m3u8") {
+            //TODO serve all variants
 
-        await ipfs.pubsub.subscribe(nextTopic, msg => {
-            const from = msg.from
-            const seqno = msg.seqno.toString('hex')
-            if (from === peerId) return log(`Ignoring message ${seqno} from self`)
-            log(`Message ${seqno} from ${from}:`)
-            try {
-                log(JSON.stringify(msg.data.toString(), null, 2))
-            } catch (_) {
-                log(msg.data.toString('hex'))
-            }
-        })
+            let res = playlist.join('\n')
 
-        topic = nextTopic
-        log(`<span class="green">Success!</span>`)
+            console.log(`${res}`)
+
+            const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
+
+            stats.loaded = stats.total = data.length
+            stats.tload = Math.max(stats.tfirst, performance.now())
+
+            const response = { url: context.url, data: data }
+
+            callbacks.onSuccess(response, stats, context)
+
+            return;
+        }
+
+        //return data when ask for video segment
+        cat(filename).then(res => {
+            console.log('Video segment loaded')
+
+            const data = (context.responseType === 'arraybuffer') ? res : buf2str(res)
+
+            stats.loaded = stats.total = data.length
+            stats.tload = Math.max(stats.tfirst, performance.now())
+
+            const response = { url: context.url, data: data }
+
+            callbacks.onSuccess(response, stats, context)
+        }, console.error)
     }
 
-    async function send(msg) {
-        if (!msg) throw new Error('Missing message')
-        if (!topic) throw new Error('Subscribe to a topic first')
-        if (!ipfs) throw new Error('Connect to a node first')
-
-        log(`Sending message to ${topic}...`)
-        await ipfs.pubsub.publish(topic, msg)
-        log(`<span class="green">Success!</span>`)
+    destroy() {
     }
 
-    const onNodeConnectClick = catchAndLog(() => nodeConnect(apiUrlInput.value), log)
-    apiUrlInput.addEventListener('keydown', onEnterPress(onNodeConnectClick))
-    nodeConnectBtn.addEventListener('click', onNodeConnectClick)
+    abort() {
+    }
+}
 
-    const onPeerConnectClick = catchAndLog(() => peerConnect(peerAddrInput.value), log)
-    peerAddrInput.addEventListener('keydown', onEnterPress(onPeerConnectClick))
-    peerConnectBtn.addEventListener('click', onPeerConnectClick)
+async function cat(cid) {
+    let value = new Uint8Array(0)
 
-    const onSubscribeClick = catchAndLog(() => subscribe(topicInput.value), log)
-    topicInput.addEventListener('keydown', onEnterPress(onSubscribeClick))
-    subscribeBtn.addEventListener('click', onSubscribeClick)
+    for await (const buf of ipfs.cat(cid)) {
+        const newBuf = new Uint8Array(value.length + buf.length)
 
-    const onSendClick = catchAndLog(async () => {
-        await send(messageInput.value)
-        messageInput.value = ''
-    }, log)
-    messageInput.addEventListener('keydown', onEnterPress(onSendClick))
-    sendBtn.addEventListener('click', onSendClick)
+        newBuf.set(value)
+        newBuf.set(buf, value.length)
+
+        value = newBuf
+    }
+
+    console.log(`Received data for file '${cid}' size: ${value.length}`)
+
+    return value
+}
+
+function buf2str(buf) {
+    return String.fromCharCode.apply(null, new Uint8Array(buf))
+}
+
+function str2buf(str) {
+    var buf = new ArrayBuffer(str.length);
+
+    var bufView = new Uint8Array(buf);
+
+    for (var i = 0, strLen = str.length; i < strLen; i++) {
+        bufView[i] = str.charCodeAt(i);
+    }
+
+    return buf;
 }
 
 main()

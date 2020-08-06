@@ -19,7 +19,7 @@ use serde::Deserialize;
 use crate::playlist::{Playlists, HLS_LIST_SIZE};
 
 // Hard-Coded for now...
-pub const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
+pub const PUBSUB_TOPIC: &str = "livelike";
 pub const STREAMER_PEER_ID: &str = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi";
 
 #[derive(Deserialize, Clone, Debug)]
@@ -41,7 +41,7 @@ struct DagNode {
 }
 
 pub async fn pubsub_sub(playlists: Arc<RwLock<Playlists>>, ipfs: IpfsClient) {
-    let mut stream = ipfs.pubsub_sub(PUBSUB_TOPIC_VIDEO, true);
+    let mut stream = ipfs.pubsub_sub(PUBSUB_TOPIC, true);
 
     //previously received dag node cid
     let mut previous_cid = None;

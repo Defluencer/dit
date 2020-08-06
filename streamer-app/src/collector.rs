@@ -9,7 +9,7 @@ use ipfs_api::IpfsClient;
 use serde::Serialize;
 
 //Hard-coded for now...
-const PUBSUB_TOPIC_VIDEO: &str = "livelike/video";
+const PUBSUB_TOPIC: &str = "livelike";
 
 #[derive(Serialize, Debug)]
 pub struct DagNode {
@@ -76,6 +76,8 @@ pub async fn collect_video_data(ipfs: IpfsClient, mut rx: Receiver<(StreamVarian
         #[cfg(debug_assertions)]
         println!("IPFS add => {}", &cid);
 
+        //TODO make sure the 4 vraiant are synced
+
         match variant {
             StreamVariants::Stream1080p60 => dag_node.latest_1080p60 = Some(cid),
             StreamVariants::Stream720p60 => dag_node.latest_720p60 = Some(cid),
@@ -107,7 +109,7 @@ pub async fn collect_video_data(ipfs: IpfsClient, mut rx: Receiver<(StreamVarian
         #[cfg(debug_assertions)]
         println!("DAG node CID => {}", &cid);
 
-        if let Err(e) = ipfs.pubsub_pub(PUBSUB_TOPIC_VIDEO, &cid).await {
+        if let Err(e) = ipfs.pubsub_pub(PUBSUB_TOPIC, &cid).await {
             eprintln!("IPFS pubsub pub failed {}", e);
             continue;
         }
