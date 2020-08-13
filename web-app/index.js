@@ -1,81 +1,136 @@
 'use strict'
 
-const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http', })
-
-const topic = "livelike"
-
+var ipfs
 var hls
 
+const topic = "livelike"
 const video = document.getElementById('video')
 
 async function main() {
-    if (!ipfs) throw new Error('Connect to a node first')
+    if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
+
+    //<script src="https://cdn.jsdelivr.net/npm/ipfs/dist/index.min.js"></script>
+    //ipfs = await Ipfs.create({ repo: 'ipfs-' + Math.random() })
+
+    //<script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
+    ipfs = await window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
     await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg))
 
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
-    Hls.DefaultConfig.debug = true
+    ///Hls.DefaultConfig.debug = false
     Hls.DefaultConfig.liveDurationInfinity = true
     Hls.DefaultConfig.autoStartLoad = false
-    Hls.DefaultConfig.liveSyncDurationCount = 5
+    //Hls.DefaultConfig.liveSyncDurationCount = 5
 
-    if (Hls.isSupported()) {
-        hls = new Hls()
+    hls = new Hls()
 
-        hls.loadSource('master.m3u8')
+    hls.loadSource('master.m3u8')
 
-        hls.attachMedia(video)
-    }
+    hls.attachMedia(video)
 }
 
-var mediaSequence = -5
+const streamer = "QmURmddJ5STiKS1MWry8XaEFcWjPrYskoCLzxzawu1KmYK"
 
-const streamer = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi"
-
-var playlist = ['#EXTM3U',
-    '#EXT-X-VERSION:6',
-    '#EXT-X-TARGETDURATION:4',
-    '#EXT-X-MEDIA-SEQUENCE:0',
-    '#EXT-X-INDEPENDENT-SEGMENTS'];
+var previousCid
 
 async function pubsubMessage(msg) {
     const from = msg.from
-    const data = msg.data
-
-    console.log(`Message Received from ${from} with data ${data}`)
+    const cid = msg.data
 
     if (from !== streamer) return
 
-    //TODO get all variants
-    const cid = await dagGet(data, '/1080p60')
+    const dagNode = await ipfs.dag.get(cid)
 
-    //console.log(`Dag node /1080p60 ${cid}`)
+    if (dagNode.value["previous"] == previousCid) {
+        //console.log("Updating Playlist")
 
+        updatePlaylists(dagNode)
+    } else {
+        //console.log("Rebuilding Playlist")
+
+        rebuildPlaylists(dagNode)
+    }
+
+    previousCid = cid
+}
+
+const playlists = [['#EXTM3U',
+    '#EXT-X-VERSION:6',
+    '#EXT-X-TARGETDURATION:4',
+    '#EXT-X-MEDIA-SEQUENCE:0',
+    '#EXT-X-INDEPENDENT-SEGMENTS']
+    , ['#EXTM3U',
+    '#EXT-X-VERSION:6',
+    '#EXT-X-TARGETDURATION:4',
+    '#EXT-X-MEDIA-SEQUENCE:0',
+    '#EXT-X-INDEPENDENT-SEGMENTS']
+    , ['#EXTM3U',
+    '#EXT-X-VERSION:6',
+    '#EXT-X-TARGETDURATION:4',
+    '#EXT-X-MEDIA-SEQUENCE:0',
+    '#EXT-X-INDEPENDENT-SEGMENTS']
+    , ['#EXTM3U',
+    '#EXT-X-VERSION:6',
+    '#EXT-X-TARGETDURATION:4',
+    '#EXT-X-MEDIA-SEQUENCE:0',
+    '#EXT-X-INDEPENDENT-SEGMENTS']]
+
+const hlsPlaylistSize = 5
+var mediaSequence = -hlsPlaylistSize
+
+function updatePlaylists(dagNode) {
     mediaSequence++
 
     if (mediaSequence > 0) {
-        playlist.splice(5, 2)
+        playlists[0].splice(5, 2)
+        playlists[1].splice(5, 2)
+        playlists[2].splice(5, 2)
+        playlists[3].splice(5, 2)
 
-        playlist[4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+        playlists[0][4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+        playlists[1][4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+        playlists[2][4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+        playlists[3][4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
     }
 
-    playlist.push('#EXTINF:4.000,')
-    playlist.push(`/${cid}`)
+    playlists[0].push('#EXTINF:4.000,')
+    playlists[0].push(`/${dagNode.value["1080p60"]}`)
+
+    playlists[1].push('#EXTINF:4.000,')
+    playlists[1].push(`/${dagNode.value["720p60"]}`)
+
+    playlists[2].push('#EXTINF:4.000,')
+    playlists[2].push(`/${dagNode.value["720p30"]}`)
+
+    playlists[3].push('#EXTINF:4.000,')
+    playlists[3].push(`/${dagNode.value["480p30"]}`)
 
     if (mediaSequence === -4) {
-
         hls.startLoad()
-
-        video.play()
-
-        console.log('Play video')
     }
 }
 
-async function dagGet(cid, path) {
-    const result = await ipfs.dag.get(cid, { path })
+async function rebuildPlaylists(latestDagNode) {
+    const nodes = [latestDagNode]
 
-    return result.value
+    while (nodes[nodes.length - 1].value["previous"] !== previousCid) {
+        const cid = nodes[nodes.length - 1].value["previous"]
+
+        const dagNode = await ipfs.dag.get(cid)
+
+        if (dagNode.value["previous"] === null) break //Found first node of the stream, stop here.
+
+        nodes.push(dagNode)
+
+        if (nodes.length >= hlsPlaylistSize) break //Found more node than the list size, stop here.
+    }
+
+    nodes.reverse() //Oldest nodes first
+
+    for (const node of nodes) {
+        updatePlaylists(node)
+    }
 }
 
 const master = ['#EXTM3U',
@@ -88,7 +143,7 @@ const master = ['#EXTM3U',
     'livelike/720p30/index.m3u8',
     '#EXT-X-STREAM-INF:BANDWIDTH=2411200,AVERAGE-BANDWIDTH=2000000,CODECS="avc1.42c01f,mp4a.40.2",RESOLUTION=854x480,FRAME-RATE=30.0',
     'livelike/480p30/index.m3u8',
-    '#EXT-X-INDEPENDENT-SEGMENTS'];
+    '#EXT-X-INDEPENDENT-SEGMENTS']
 
 class HlsjsIPFSLoader {
     constructor(config) {
@@ -116,16 +171,14 @@ class HlsjsIPFSLoader {
         stats.tfirst = Math.max(performance.now(), stats.trequest)
         stats.loaded = 0
 
-        console.log(`Load ${context.url}`)
-
         const urlParts = context.url.split("/")
         var filename = urlParts[urlParts.length - 1]
 
         //return data when ask for master playlist
         if (filename === "master.m3u8") {
-            let res = master.join('\n')
+            const res = master.join('\n')
 
-            console.log(`${res}`)
+            //console.log(`/${res}`)
 
             const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
             const response = { url: context.url, data: data }
@@ -137,11 +190,25 @@ class HlsjsIPFSLoader {
 
         //return data when ask for segment playlist
         if (filename === "index.m3u8") {
-            //TODO serve all variants
+            let res
 
-            let res = playlist.join('\n')
+            //use js equivalent of a hash table???
+            switch (urlParts[urlParts.length - 2]) {
+                case "1080p60":
+                    res = playlists[0].join('\n')
+                    break;
+                case "720p60":
+                    res = playlists[1].join('\n')
+                    break;
+                case "720p30":
+                    res = playlists[2].join('\n')
+                    break;
+                case "480p30":
+                    res = playlists[3].join('\n')
+                    break;
+            }
 
-            console.log(`${res}`)
+            //console.log(`/${res}`)
 
             const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
 
@@ -157,8 +224,6 @@ class HlsjsIPFSLoader {
 
         //return data when ask for video segment
         cat(filename).then(res => {
-            console.log('Video segment loaded')
-
             const data = (context.responseType === 'arraybuffer') ? res : buf2str(res)
 
             stats.loaded = stats.total = data.length
@@ -188,8 +253,6 @@ async function cat(cid) {
 
         value = newBuf
     }
-
-    console.log(`Received data for file '${cid}' size: ${value.length}`)
 
     return value
 }
