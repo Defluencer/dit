@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -12,6 +12,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::collector::StreamVariants;
 use crate::services::put_requests;
+use crate::Config;
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
@@ -69,11 +70,12 @@ async fn shutdown_signal() {
     //TODO stamp the last dag node, finalizing the stream.
 }
 
-// Hard-Coded for now...
-pub const SERVER_PORT: u16 = 2526;
-
-pub async fn start_server(collector: Sender<(StreamVariants, Bytes)>) {
-    let server_addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), SERVER_PORT);
+pub async fn start_server(collector: Sender<(StreamVariants, Bytes)>, config: &Config) {
+    let server_addr = config
+        .streamer_app
+        .socket_addr
+        .parse::<SocketAddr>()
+        .expect("Parsing socket address failed");
 
     let service = MakeLiveLikeService::new(collector);
 

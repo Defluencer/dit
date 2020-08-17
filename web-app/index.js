@@ -1,10 +1,12 @@
 'use strict'
 
+const streamerPeerId = "QmURmddJ5STiKS1MWry8XaEFcWjPrYskoCLzxzawu1KmYK"
+const gossipsubTopic = "livelike"
+
+const video = document.getElementById('video')
+
 var ipfs
 var hls
-
-const topic = "livelike"
-const video = document.getElementById('video')
 
 async function main() {
     if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
@@ -15,7 +17,7 @@ async function main() {
     //<script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
     ipfs = await window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
-    await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg))
+    await ipfs.pubsub.subscribe(gossipsubTopic, msg => pubsubMessage(msg))
 
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
     ///Hls.DefaultConfig.debug = false
@@ -30,15 +32,13 @@ async function main() {
     hls.attachMedia(video)
 }
 
-const streamer = "QmURmddJ5STiKS1MWry8XaEFcWjPrYskoCLzxzawu1KmYK"
-
 var previousCid
 
 async function pubsubMessage(msg) {
     const from = msg.from
     const cid = msg.data
 
-    if (from !== streamer) return
+    if (from !== streamerPeerId) return
 
     const dagNode = await ipfs.dag.get(cid)
 

@@ -6,7 +6,7 @@ ffmpeg -i udp://localhost:2525?fifo_size=1146880^&overrun_nonfatal=1 ^
 -map a:0 -map a:0 -map a:0 -map a:0 -c:a: aac -b:a: 192k -ar: 48000 -ac: 2 ^
 -f hls -var_stream_map "v:0,a:0,name:1080p60 v:1,a:1,name:720p60 v:2,a:2,name:720p30 v:3,a:3,name:480p30" ^
 -hls_init_time 4 -hls_time 4 -hls_list_size 5 -hls_flags independent_segments -master_pl_name master.m3u8 ^
--hls_segment_filename http://192.168.1.152:2526/%%v/%%d.ts ^
+-hls_segment_filename http://localhost:2526/%%v/%%d.ts ^
 -http_persistent 1 -ignore_io_errors 1 ^
--method PUT http://192.168.1.152:2526/%%v/index.m3u8
+-method PUT http://localhost:2526/%%v/index.m3u8
 pause

@@ -1,13 +1,17 @@
 use tokio::process::Command;
 
-use crate::server::SERVER_PORT;
+use crate::Config;
 
-pub async fn start() {
-    let handle = match Command::new("ffmpeg")
-        .creation_flags(0x00000010) //https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
+pub async fn start(config: &Config) {
+    let mut command = Command::new("ffmpeg");
+
+    command
         .args(&[
             "-i",
-            "udp://[::1]:2525?fifo_size=114688&overrun_nonfatal=1",
+            &format!(
+                "udp://{}?fifo_size=1146880&overrun_nonfatal=1",
+                config.streamer_app.ffmpeg.as_ref().unwrap().socket_addr
+            ),
         ])
         .args(&[
             "-map",
@@ -63,17 +67,20 @@ pub async fn start() {
             "-master_pl_name",
             "master.m3u8",
             "-hls_segment_filename",
-            &format!("http://[::1]:{}/%v/%d.ts", SERVER_PORT),
+            &format!("http://{}/%v/%d.ts", config.streamer_app.socket_addr),
             "-http_persistent",
             "1",
             "-ignore_io_errors",
             "1",
             "-method",
             "PUT",
-            &format!("http://[::1]:{}/%v/index.m3u8", SERVER_PORT),
-        ])
-        .spawn()
-    {
+            &format!("http://{}/%v/index.m3u8", config.streamer_app.socket_addr),
+        ]);
+
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x00000010); //https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
+
+    let handle = match command.spawn() {
         Ok(result) => {
             println!("Local transcoding starting... Do not close the windows while streaming!");
 

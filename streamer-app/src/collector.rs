@@ -1,3 +1,5 @@
+use crate::Config;
+
 use std::io::Cursor;
 
 use tokio::sync::mpsc::Receiver;
@@ -7,9 +9,6 @@ use hyper::body::Bytes;
 use ipfs_api::IpfsClient;
 
 use serde::Serialize;
-
-//Hard-coded for now...
-const PUBSUB_TOPIC: &str = "livelike";
 
 #[derive(Serialize, Debug)]
 pub struct DagNode {
@@ -48,7 +47,11 @@ pub enum StreamVariants {
     Stream480p30,
 }
 
-pub async fn collect_video_data(ipfs: IpfsClient, mut rx: Receiver<(StreamVariants, Bytes)>) {
+pub async fn collect_video_data(
+    ipfs: IpfsClient,
+    mut rx: Receiver<(StreamVariants, Bytes)>,
+    config: &Config,
+) {
     let mut dag_node: DagNode = DagNode::default();
 
     while let Some((variant, data)) = rx.recv().await {
@@ -77,7 +80,6 @@ pub async fn collect_video_data(ipfs: IpfsClient, mut rx: Receiver<(StreamVarian
         println!("IPFS add => {}", &cid);
 
         //TODO make sure the 4 vraiant are synced
-
         match variant {
             StreamVariants::Stream1080p60 => dag_node.latest_1080p60 = Some(cid),
             StreamVariants::Stream720p60 => dag_node.latest_720p60 = Some(cid),
@@ -109,7 +111,7 @@ pub async fn collect_video_data(ipfs: IpfsClient, mut rx: Receiver<(StreamVarian
         #[cfg(debug_assertions)]
         println!("DAG node CID => {}", &cid);
 
-        if let Err(e) = ipfs.pubsub_pub(PUBSUB_TOPIC, &cid).await {
+        if let Err(e) = ipfs.pubsub_pub(&config.gossipsub_topic, &cid).await {
             eprintln!("IPFS pubsub pub failed {}", e);
             continue;
         }
