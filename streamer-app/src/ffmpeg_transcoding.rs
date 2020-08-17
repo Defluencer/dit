@@ -7,11 +7,17 @@ pub async fn start(config: &Config) {
 
     command
         .args(&[
+            "-listen",
+            "1",
             "-i",
             &format!(
-                "udp://{}?fifo_size=1146880&overrun_nonfatal=1",
+                "rtmp://{}",
                 config.streamer_app.ffmpeg.as_ref().unwrap().socket_addr
             ),
+            "-rtmp_live",
+            "live",
+            "-rtmp_buffer",
+            "8000",
         ])
         .args(&[
             "-map",
