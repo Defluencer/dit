@@ -10,8 +10,8 @@ use hyper::{Body, Error, Request, Response, Server};
 use tokio::signal::ctrl_c;
 use tokio::sync::mpsc::Sender;
 
-use crate::collector::StreamVariants;
 use crate::services::put_requests;
+use crate::stream_links::StreamVariants;
 use crate::Config;
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;

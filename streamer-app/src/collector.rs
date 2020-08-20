@@ -1,5 +1,8 @@
-use crate::Config;
+use crate::config::Config;
+use crate::hash_timecode::HashTimecode;
+use crate::stream_links::{LiveNode, StreamVariants, VariantsNode};
 
+use std::collections::HashMap;
 use std::io::Cursor;
 
 use tokio::sync::mpsc::Receiver;
@@ -8,51 +11,15 @@ use hyper::body::Bytes;
 
 use ipfs_api::IpfsClient;
 
-use serde::Serialize;
-
-#[derive(Serialize, Debug)]
-pub struct DagNode {
-    #[serde(rename = "1080p60")]
-    latest_1080p60: Option<String>,
-
-    #[serde(rename = "720p60")]
-    latest_720p60: Option<String>,
-
-    #[serde(rename = "720p30")]
-    latest_720p30: Option<String>,
-
-    #[serde(rename = "480p30")]
-    latest_480p30: Option<String>,
-
-    #[serde(rename = "previous")]
-    previous: Option<String>,
-}
-
-impl Default for DagNode {
-    fn default() -> Self {
-        Self {
-            latest_1080p60: None,
-            latest_720p60: None,
-            latest_720p30: None,
-            latest_480p30: None,
-            previous: None,
-        }
-    }
-}
-
-pub enum StreamVariants {
-    Stream1080p60,
-    Stream720p60,
-    Stream720p30,
-    Stream480p30,
-}
-
 pub async fn collect_video_data(
     ipfs: IpfsClient,
+    mut timecode: HashTimecode,
     mut rx: Receiver<(StreamVariants, Bytes)>,
     config: &Config,
 ) {
-    let mut dag_node: DagNode = DagNode::default();
+    let mut variant_node: VariantsNode = VariantsNode {
+        variants: HashMap::with_capacity(4),
+    };
 
     while let Some((variant, data)) = rx.recv().await {
         let add = ipfs_api::request::Add {
@@ -79,7 +46,7 @@ pub async fn collect_video_data(
         #[cfg(debug_assertions)]
         println!("IPFS add => {}", &cid);
 
-        //TODO make sure the 4 vraiant are synced
+        //TODO make sure the 4 variant are synced
         match variant {
             StreamVariants::Stream1080p60 => dag_node.latest_1080p60 = Some(cid),
             StreamVariants::Stream720p60 => dag_node.latest_720p60 = Some(cid),
@@ -123,6 +90,8 @@ pub async fn collect_video_data(
         dag_node.latest_720p30 = None;
         dag_node.latest_480p30 = None;
 
-        dag_node.previous = Some(cid);
+        dag_node.previous = Some(cid.clone());
+
+        timecode.add_segment_cid(cid);
     }
 }

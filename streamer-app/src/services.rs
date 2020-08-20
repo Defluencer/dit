@@ -6,7 +6,7 @@ use hyper::{Body, Error, Method, Request, Response, StatusCode};
 
 use tokio::sync::mpsc::Sender;
 
-use crate::collector::StreamVariants;
+use crate::stream_links::StreamVariants;
 
 // Hard-Coded for now...
 const PATH_1080_60: &str = "/1080p60";
