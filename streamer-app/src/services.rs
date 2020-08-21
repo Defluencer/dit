@@ -6,17 +6,9 @@ use hyper::{Body, Error, Method, Request, Response, StatusCode};
 
 use tokio::sync::mpsc::Sender;
 
-use crate::stream_links::StreamVariants;
-
-// Hard-Coded for now...
-const PATH_1080_60: &str = "/1080p60";
-const PATH_720_60: &str = "/720p60";
-const PATH_720_30: &str = "/720p30";
-const PATH_480_30: &str = "/480p30";
-
 pub async fn put_requests(
     req: Request<Body>,
-    mut collector: Sender<(StreamVariants, Bytes)>,
+    mut collector: Sender<(String, Bytes)>,
 ) -> Result<Response<Body>, Error> {
     #[cfg(debug_assertions)]
     println!("{:#?}", req);
@@ -50,24 +42,14 @@ pub async fn put_requests(
 
     let parent = path
         .parent()
-        .expect("Orphan path")
-        .to_str()
-        .expect("Path invalid UTF-8");
+        .expect("Orphan path!")
+        .file_name()
+        .expect("Dir with no name!")
+        .to_os_string()
+        .into_string()
+        .expect("Dir name is invalid Unicode!");
 
-    let variant: StreamVariants;
-
-    match parent {
-        PATH_1080_60 => variant = StreamVariants::Stream1080p60,
-        PATH_720_60 => variant = StreamVariants::Stream720p60,
-        PATH_720_30 => variant = StreamVariants::Stream720p30,
-        PATH_480_30 => variant = StreamVariants::Stream480p30,
-        _ => {
-            *res.status_mut() = StatusCode::NOT_FOUND;
-            return Ok(res);
-        }
-    };
-
-    let msg = (variant, video_data);
+    let msg = (parent, video_data);
 
     if let Err(error) = collector.send(msg).await {
         eprintln!("Collector hung up {}", error);
@@ -93,13 +75,19 @@ mod tests {
 
     #[test]
     fn path_parent() {
-        let full_path = "/livelike/1080p60/0.ts";
+        let full_path = "/1080p60/356.ts";
         let path = Path::new(full_path);
 
-        let folder = "/livelike/1080p60";
+        /* let file_name = "356";
 
-        let parent = path.parent().unwrap().to_str().unwrap();
+        let file = path.file_stem().unwrap();
 
-        assert_eq!(parent, folder);
+        assert_eq!(file, file_name); */
+
+        let folder_name = "1080p60";
+
+        let parent = path.parent().unwrap().file_name().unwrap();
+
+        assert_eq!(parent, folder_name);
     }
 }

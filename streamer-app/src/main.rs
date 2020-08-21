@@ -30,7 +30,12 @@ async fn main() {
 
     match ipfs.config("Identity.PeerID", None, None, None).await {
         Ok(peer_id) => {
-            println!("IPFS PeerId: {}", peer_id.value);
+            if peer_id.value == config.streamer_peer_id {
+                println!("Peer Id: {}", peer_id.value);
+            } else {
+                eprintln!("Error! {} != {}", peer_id.value, config.streamer_peer_id);
+                return;
+            }
         }
         Err(_) => {
             eprintln!("Error! Is IPFS running with PubSub enabled?");
@@ -38,20 +43,24 @@ async fn main() {
         }
     }
 
-    let timecode = HashTimecode::new(ipfs.clone());
+    let (timecode_tx, timecode_rx) = channel(5);
 
-    let (tx, rx) = channel(4);
+    let mut timecode = HashTimecode::new(ipfs.clone(), timecode_rx);
+
+    let (video_tx, video_rx) = channel(4); //TODO replace 4 with number of variant stream
 
     if config.streamer_app.ffmpeg.is_some() {
         tokio::join!(
-            collector::collect_video_data(ipfs, timecode, rx, &config),
-            server::start_server(tx, &config),
+            collector::collect_video_data(ipfs, timecode_tx.clone(), video_rx, &config),
+            server::start_server(video_tx, timecode_tx, &config),
+            timecode.collect(),
             ffmpeg_transcoding::start(&config)
         );
     } else {
         tokio::join!(
-            collector::collect_video_data(ipfs, timecode, rx, &config),
-            server::start_server(tx, &config)
+            collector::collect_video_data(ipfs, timecode_tx.clone(), video_rx, &config),
+            server::start_server(video_tx, timecode_tx, &config),
+            timecode.collect()
         );
     }
 }

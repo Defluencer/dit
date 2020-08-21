@@ -1,3 +1,7 @@
+use crate::hash_timecode::Timecode;
+use crate::services::put_requests;
+use crate::Config;
+
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -10,14 +14,10 @@ use hyper::{Body, Error, Request, Response, Server};
 use tokio::signal::ctrl_c;
 use tokio::sync::mpsc::Sender;
 
-use crate::services::put_requests;
-use crate::stream_links::StreamVariants;
-use crate::Config;
-
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
 struct LiveLikeService {
-    collector: Sender<(StreamVariants, Bytes)>,
+    collector: Sender<(String, Bytes)>,
 }
 
 impl Service<Request<Body>> for LiveLikeService {
@@ -35,11 +35,11 @@ impl Service<Request<Body>> for LiveLikeService {
 }
 
 struct MakeLiveLikeService {
-    collector: Sender<(StreamVariants, Bytes)>,
+    collector: Sender<(String, Bytes)>,
 }
 
 impl MakeLiveLikeService {
-    fn new(collector: Sender<(StreamVariants, Bytes)>) -> Self {
+    fn new(collector: Sender<(String, Bytes)>) -> Self {
         Self { collector }
     }
 }
@@ -62,26 +62,36 @@ impl<T> Service<T> for MakeLiveLikeService {
     }
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(mut timecode_tx: Sender<Timecode>) {
     ctrl_c()
         .await
         .expect("Failed to install CTRL+C signal handler");
 
-    //TODO stamp the last dag node, finalizing the stream.
+    let msg = Timecode::Finalize;
+
+    if let Err(error) = timecode_tx.send(msg).await {
+        eprintln!("Timecode receiver hung up {}", error);
+    }
+
+    println!("Finalizing Stream...");
 }
 
-pub async fn start_server(collector: Sender<(StreamVariants, Bytes)>, config: &Config) {
+pub async fn start_server(
+    collector: Sender<(String, Bytes)>,
+    timecode_tx: Sender<Timecode>,
+    config: &Config,
+) {
     let server_addr = config
         .streamer_app
         .socket_addr
         .parse::<SocketAddr>()
         .expect("Parsing socket address failed");
 
-    let service = MakeLiveLikeService::new(collector);
+    let service = MakeLiveLikeService::new(collector.clone());
 
     let server = Server::bind(&server_addr).serve(service);
 
-    let graceful = server.with_graceful_shutdown(shutdown_signal());
+    let graceful = server.with_graceful_shutdown(shutdown_signal(timecode_tx));
 
     if let Err(e) = graceful.await {
         eprintln!("Server error {}", e);
