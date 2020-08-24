@@ -7,12 +7,12 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use tokio::signal::ctrl_c;
+use tokio::sync::mpsc::Sender;
+
 use hyper::body::Bytes;
 use hyper::service::Service;
 use hyper::{Body, Error, Request, Response, Server};
-
-use tokio::signal::ctrl_c;
-use tokio::sync::mpsc::Sender;
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
@@ -72,8 +72,6 @@ async fn shutdown_signal(mut timecode_tx: Sender<Timecode>) {
     if let Err(error) = timecode_tx.send(msg).await {
         eprintln!("Timecode receiver hung up {}", error);
     }
-
-    println!("Finalizing Stream...");
 }
 
 pub async fn start_server(

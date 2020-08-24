@@ -1,3 +1,5 @@
+use crate::config::Config;
+
 use std::io::Cursor;
 
 use tokio::sync::mpsc::Receiver;
@@ -8,18 +10,24 @@ use ipfs_api::IpfsClient;
 
 pub struct HashTimecode {
     ipfs: IpfsClient,
+
     timecode_rx: Receiver<Timecode>,
 
-    pub seconds_node: SecondsNode,
-    pub minutes_node: MinutesNode,
-    pub hours_node: HoursNode,
+    config: Config,
+
+    seconds_node: SecondsNode,
+    minutes_node: MinutesNode,
+    hours_node: HoursNode,
 }
 
 impl HashTimecode {
-    pub fn new(ipfs: IpfsClient, timecode_rx: Receiver<Timecode>) -> Self {
+    pub fn new(ipfs: IpfsClient, timecode_rx: Receiver<Timecode>, config: Config) -> Self {
         Self {
             ipfs,
+
             timecode_rx,
+
+            config,
 
             seconds_node: SecondsNode {
                 links_to_video: Vec::with_capacity(60),
@@ -45,11 +53,11 @@ impl HashTimecode {
     async fn add_segment(&mut self, cid: String) {
         let link = IPLDLink { link: cid };
 
-        self.seconds_node.links_to_video.push(link);
+        for _ in 0..self.config.video_segment_duration {
+            self.seconds_node.links_to_video.push(link.clone());
+        }
 
-        //TODO config get number of seconds in each video segment
-
-        if self.seconds_node.links_to_video.len() < 15 {
+        if self.seconds_node.links_to_video.len() < 60 {
             return;
         }
 
@@ -67,7 +75,7 @@ impl HashTimecode {
             serde_json::to_string(&self.seconds_node).expect("Can't serialize seconds node");
 
         #[cfg(debug_assertions)]
-        println!("{}", &json_string);
+        println!("{:#}", &json_string);
 
         let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
@@ -91,7 +99,7 @@ impl HashTimecode {
             serde_json::to_string(&self.minutes_node).expect("Can't serialize minutes node");
 
         #[cfg(debug_assertions)]
-        println!("{}", &json_string);
+        println!("{:#}", &json_string);
 
         let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
@@ -111,6 +119,8 @@ impl HashTimecode {
     }
 
     async fn finalize(&mut self) {
+        println!("Finalizing Stream...");
+
         if !self.seconds_node.links_to_video.is_empty() {
             self.collect_seconds().await;
         }
@@ -123,7 +133,7 @@ impl HashTimecode {
             serde_json::to_string(&self.hours_node).expect("Can't serialize minutes node");
 
         #[cfg(debug_assertions)]
-        println!("{}", &json_string);
+        println!("{:#}", &json_string);
 
         let hours_node_cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
@@ -142,7 +152,7 @@ impl HashTimecode {
         let json_string = serde_json::to_string(&stream).expect("Can't serialize minutes node");
 
         #[cfg(debug_assertions)]
-        println!("{}", &json_string);
+        println!("{:#}", &json_string);
 
         let stream_cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
@@ -152,7 +162,12 @@ impl HashTimecode {
             }
         };
 
-        println!("Stream CID => {}", &stream_cid);
+        if self.config.pin_stream {
+            match self.ipfs.pin_add(&stream_cid, true).await {
+                Ok(_) => println!("Stream CID => {}", &stream_cid),
+                Err(e) => eprintln!("IPFS pin add failed {}", e),
+            }
+        }
     }
 }
 
@@ -169,28 +184,28 @@ pub struct IPLDLink {
 
 /// Root CID.
 #[derive(Serialize, Debug)]
-pub struct Stream {
+struct Stream {
     #[serde(rename = "time")]
-    pub timecode: IPLDLink, // ../<StreamHash>/time/..
+    timecode: IPLDLink, // ../<StreamHash>/time/..
 }
 
 /// Links all hour nodes for multiple hours of video.
 #[derive(Serialize, Debug)]
-pub struct HoursNode {
+struct HoursNode {
     #[serde(rename = "hour")]
-    pub links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/..
+    links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/..
 }
 
 /// Links all minute nodes for 1 hour of video.
 #[derive(Serialize, Debug)]
-pub struct MinutesNode {
+struct MinutesNode {
     #[serde(rename = "minute")]
-    pub links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/..
+    links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/..
 }
 
 /// Links all variants nodes for 1 minute of video.
 #[derive(Serialize, Debug)]
-pub struct SecondsNode {
+struct SecondsNode {
     #[serde(rename = "second")]
-    pub links_to_video: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/..
+    links_to_video: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/..
 }

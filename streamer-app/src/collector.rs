@@ -10,10 +10,10 @@ use tokio::sync::mpsc::Sender;
 
 use hyper::body::Bytes;
 
+use serde::Serialize;
+
 use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
-
-use serde::Serialize;
 
 pub struct HashVideo {
     ipfs: IpfsClient,
@@ -124,10 +124,7 @@ impl HashVideo {
 
         self.node.variant.insert(variant, link);
 
-        //TODO smart numbering of variant => insert new until key already exist then count number of keys
-        //TODO make sure the 4 variants are synced
-
-        self.node.variant.len() >= 4
+        self.node.variant.len() >= self.config.variants
     }
 
     /// Add stream variants dag node to IPFS. Return a CID.
@@ -135,7 +132,7 @@ impl HashVideo {
         let json_string = serde_json::to_string(&self.node).expect("Can't serialize variants node");
 
         #[cfg(debug_assertions)]
-        println!("{}", &json_string);
+        println!("{:#}", &json_string);
 
         let response = self.ipfs.dag_put(Cursor::new(json_string)).await?;
 
@@ -154,7 +151,7 @@ impl HashVideo {
         let json_string = serde_json::to_string(&live_node).expect("Can't serialize live node");
 
         #[cfg(debug_assertions)]
-        println!("{}", &json_string);
+        println!("{:#}", &json_string);
 
         let response = self.ipfs.dag_put(Cursor::new(json_string)).await?;
 
@@ -168,12 +165,8 @@ impl HashVideo {
             .pubsub_pub(&self.config.gossipsub_topic, &cid)
             .await
         {
-            Ok(_) => {
-                println!("GossipSub publish => {}", &cid);
-            }
-            Err(e) => {
-                eprintln!("IPFS pubsub pub failed {}", e);
-            }
+            Ok(_) => println!("GossipSub publish => {}", &cid),
+            Err(e) => eprintln!("IPFS pubsub pub failed {}", e),
         }
 
         let link = IPLDLink { link: cid };
@@ -185,14 +178,14 @@ impl HashVideo {
 /// Link the current stream variants dag node and the previous live dag node.
 /// Allow rewind/buffer previous video segments.
 #[derive(Serialize, Debug)]
-pub struct LiveNode {
-    pub current: IPLDLink,
-    pub previous: Option<IPLDLink>,
+struct LiveNode {
+    current: IPLDLink,
+    previous: Option<IPLDLink>,
 }
 
 /// Link all stream variants.
 /// Allow viewer to select video quality.
 #[derive(Serialize, Debug)]
-pub struct VariantsNode {
-    pub variant: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/variant/1080p60/..
+struct VariantsNode {
+    variant: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/variant/1080p60/..
 }

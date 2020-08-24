@@ -1,10 +1,10 @@
 use std::path::Path;
 
+use tokio::sync::mpsc::Sender;
+
 use hyper::body::Bytes;
 use hyper::header::{HeaderValue, LOCATION};
 use hyper::{Body, Error, Method, Request, Response, StatusCode};
-
-use tokio::sync::mpsc::Sender;
 
 pub async fn put_requests(
     req: Request<Body>,

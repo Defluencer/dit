@@ -45,9 +45,9 @@ async fn main() {
 
     let (timecode_tx, timecode_rx) = channel(5);
 
-    let mut timecode = HashTimecode::new(ipfs.clone(), timecode_rx);
+    let mut timecode = HashTimecode::new(ipfs.clone(), timecode_rx, config.clone());
 
-    let (video_tx, video_rx) = channel(4); //TODO replace 4 with number of variant stream
+    let (video_tx, video_rx) = channel(config.variants);
 
     let mut video = HashVideo::new(ipfs.clone(), video_rx, timecode_tx.clone(), config.clone());
 

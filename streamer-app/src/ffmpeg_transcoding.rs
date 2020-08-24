@@ -1,6 +1,6 @@
-use tokio::process::Command;
-
 use crate::Config;
+
+use tokio::process::Command;
 
 pub async fn start(config: Config) {
     let mut command = Command::new("ffmpeg");
