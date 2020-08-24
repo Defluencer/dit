@@ -41,7 +41,7 @@ impl HashVideo {
             config,
 
             node: VariantsNode {
-                variants: HashMap::with_capacity(4),
+                variant: HashMap::with_capacity(4),
             },
 
             previous_link: None,
@@ -50,7 +50,7 @@ impl HashVideo {
 
     pub async fn collect(&mut self) {
         while let Some((variant, data)) = self.video_rx.recv().await {
-            let cid = match self.add_video(data).await {
+            let video_segment_cid = match self.add_video(data).await {
                 Ok(cid) => cid,
                 Err(e) => {
                     eprintln!("IPFS add failed {}", e);
@@ -58,10 +58,7 @@ impl HashVideo {
                 }
             };
 
-            let should_collect = self.add_variant(variant, cid);
-
-            #[cfg(debug_assertions)]
-            println!("{:#?}", self.node);
+            let should_collect = self.add_variant(variant, video_segment_cid);
 
             if !should_collect {
                 continue;
@@ -125,22 +122,24 @@ impl HashVideo {
     fn add_variant(&mut self, variant: String, cid: String) -> bool {
         let link = IPLDLink { link: cid };
 
-        self.node.variants.insert(variant, link);
+        self.node.variant.insert(variant, link);
 
         //TODO smart numbering of variant => insert new until key already exist then count number of keys
-        //TODO replace 4 with number of variant stream
         //TODO make sure the 4 variants are synced
 
-        self.node.variants.len() >= 4
+        self.node.variant.len() >= 4
     }
 
     /// Add stream variants dag node to IPFS. Return a CID.
     async fn collect_variants(&mut self) -> Result<String, Error> {
         let json_string = serde_json::to_string(&self.node).expect("Can't serialize variants node");
 
+        #[cfg(debug_assertions)]
+        println!("{}", &json_string);
+
         let response = self.ipfs.dag_put(Cursor::new(json_string)).await?;
 
-        self.node.variants.clear();
+        self.node.variant.clear();
 
         Ok(response.cid.cid_string)
     }
@@ -153,6 +152,9 @@ impl HashVideo {
         };
 
         let json_string = serde_json::to_string(&live_node).expect("Can't serialize live node");
+
+        #[cfg(debug_assertions)]
+        println!("{}", &json_string);
 
         let response = self.ipfs.dag_put(Cursor::new(json_string)).await?;
 
@@ -188,11 +190,9 @@ pub struct LiveNode {
     pub previous: Option<IPLDLink>,
 }
 
-// egg ../<StreamHash>/timecode/hours/0/minutes/36/seconds/12/variants/1080p60/.. => video blocks
-
 /// Link all stream variants.
 /// Allow viewer to select video quality.
 #[derive(Serialize, Debug)]
 pub struct VariantsNode {
-    pub variants: HashMap<String, IPLDLink>,
+    pub variant: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/variant/1080p60/..
 }

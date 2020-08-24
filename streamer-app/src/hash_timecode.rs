@@ -22,13 +22,13 @@ impl HashTimecode {
             timecode_rx,
 
             seconds_node: SecondsNode {
-                seconds: Vec::with_capacity(60),
+                links_to_video: Vec::with_capacity(60),
             },
             minutes_node: MinutesNode {
-                minutes: Vec::with_capacity(60),
+                links_to_seconds: Vec::with_capacity(60),
             },
             hours_node: HoursNode {
-                hours: Vec::with_capacity(24),
+                links_to_minutes: Vec::with_capacity(24),
             },
         }
     }
@@ -45,16 +45,17 @@ impl HashTimecode {
     async fn add_segment(&mut self, cid: String) {
         let link = IPLDLink { link: cid };
 
-        self.seconds_node.seconds.push(link);
-        //TODO push link number of time equal to video segment duration in seconds
+        self.seconds_node.links_to_video.push(link);
 
-        if self.seconds_node.seconds.len() < 60 {
+        //TODO config get number of seconds in each video segment
+
+        if self.seconds_node.links_to_video.len() < 15 {
             return;
         }
 
         self.collect_seconds().await;
 
-        if self.minutes_node.minutes.len() < 60 {
+        if self.minutes_node.links_to_seconds.len() < 60 {
             return;
         }
 
@@ -62,12 +63,12 @@ impl HashTimecode {
     }
 
     async fn collect_seconds(&mut self) {
-        #[cfg(debug_assertions)]
-        println!("{:#?}", &self.seconds_node);
-
         let json_string =
             serde_json::to_string(&self.seconds_node).expect("Can't serialize seconds node");
 
+        #[cfg(debug_assertions)]
+        println!("{}", &json_string);
+
         let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
             Err(e) => {
@@ -78,19 +79,19 @@ impl HashTimecode {
 
         //let cid = Cid::from_str(&cid).expect("CID from dag put response failed");
 
-        self.seconds_node.seconds.clear();
+        self.seconds_node.links_to_video.clear();
 
         let link = IPLDLink { link: cid };
 
-        self.minutes_node.minutes.push(link);
+        self.minutes_node.links_to_seconds.push(link);
     }
 
     async fn collect_minutes(&mut self) {
-        #[cfg(debug_assertions)]
-        println!("{:#?}", &self.minutes_node);
-
         let json_string =
             serde_json::to_string(&self.minutes_node).expect("Can't serialize minutes node");
+
+        #[cfg(debug_assertions)]
+        println!("{}", &json_string);
 
         let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
@@ -102,19 +103,27 @@ impl HashTimecode {
 
         //let cid = Cid::from_str(&cid).expect("CID from dag put response failed");
 
-        self.minutes_node.minutes.clear();
+        self.minutes_node.links_to_seconds.clear();
 
         let link = IPLDLink { link: cid };
 
-        self.hours_node.hours.push(link);
+        self.hours_node.links_to_minutes.push(link);
     }
 
-    async fn finalize(&self) {
-        #[cfg(debug_assertions)]
-        println!("{:#?}", &self.hours_node);
+    async fn finalize(&mut self) {
+        if !self.seconds_node.links_to_video.is_empty() {
+            self.collect_seconds().await;
+        }
+
+        if !self.minutes_node.links_to_seconds.is_empty() {
+            self.collect_minutes().await;
+        }
 
         let json_string =
             serde_json::to_string(&self.hours_node).expect("Can't serialize minutes node");
+
+        #[cfg(debug_assertions)]
+        println!("{}", &json_string);
 
         let hours_node_cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
@@ -125,15 +134,15 @@ impl HashTimecode {
         };
 
         let stream = Stream {
-            time: IPLDLink {
+            timecode: IPLDLink {
                 link: hours_node_cid,
             },
         };
 
-        #[cfg(debug_assertions)]
-        println!("{:#?}", &stream);
-
         let json_string = serde_json::to_string(&stream).expect("Can't serialize minutes node");
+
+        #[cfg(debug_assertions)]
+        println!("{}", &json_string);
 
         let stream_cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
@@ -143,7 +152,7 @@ impl HashTimecode {
             }
         };
 
-        println!("VOD CID => {}", &stream_cid);
+        println!("Stream CID => {}", &stream_cid);
     }
 }
 
@@ -158,22 +167,30 @@ pub struct IPLDLink {
     pub link: String, //TODO find a way to serialize Cid instead of String
 }
 
+/// Root CID.
 #[derive(Serialize, Debug)]
 pub struct Stream {
-    pub time: IPLDLink, // ../<StreamHash>/time/hours/0/minutes/36/seconds/12/..
+    #[serde(rename = "time")]
+    pub timecode: IPLDLink, // ../<StreamHash>/time/..
 }
 
-#[derive(Serialize, Debug)]
-pub struct SecondsNode {
-    pub seconds: Vec<IPLDLink>,
-}
-
-#[derive(Serialize, Debug)]
-pub struct MinutesNode {
-    pub minutes: Vec<IPLDLink>,
-}
-
+/// Links all hour nodes for multiple hours of video.
 #[derive(Serialize, Debug)]
 pub struct HoursNode {
-    pub hours: Vec<IPLDLink>,
+    #[serde(rename = "hour")]
+    pub links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/..
+}
+
+/// Links all minute nodes for 1 hour of video.
+#[derive(Serialize, Debug)]
+pub struct MinutesNode {
+    #[serde(rename = "minute")]
+    pub links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/..
+}
+
+/// Links all variants nodes for 1 minute of video.
+#[derive(Serialize, Debug)]
+pub struct SecondsNode {
+    #[serde(rename = "second")]
+    pub links_to_video: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/..
 }

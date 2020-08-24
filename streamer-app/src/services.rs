@@ -19,6 +19,10 @@ pub async fn put_requests(
 
     if parts.method != Method::PUT {
         *res.status_mut() = StatusCode::NOT_FOUND;
+
+        #[cfg(debug_assertions)]
+        println!("{:#?}", res);
+
         return Ok(res);
     }
 
@@ -31,6 +35,9 @@ pub async fn put_requests(
         let header_value = HeaderValue::from_str(path.to_str().unwrap()).unwrap();
 
         res.headers_mut().insert(LOCATION, header_value);
+
+        #[cfg(debug_assertions)]
+        println!("{:#?}", res);
 
         return Ok(res);
     }
@@ -53,7 +60,12 @@ pub async fn put_requests(
 
     if let Err(error) = collector.send(msg).await {
         eprintln!("Collector hung up {}", error);
+
         *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+
+        #[cfg(debug_assertions)]
+        println!("{:#?}", res);
+
         return Ok(res);
     }
 
