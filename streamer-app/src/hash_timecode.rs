@@ -8,23 +8,18 @@ use ipfs_api::IpfsClient;
 
 pub struct HashTimecode {
     ipfs: IpfsClient,
-    rx: Receiver<Timecode>,
+    timecode_rx: Receiver<Timecode>,
 
     pub seconds_node: SecondsNode,
     pub minutes_node: MinutesNode,
     pub hours_node: HoursNode,
 }
 
-pub enum Timecode {
-    Add(String),
-    Finalize,
-}
-
 impl HashTimecode {
-    pub fn new(ipfs: IpfsClient, rx: Receiver<Timecode>) -> Self {
+    pub fn new(ipfs: IpfsClient, timecode_rx: Receiver<Timecode>) -> Self {
         Self {
             ipfs,
-            rx,
+            timecode_rx,
 
             seconds_node: SecondsNode {
                 seconds: Vec::with_capacity(60),
@@ -39,15 +34,15 @@ impl HashTimecode {
     }
 
     pub async fn collect(&mut self) {
-        while let Some(event) = self.rx.recv().await {
+        while let Some(event) = self.timecode_rx.recv().await {
             match event {
-                Timecode::Add(cid) => self.add_segment_cid(cid).await,
+                Timecode::Add(cid) => self.add_segment(cid).await,
                 Timecode::Finalize => self.finalize().await,
             }
         }
     }
 
-    async fn add_segment_cid(&mut self, cid: String) {
+    async fn add_segment(&mut self, cid: String) {
         let link = IPLDLink { link: cid };
 
         self.seconds_node.seconds.push(link);
@@ -130,7 +125,7 @@ impl HashTimecode {
         };
 
         let stream = Stream {
-            timecode: IPLDLink {
+            time: IPLDLink {
                 link: hours_node_cid,
             },
         };
@@ -148,24 +143,29 @@ impl HashTimecode {
             }
         };
 
-        println!("Stream CID => {}", &stream_cid);
+        println!("VOD CID => {}", &stream_cid);
     }
 }
 
-#[derive(Debug, Serialize, Clone)]
+pub enum Timecode {
+    Add(String),
+    Finalize,
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub struct IPLDLink {
     #[serde(rename = "/")]
     pub link: String, //TODO find a way to serialize Cid instead of String
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Stream {
-    pub timecode: IPLDLink, // ../<StreamHash>/timecode/hours/0/minutes/36/seconds/12/..
+    pub time: IPLDLink, // ../<StreamHash>/time/hours/0/minutes/36/seconds/12/..
 }
 
-#[derive(Debug, Serialize)]
-pub struct HoursNode {
-    pub hours: Vec<IPLDLink>,
+#[derive(Serialize, Debug)]
+pub struct SecondsNode {
+    pub seconds: Vec<IPLDLink>,
 }
 
 #[derive(Serialize, Debug)]
@@ -174,6 +174,6 @@ pub struct MinutesNode {
 }
 
 #[derive(Serialize, Debug)]
-pub struct SecondsNode {
-    pub seconds: Vec<IPLDLink>,
+pub struct HoursNode {
+    pub hours: Vec<IPLDLink>,
 }

@@ -4,8 +4,8 @@ mod ffmpeg_transcoding;
 mod hash_timecode;
 mod server;
 mod services;
-mod stream_links;
 
+use crate::collector::HashVideo;
 use crate::config::Config;
 use crate::hash_timecode::HashTimecode;
 
@@ -28,7 +28,7 @@ async fn main() {
 
     let ipfs = IpfsClient::default();
 
-    match ipfs.config("Identity.PeerID", None, None, None).await {
+    match ipfs.config_get_string("Identity.PeerID").await {
         Ok(peer_id) => {
             if peer_id.value == config.streamer_peer_id {
                 println!("Peer Id: {}", peer_id.value);
@@ -49,17 +49,19 @@ async fn main() {
 
     let (video_tx, video_rx) = channel(4); //TODO replace 4 with number of variant stream
 
+    let mut video = HashVideo::new(ipfs.clone(), video_rx, timecode_tx.clone(), config.clone());
+
     if config.streamer_app.ffmpeg.is_some() {
         tokio::join!(
-            collector::collect_video_data(ipfs, timecode_tx.clone(), video_rx, &config),
-            server::start_server(video_tx, timecode_tx, &config),
+            video.collect(),
+            server::start_server(video_tx, timecode_tx, config.clone()),
             timecode.collect(),
-            ffmpeg_transcoding::start(&config)
+            ffmpeg_transcoding::start(config)
         );
     } else {
         tokio::join!(
-            collector::collect_video_data(ipfs, timecode_tx.clone(), video_rx, &config),
-            server::start_server(video_tx, timecode_tx, &config),
+            video.collect(),
+            server::start_server(video_tx, timecode_tx, config),
             timecode.collect()
         );
     }

@@ -79,7 +79,7 @@ async fn shutdown_signal(mut timecode_tx: Sender<Timecode>) {
 pub async fn start_server(
     collector: Sender<(String, Bytes)>,
     timecode_tx: Sender<Timecode>,
-    config: &Config,
+    config: Config,
 ) {
     let server_addr = config
         .streamer_app
