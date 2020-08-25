@@ -1,6 +1,6 @@
 'use strict'
 
-const streamerPeerId = "QmURmddJ5STiKS1MWry8XaEFcWjPrYskoCLzxzawu1KmYK"
+const streamerPeerId = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi"
 const gossipsubTopic = "livelike"
 
 const video = document.getElementById('video')
@@ -20,7 +20,7 @@ async function main() {
     await ipfs.pubsub.subscribe(gossipsubTopic, msg => pubsubMessage(msg))
 
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
-    ///Hls.DefaultConfig.debug = false
+    Hls.DefaultConfig.debug = false
     Hls.DefaultConfig.liveDurationInfinity = true
     Hls.DefaultConfig.autoStartLoad = false
     //Hls.DefaultConfig.liveSyncDurationCount = 5
@@ -32,7 +32,7 @@ async function main() {
     hls.attachMedia(video)
 }
 
-var previousCid
+//var previousCid = null
 
 async function pubsubMessage(msg) {
     const from = msg.from
@@ -40,19 +40,33 @@ async function pubsubMessage(msg) {
 
     if (from !== streamerPeerId) return
 
-    const dagNode = await ipfs.dag.get(cid)
+    console.log(`PubSub reveived => ${cid}`)
+    //console.log(`Previous => ${previousCid}`)
 
-    if (dagNode.value["previous"] == previousCid) {
-        //console.log("Updating Playlist")
+    const liveNode = await ipfs.dag.get(cid)
 
-        updatePlaylists(dagNode)
+    console.log(`New Node Previous => ${liveNode.value.previous}`)
+
+    const variants = await ipfs.dag.get(liveNode.value.current)
+
+    updatePlaylists(variants)
+
+    //javascript object cannot be equal WTF???
+    /* if (liveNode.value.previous == previousCid) {
+        console.log("Updating Playlist")
+
+        //console.log(`Variants CID => ${liveNode.value.current}`)
+
+        const variants = await ipfs.dag.get(liveNode.value.current)
+
+        updatePlaylists(variants)
     } else {
-        //console.log("Rebuilding Playlist")
+        console.log("Rebuilding Playlist")
 
-        rebuildPlaylists(dagNode)
+        rebuildPlaylists(liveNode)
     }
 
-    previousCid = cid
+    previousCid = cid */
 }
 
 const playlists = [['#EXTM3U',
@@ -79,7 +93,7 @@ const playlists = [['#EXTM3U',
 const hlsPlaylistSize = 5
 var mediaSequence = -hlsPlaylistSize
 
-function updatePlaylists(dagNode) {
+function updatePlaylists(variants) {
     mediaSequence++
 
     if (mediaSequence > 0) {
@@ -88,40 +102,40 @@ function updatePlaylists(dagNode) {
         playlists[2].splice(5, 2)
         playlists[3].splice(5, 2)
 
-        playlists[0][4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
-        playlists[1][4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
-        playlists[2][4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
-        playlists[3][4] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+        playlists[0][3] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+        playlists[1][3] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+        playlists[2][3] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
+        playlists[3][3] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
     }
 
     playlists[0].push('#EXTINF:4.000,')
-    playlists[0].push(`/${dagNode.value["1080p60"]}`)
+    playlists[0].push(`/${variants.value.variant["1080p60"]}`)
 
     playlists[1].push('#EXTINF:4.000,')
-    playlists[1].push(`/${dagNode.value["720p60"]}`)
+    playlists[1].push(`/${variants.value.variant["720p60"]}`)
 
     playlists[2].push('#EXTINF:4.000,')
-    playlists[2].push(`/${dagNode.value["720p30"]}`)
+    playlists[2].push(`/${variants.value.variant["720p30"]}`)
 
     playlists[3].push('#EXTINF:4.000,')
-    playlists[3].push(`/${dagNode.value["480p30"]}`)
+    playlists[3].push(`/${variants.value.variant["480p30"]}`)
 
     if (mediaSequence === -4) {
         hls.startLoad()
     }
 }
 
-async function rebuildPlaylists(latestDagNode) {
-    const nodes = [latestDagNode]
+async function rebuildPlaylists(latestLive) {
+    const nodes = [latestLive]
 
-    while (nodes[nodes.length - 1].value["previous"] !== previousCid) {
-        const cid = nodes[nodes.length - 1].value["previous"]
+    while (nodes[nodes.length - 1].value.previous !== previousCid) {
+        const cid = nodes[nodes.length - 1].value.previous
 
-        const dagNode = await ipfs.dag.get(cid)
+        const liveNode = await ipfs.dag.get(cid)
 
-        if (dagNode.value["previous"] === null) break //Found first node of the stream, stop here.
+        if (liveNode.value.previous === null) break //Found first node of the stream, stop here.
 
-        nodes.push(dagNode)
+        nodes.push(liveNode)
 
         if (nodes.length >= hlsPlaylistSize) break //Found more node than the list size, stop here.
     }
@@ -129,7 +143,11 @@ async function rebuildPlaylists(latestDagNode) {
     nodes.reverse() //Oldest nodes first
 
     for (const node of nodes) {
-        updatePlaylists(node)
+        //console.log(`Variants CID => ${node.value.current}`)
+
+        const variants = await ipfs.dag.get(node.value.current)
+
+        updatePlaylists(variants)
     }
 }
 
@@ -178,7 +196,7 @@ class HlsjsIPFSLoader {
         if (filename === "master.m3u8") {
             const res = master.join('\n')
 
-            //console.log(`/${res}`)
+            console.log(`${res}`)
 
             const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
             const response = { url: context.url, data: data }
@@ -208,7 +226,7 @@ class HlsjsIPFSLoader {
                     break;
             }
 
-            //console.log(`/${res}`)
+            console.log(`${res}`)
 
             const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
 
