@@ -1,14 +1,18 @@
 mod collector;
+mod config;
 mod ffmpeg_transcoding;
+mod hash_timecode;
 mod server;
 mod services;
+
+use crate::collector::HashVideo;
+use crate::config::Config;
+use crate::hash_timecode::HashTimecode;
 
 use std::fs::File;
 use std::io::BufReader;
 
 use tokio::sync::mpsc::channel;
-
-use serde::Deserialize;
 
 use ipfs_api::IpfsClient;
 
@@ -24,9 +28,14 @@ async fn main() {
 
     let ipfs = IpfsClient::default();
 
-    match ipfs.config("Identity.PeerID", None, None, None).await {
+    match ipfs.config_get_string("Identity.PeerID").await {
         Ok(peer_id) => {
-            println!("IPFS PeerId: {}", peer_id.value);
+            if peer_id.value == config.streamer_peer_id {
+                println!("Peer Id: {}", peer_id.value);
+            } else {
+                eprintln!("Error! {} != {}", peer_id.value, config.streamer_peer_id);
+                return;
+            }
         }
         Err(_) => {
             eprintln!("Error! Is IPFS running with PubSub enabled?");
@@ -34,36 +43,26 @@ async fn main() {
         }
     }
 
-    let (tx, rx) = channel(4);
+    let (timecode_tx, timecode_rx) = channel(5);
+
+    let mut timecode = HashTimecode::new(ipfs.clone(), timecode_rx, config.clone());
+
+    let (video_tx, video_rx) = channel(config.variants);
+
+    let mut video = HashVideo::new(ipfs.clone(), video_rx, timecode_tx.clone(), config.clone());
 
     if config.streamer_app.ffmpeg.is_some() {
         tokio::join!(
-            collector::collect_video_data(ipfs, rx, &config),
-            server::start_server(tx, &config),
-            ffmpeg_transcoding::start(&config)
+            video.collect(),
+            server::start_server(video_tx, timecode_tx, config.clone()),
+            timecode.collect(),
+            ffmpeg_transcoding::start(config)
         );
     } else {
         tokio::join!(
-            collector::collect_video_data(ipfs, rx, &config),
-            server::start_server(tx, &config)
+            video.collect(),
+            server::start_server(video_tx, timecode_tx, config),
+            timecode.collect()
         );
     }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Config {
-    pub streamer_peer_id: String,
-    pub gossipsub_topic: String,
-    pub streamer_app: StreamerApp,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct StreamerApp {
-    pub socket_addr: String,
-    pub ffmpeg: Option<Ffmpeg>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Ffmpeg {
-    pub socket_addr: String,
 }

@@ -6,5 +6,8 @@
         "ffmpeg": {
             "socket_addr": "127.0.0.1:2525"
         }
-    }
+    },
+    "variants": 4,
+    "video_segment_duration": 4,
+    "pin_stream": true
 }
