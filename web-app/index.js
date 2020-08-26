@@ -109,16 +109,16 @@ function updatePlaylists(variants) {
     }
 
     playlists[0].push('#EXTINF:4.000,')
-    playlists[0].push(`/${variants.value.variant["1080p60"]}`)
+    playlists[0].push(`/${variants.value.quality["1080p60"]}`)
 
     playlists[1].push('#EXTINF:4.000,')
-    playlists[1].push(`/${variants.value.variant["720p60"]}`)
+    playlists[1].push(`/${variants.value.quality["720p60"]}`)
 
     playlists[2].push('#EXTINF:4.000,')
-    playlists[2].push(`/${variants.value.variant["720p30"]}`)
+    playlists[2].push(`/${variants.value.quality["720p30"]}`)
 
     playlists[3].push('#EXTINF:4.000,')
-    playlists[3].push(`/${variants.value.variant["480p30"]}`)
+    playlists[3].push(`/${variants.value.quality["480p30"]}`)
 
     if (mediaSequence === -4) {
         hls.startLoad()

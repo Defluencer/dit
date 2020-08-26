@@ -1,5 +1,6 @@
 mod collector;
 mod config;
+mod dag_nodes;
 mod ffmpeg_transcoding;
 mod hash_timecode;
 mod server;

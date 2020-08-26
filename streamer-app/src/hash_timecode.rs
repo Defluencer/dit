@@ -1,12 +1,19 @@
 use crate::config::Config;
+use crate::dag_nodes::{HoursNode, IPLDLink, MinutesNode, SecondsNode, StreamNode};
 
+use std::convert::TryFrom;
 use std::io::Cursor;
 
 use tokio::sync::mpsc::Receiver;
 
-use serde::Serialize;
-
 use ipfs_api::IpfsClient;
+
+use cid::Cid;
+
+pub enum Timecode {
+    Add(Cid),
+    Finalize,
+}
 
 pub struct HashTimecode {
     ipfs: IpfsClient,
@@ -50,7 +57,7 @@ impl HashTimecode {
         }
     }
 
-    async fn add_segment(&mut self, cid: String) {
+    async fn add_segment(&mut self, cid: Cid) {
         let link = IPLDLink { link: cid };
 
         for _ in 0..self.config.video_segment_duration {
@@ -71,21 +78,24 @@ impl HashTimecode {
     }
 
     async fn collect_seconds(&mut self) {
+        #[cfg(debug_assertions)]
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&self.seconds_node).unwrap()
+        );
+
         let json_string =
             serde_json::to_string(&self.seconds_node).expect("Can't serialize seconds node");
 
-        #[cfg(debug_assertions)]
-        println!("{:#}", &json_string);
-
         let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-            Ok(response) => response.cid.cid_string,
+            Ok(response) => {
+                Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed")
+            }
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
                 return;
             }
         };
-
-        //let cid = Cid::from_str(&cid).expect("CID from dag put response failed");
 
         self.seconds_node.links_to_video.clear();
 
@@ -95,21 +105,24 @@ impl HashTimecode {
     }
 
     async fn collect_minutes(&mut self) {
+        #[cfg(debug_assertions)]
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&self.minutes_node).unwrap()
+        );
+
         let json_string =
             serde_json::to_string(&self.minutes_node).expect("Can't serialize minutes node");
 
-        #[cfg(debug_assertions)]
-        println!("{:#}", &json_string);
-
         let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-            Ok(response) => response.cid.cid_string,
+            Ok(response) => {
+                Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed")
+            }
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
                 return;
             }
         };
-
-        //let cid = Cid::from_str(&cid).expect("CID from dag put response failed");
 
         self.minutes_node.links_to_seconds.clear();
 
@@ -129,30 +142,33 @@ impl HashTimecode {
             self.collect_minutes().await;
         }
 
-        let json_string =
-            serde_json::to_string(&self.hours_node).expect("Can't serialize minutes node");
-
         #[cfg(debug_assertions)]
-        println!("{:#}", &json_string);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&self.hours_node).unwrap()
+        );
 
-        let hours_node_cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-            Ok(response) => response.cid.cid_string,
+        let json_string =
+            serde_json::to_string(&self.hours_node).expect("Can't serialize hours node");
+
+        let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
+            Ok(response) => {
+                Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed")
+            }
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
                 return;
             }
         };
 
-        let stream = Stream {
-            timecode: IPLDLink {
-                link: hours_node_cid,
-            },
+        let stream = StreamNode {
+            timecode: IPLDLink { link: cid },
         };
 
-        let json_string = serde_json::to_string(&stream).expect("Can't serialize minutes node");
-
         #[cfg(debug_assertions)]
-        println!("{:#}", &json_string);
+        println!("{}", serde_json::to_string_pretty(&stream).unwrap());
+
+        let json_string = serde_json::to_string(&stream).expect("Can't serialize stream node");
 
         let stream_cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
@@ -169,43 +185,4 @@ impl HashTimecode {
             }
         }
     }
-}
-
-pub enum Timecode {
-    Add(String),
-    Finalize,
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub struct IPLDLink {
-    #[serde(rename = "/")]
-    pub link: String, //TODO find a way to serialize Cid instead of String
-}
-
-/// Root CID.
-#[derive(Serialize, Debug)]
-struct Stream {
-    #[serde(rename = "time")]
-    timecode: IPLDLink, // ../<StreamHash>/time/..
-}
-
-/// Links all hour nodes for multiple hours of video.
-#[derive(Serialize, Debug)]
-struct HoursNode {
-    #[serde(rename = "hour")]
-    links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/..
-}
-
-/// Links all minute nodes for 1 hour of video.
-#[derive(Serialize, Debug)]
-struct MinutesNode {
-    #[serde(rename = "minute")]
-    links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/..
-}
-
-/// Links all variants nodes for 1 minute of video.
-#[derive(Serialize, Debug)]
-struct SecondsNode {
-    #[serde(rename = "second")]
-    links_to_video: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/..
 }

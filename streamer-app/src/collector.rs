@@ -1,8 +1,9 @@
 use crate::config::Config;
-use crate::hash_timecode::IPLDLink;
+use crate::dag_nodes::{IPLDLink, LiveNode, VariantsNode};
 use crate::hash_timecode::Timecode;
 
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::io::Cursor;
 
 use tokio::sync::mpsc::Receiver;
@@ -10,10 +11,10 @@ use tokio::sync::mpsc::Sender;
 
 use hyper::body::Bytes;
 
-use serde::Serialize;
-
 use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
+
+use cid::Cid;
 
 pub struct HashVideo {
     ipfs: IpfsClient,
@@ -41,7 +42,7 @@ impl HashVideo {
             config,
 
             node: VariantsNode {
-                variant: HashMap::with_capacity(4),
+                variants: HashMap::with_capacity(4),
             },
 
             previous_link: None,
@@ -86,15 +87,12 @@ impl HashVideo {
                 }
             };
 
-            #[cfg(debug_assertions)]
-            println!("Live node CID => {}", &live_node_cid);
-
             self.publish(live_node_cid).await;
         }
     }
 
     /// Add video data to IPFS. Return a CID.
-    async fn add_video(&mut self, data: Bytes) -> Result<String, Error> {
+    async fn add_video(&mut self, data: Bytes) -> Result<Cid, Error> {
         let add = ipfs_api::request::Add {
             trickle: None,
             only_hash: None,
@@ -110,62 +108,64 @@ impl HashVideo {
 
         let response = self.ipfs.add_with_options(Cursor::new(data), add).await?;
 
-        let video_segment_cid = response.hash;
+        let cid = Cid::try_from(response.hash).expect("CID from dag put response failed");
 
         #[cfg(debug_assertions)]
-        println!("IPFS add => {}", &video_segment_cid);
+        println!("IPFS added => {}", &cid);
 
-        Ok(video_segment_cid)
+        Ok(cid)
     }
 
     /// Add CID to stream variants dag node. Return true if all stream variants were added.
-    fn add_variant(&mut self, variant: String, cid: String) -> bool {
+    fn add_variant(&mut self, variant: String, cid: Cid) -> bool {
         let link = IPLDLink { link: cid };
 
-        self.node.variant.insert(variant, link);
+        self.node.variants.insert(variant, link);
 
-        self.node.variant.len() >= self.config.variants
+        self.node.variants.len() >= self.config.variants
     }
 
     /// Add stream variants dag node to IPFS. Return a CID.
-    async fn collect_variants(&mut self) -> Result<String, Error> {
-        let json_string = serde_json::to_string(&self.node).expect("Can't serialize variants node");
-
+    async fn collect_variants(&mut self) -> Result<Cid, Error> {
         #[cfg(debug_assertions)]
-        println!("{:#}", &json_string);
+        println!("{}", serde_json::to_string_pretty(&self.node).unwrap());
+
+        let json_string = serde_json::to_string(&self.node).expect("Can't serialize variants node");
 
         let response = self.ipfs.dag_put(Cursor::new(json_string)).await?;
 
-        self.node.variant.clear();
+        let cid = Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed");
 
-        Ok(response.cid.cid_string)
+        self.node.variants.clear();
+
+        Ok(cid)
     }
 
     /// Add live dag node to IPFS. Return a CID.
-    async fn add_live(&mut self, cid: String) -> Result<String, Error> {
+    async fn add_live(&mut self, cid: Cid) -> Result<Cid, Error> {
         let live_node = LiveNode {
             current: IPLDLink { link: cid },
             previous: self.previous_link.clone(),
         };
 
-        let json_string = serde_json::to_string(&live_node).expect("Can't serialize live node");
-
         #[cfg(debug_assertions)]
-        println!("{:#}", &json_string);
+        println!("{}", serde_json::to_string_pretty(&live_node).unwrap());
+
+        let json_string = serde_json::to_string(&live_node).expect("Can't serialize live node");
 
         let response = self.ipfs.dag_put(Cursor::new(json_string)).await?;
 
-        Ok(response.cid.cid_string)
+        let cid = Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed");
+
+        Ok(cid)
     }
 
     /// Publish live dag node CID to configured topic using GossipSub.
-    async fn publish(&mut self, cid: String) {
-        match self
-            .ipfs
-            .pubsub_pub(&self.config.gossipsub_topic, &cid)
-            .await
-        {
-            Ok(_) => println!("GossipSub publish => {}", &cid),
+    async fn publish(&mut self, cid: Cid) {
+        let topic = &self.config.gossipsub_topic;
+
+        match self.ipfs.pubsub_pub(topic, &cid.to_string()).await {
+            Ok(_) => println!("GossipSub published => {}", &cid),
             Err(e) => eprintln!("IPFS pubsub pub failed {}", e),
         }
 
@@ -173,19 +173,4 @@ impl HashVideo {
 
         self.previous_link = Some(link);
     }
-}
-
-/// Link the current stream variants dag node and the previous live dag node.
-/// Allow rewind/buffer previous video segments.
-#[derive(Serialize, Debug)]
-struct LiveNode {
-    current: IPLDLink,
-    previous: Option<IPLDLink>,
-}
-
-/// Link all stream variants.
-/// Allow viewer to select video quality.
-#[derive(Serialize, Debug)]
-struct VariantsNode {
-    variant: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/variant/1080p60/..
 }
