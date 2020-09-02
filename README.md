@@ -1,5 +1,13 @@
 # Live-Like
-Decentralised Live Streaming
+The Live-Like project aim to decentralize live streaming. Provide the same popular moderation tools and allow content creators to receive 100% of users donations.
+
+## Roadmap
+- Live Streaming: Mostly working but could use some polish. Some customizations.
+- VOD: Can save stream as timecode adressable video. Can't view yet.
+- Live Chat: In progress.
+- Moderation: Designed.
+- Community: Some thoughts.
+- Ecosystem: Wild dreams!
 
 ## Setup
  - Make sure your broadcast software output is set to FFMPEG local address.
@@ -9,19 +17,23 @@ Decentralised Live Streaming
  - Set "streamer_peer_id" to the peer id of the ipfs node that will be used to stream.
  - Set "gossipsub_topic" to something unique to you.
  - Set "streamerPeerId" & "gossipsubTopic" in index.js to the same values.
- - Add the web-app folder to IPFS.
- - Use the IPFS link to share the stream.
+ - Add the web-app folder to IPFS or deploy as website.
 
-## Streamer
+## Streaming
  - Start IPFS with PUBSUB enabled.
  - Start streamer-app.
  - Start your broadcast software.
- - Start Streaming!
+ - Stream!
 
-## Viewers
+## Viewing
  - Start IPFS with PUBSUB enabled.
- - Set CORS.
- - Open IPFS link.
+ - Set IPFS CORS to allow calls from link or website.
+ - Open IPFS link or website.
+
+## V.O.D.
+ - Stop your broadcast software.
+ - Press Ctrl-c in streamer-app to save the stream locally.
+ - Upload to Filecoin using final stream CID.
 
 ## License
 Licensed under either of
@@ -37,3 +49,8 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+## Financial Support
+- https://gitcoin.co/grants/1084/live-like
+- ETH 0x61Cef8a2362aa699DEe9E0b98683D6Ec706F76c6
+- BTC 148SqyhtAZNGc7sDya2BHY34vZE1iY8WFM
