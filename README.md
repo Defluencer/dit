@@ -4,8 +4,8 @@ The Live-Like project aim to decentralize live streaming. Provide the same popul
 ## Roadmap
 - Live Streaming: Mostly working but could use some polish. Some customizations.
 - VOD: Can save stream as timecode adressable video. Can't view yet.
-- Live Chat: In progress.
-- Moderation: Designed.
+- Live Chat: In Design.
+- Moderation: In Design.
 - Community: Some thoughts.
 - Ecosystem: Wild dreams!
 
@@ -52,5 +52,3 @@ dual licensed as above, without any additional terms or conditions.
 
 ## Financial Support
 - https://gitcoin.co/grants/1084/live-like
-- ETH 0x61Cef8a2362aa699DEe9E0b98683D6Ec706F76c6
-- BTC 148SqyhtAZNGc7sDya2BHY34vZE1iY8WFM
