@@ -1,15 +1,16 @@
-use serde::Serializer;
 use std::collections::HashMap;
+use std::str::FromStr;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde::{Deserializer, Serializer};
 
 use cid::Cid;
-use multibase::Base;
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct IPLDLink {
-    #[serde(serialize_with = "serialize_cid")]
     #[serde(rename = "/")]
+    #[serde(serialize_with = "serialize_cid")]
+    #[serde(deserialize_with = "deserialize_cid")]
     pub link: Cid,
 }
 
@@ -17,11 +18,18 @@ fn serialize_cid<S>(cid: &Cid, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    let string = cid
-        .to_string_of_base(Base::Base32Lower)
-        .expect("serialize_cid failed");
+    serializer.serialize_str(&cid.to_string())
+}
 
-    serializer.serialize_str(&string)
+fn deserialize_cid<'de, D>(deserializer: D) -> Result<Cid, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let cid_str: &str = Deserialize::deserialize(deserializer)?;
+
+    let cid = Cid::from_str(cid_str).expect("Deserialize string to CID failed");
+
+    Ok(cid)
 }
 
 /// Stream Root CID.
@@ -66,4 +74,22 @@ pub struct VariantsNode {
 pub struct LiveNode {
     pub current: IPLDLink,
     pub previous: Option<IPLDLink>,
+}
+
+/// Chat message optionaly signed with some form of private key
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChatMessage {
+    pub data: ChatContent,
+
+    pub signature: Option<String>,
+}
+
+/// Containts; user name, message and a link to LiveNode as timestamp
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChatContent {
+    pub name: String,
+
+    pub message: String,
+
+    pub timestamp: IPLDLink,
 }

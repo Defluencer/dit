@@ -162,7 +162,7 @@ impl HashVideo {
 
     /// Publish live dag node CID to configured topic using GossipSub.
     async fn publish(&mut self, cid: Cid) {
-        let topic = &self.config.gossipsub_topic;
+        let topic = &self.config.gossipsub_topics.video;
 
         match self.ipfs.pubsub_pub(topic, &cid.to_string()).await {
             Ok(_) => println!("GossipSub published => {}", &cid),

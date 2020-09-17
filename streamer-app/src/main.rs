@@ -1,14 +1,16 @@
-mod collector;
+mod chat;
 mod config;
 mod dag_nodes;
 mod ffmpeg_transcoding;
 mod hash_timecode;
+mod hash_video;
 mod server;
 mod services;
 
-use crate::collector::HashVideo;
+use crate::chat::ChatAggregator;
 use crate::config::Config;
 use crate::hash_timecode::HashTimecode;
+use crate::hash_video::HashVideo;
 
 use std::fs::File;
 use std::io::BufReader;
@@ -29,10 +31,10 @@ async fn main() {
 
     let ipfs = IpfsClient::default();
 
-    match ipfs.config_get_string("Identity.PeerID").await {
+    let peer_id = match ipfs.config_get_string("Identity.PeerID").await {
         Ok(peer_id) => {
             if peer_id.value == config.streamer_peer_id {
-                println!("Peer Id: {}", peer_id.value);
+                peer_id.value
             } else {
                 eprintln!("Error! {} != {}", peer_id.value, config.streamer_peer_id);
                 return;
@@ -42,7 +44,9 @@ async fn main() {
             eprintln!("Error! Is IPFS running with PubSub enabled?");
             return;
         }
-    }
+    };
+
+    println!("Peer Id: {}", peer_id);
 
     let (timecode_tx, timecode_rx) = channel(5);
 
@@ -52,18 +56,22 @@ async fn main() {
 
     let mut video = HashVideo::new(ipfs.clone(), video_rx, timecode_tx.clone(), config.clone());
 
+    let mut chat = ChatAggregator::new(ipfs.clone(), config.clone());
+
     if config.streamer_app.ffmpeg.is_some() {
         tokio::join!(
             video.collect(),
             server::start_server(video_tx, timecode_tx, config.clone()),
             timecode.collect(),
+            chat.aggregate(),
             ffmpeg_transcoding::start(config)
         );
     } else {
         tokio::join!(
             video.collect(),
             server::start_server(video_tx, timecode_tx, config),
-            timecode.collect()
+            timecode.collect(),
+            chat.aggregate()
         );
     }
 }

@@ -3,7 +3,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub streamer_peer_id: String,
-    pub gossipsub_topic: String,
+    pub gossipsub_topics: Topics,
     pub streamer_app: StreamerApp,
     pub variants: usize,
     pub video_segment_duration: usize,
@@ -19,4 +19,10 @@ pub struct StreamerApp {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Ffmpeg {
     pub socket_addr: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Topics {
+    pub video: String,
+    pub chat: String,
 }
