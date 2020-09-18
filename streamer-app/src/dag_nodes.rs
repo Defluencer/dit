@@ -6,7 +6,7 @@ use serde::{Deserializer, Serializer};
 
 use cid::Cid;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct IPLDLink {
     #[serde(rename = "/")]
     #[serde(serialize_with = "serialize_cid")]
@@ -41,31 +41,43 @@ pub struct StreamNode {
 
 /// Links all hour nodes for multiple hours of video.
 #[derive(Serialize, Debug)]
-pub struct HoursNode {
+pub struct DayNode {
     #[serde(rename = "hour")]
-    pub links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/..
+    pub links_to_hours: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/..
 }
 
 /// Links all minute nodes for 1 hour of video.
 #[derive(Serialize, Debug)]
-pub struct MinutesNode {
+pub struct HourNode {
     #[serde(rename = "minute")]
-    pub links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/..
+    pub links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/..
 }
 
 /// Links all variants nodes for 1 minute of video.
 #[derive(Serialize, Debug)]
-pub struct SecondsNode {
+pub struct MinuteNode {
     #[serde(rename = "second")]
-    pub links_to_video: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/..
+    pub links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/..
 }
+
+/// Links video and chat nodes.
+#[derive(Serialize, Debug)]
+pub struct SecondNode {
+    #[serde(rename = "video")]
+    pub link_to_video: IPLDLink, // ../<StreamHash>/time/hour/1/minute/15/second/30/video/..
+
+    #[serde(rename = "chat")]
+    pub links_to_chat: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/chat/0/..
+}
+
+/* Below are nodes created during the live stream */
 
 /// Link all stream variants.
 /// Allow viewer to select video quality.
 #[derive(Serialize, Debug)]
 pub struct VariantsNode {
     #[serde(rename = "quality")]
-    pub variants: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/quality/1080p60/..
+    pub variants: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
 }
 
 /// Link the current stream variants dag node and the previous live dag node.
@@ -79,12 +91,14 @@ pub struct LiveNode {
 /// Chat message optionaly signed with some form of private key
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChatMessage {
-    pub data: ChatContent,
+    pub public_key: Option<String>,
 
     pub signature: Option<String>,
+
+    pub data: ChatContent,
 }
 
-/// Containts; user name, message and a link to LiveNode as timestamp
+/// Containts; user name, message and a link to VariantsNode as timestamp
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChatContent {
     pub name: String,

@@ -1,26 +1,36 @@
+use crate::chronicler::Archive;
+use crate::config::Config;
+use crate::dag_nodes::ChatMessage;
+
 use std::convert::TryFrom;
 use std::str;
 
 use tokio::stream::StreamExt;
+use tokio::sync::mpsc::Sender;
 
-use ipfs_api::response::{Error, PubsubSubResponse};
+use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
 use cid::Cid;
 use multibase::Base;
 
-use crate::config::Config;
-use crate::dag_nodes::{ChatContent, ChatMessage};
-
 pub struct ChatAggregator {
     ipfs: IpfsClient,
+
+    archive_tx: Sender<Archive>,
 
     config: Config,
 }
 
 impl ChatAggregator {
-    pub fn new(ipfs: IpfsClient, config: Config) -> Self {
-        Self { ipfs, config }
+    pub fn new(ipfs: IpfsClient, archive_tx: Sender<Archive>, config: Config) -> Self {
+        Self {
+            ipfs,
+
+            archive_tx,
+
+            config,
+        }
     }
 
     pub async fn aggregate(&mut self) {
@@ -40,9 +50,6 @@ impl ChatAggregator {
     }
 
     async fn process_msg(&mut self, msg: &PubsubSubResponse) {
-        #[cfg(debug_assertions)]
-        println!("{:#?}", msg);
-
         if !is_verified_sender(msg) {
             return;
         }
@@ -52,9 +59,15 @@ impl ChatAggregator {
             None => return,
         };
 
-        //TODO verify msg signature
+        if !is_auth_signature(&chat_message) {
+            return;
+        }
 
-        let content = chat_message.data;
+        let msg = Archive::Chat(chat_message);
+
+        if let Err(error) = self.archive_tx.send(msg).await {
+            eprintln!("Archive receiver hung up {}", error);
+        }
     }
 }
 
@@ -98,4 +111,9 @@ fn decode_message(response: &PubsubSubResponse) -> Option<ChatMessage> {
     };
 
     Some(chat_message)
+}
+
+fn is_auth_signature(_msg: &ChatMessage) -> bool {
+    //TODO
+    true
 }

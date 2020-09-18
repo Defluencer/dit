@@ -1,6 +1,9 @@
 {
     "streamer_peer_id": "Qm...",
-    "gossipsub_topic": "livelike",
+    "gossipsub_topics": {
+        "video": "livelikevideo",
+        "chat": "livelikechat"
+    },
     "streamer_app": {
         "socket_addr": "127.0.0.1:2526",
         "ffmpeg": {

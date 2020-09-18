@@ -1,16 +1,16 @@
 mod chat;
+mod chronicler;
 mod config;
 mod dag_nodes;
 mod ffmpeg_transcoding;
-mod hash_timecode;
-mod hash_video;
 mod server;
 mod services;
+mod video;
 
 use crate::chat::ChatAggregator;
+use crate::chronicler::Chronicler;
 use crate::config::Config;
-use crate::hash_timecode::HashTimecode;
-use crate::hash_video::HashVideo;
+use crate::video::VideoAggregator;
 
 use std::fs::File;
 use std::io::BufReader;
@@ -48,30 +48,29 @@ async fn main() {
 
     println!("Peer Id: {}", peer_id);
 
-    let (timecode_tx, timecode_rx) = channel(5);
-
-    let mut timecode = HashTimecode::new(ipfs.clone(), timecode_rx, config.clone());
+    let (archive_tx, archive_rx) = channel(25);
+    let mut chronicler = Chronicler::new(ipfs.clone(), archive_rx, config.clone());
 
     let (video_tx, video_rx) = channel(config.variants);
+    let mut video =
+        VideoAggregator::new(ipfs.clone(), video_rx, archive_tx.clone(), config.clone());
 
-    let mut video = HashVideo::new(ipfs.clone(), video_rx, timecode_tx.clone(), config.clone());
-
-    let mut chat = ChatAggregator::new(ipfs.clone(), config.clone());
+    let mut chat = ChatAggregator::new(ipfs.clone(), archive_tx.clone(), config.clone());
 
     if config.streamer_app.ffmpeg.is_some() {
         tokio::join!(
-            video.collect(),
-            server::start_server(video_tx, timecode_tx, config.clone()),
-            timecode.collect(),
+            chronicler.collect(),
             chat.aggregate(),
-            ffmpeg_transcoding::start(config)
+            video.aggregate(),
+            server::start_server(video_tx, archive_tx, config.clone()),
+            ffmpeg_transcoding::start(config),
         );
     } else {
         tokio::join!(
-            video.collect(),
-            server::start_server(video_tx, timecode_tx, config),
-            timecode.collect(),
-            chat.aggregate()
+            chronicler.collect(),
+            chat.aggregate(),
+            video.aggregate(),
+            server::start_server(video_tx, archive_tx, config),
         );
     }
 }

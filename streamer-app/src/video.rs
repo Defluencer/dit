@@ -1,6 +1,6 @@
+use crate::chronicler::Archive;
 use crate::config::Config;
 use crate::dag_nodes::{IPLDLink, LiveNode, VariantsNode};
-use crate::hash_timecode::Timecode;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -16,10 +16,10 @@ use ipfs_api::IpfsClient;
 
 use cid::Cid;
 
-pub struct HashVideo {
+pub struct VideoAggregator {
     ipfs: IpfsClient,
 
-    timecode_tx: Sender<Timecode>,
+    archive_tx: Sender<Archive>,
     video_rx: Receiver<(String, Bytes)>,
 
     config: Config,
@@ -28,16 +28,16 @@ pub struct HashVideo {
     previous_link: Option<IPLDLink>,
 }
 
-impl HashVideo {
+impl VideoAggregator {
     pub fn new(
         ipfs: IpfsClient,
         video_rx: Receiver<(String, Bytes)>,
-        timecode_tx: Sender<Timecode>,
+        archive_tx: Sender<Archive>,
         config: Config,
     ) -> Self {
         Self {
             ipfs,
-            timecode_tx,
+            archive_tx,
             video_rx,
             config,
 
@@ -49,7 +49,7 @@ impl HashVideo {
         }
     }
 
-    pub async fn collect(&mut self) {
+    pub async fn aggregate(&mut self) {
         while let Some((variant, data)) = self.video_rx.recv().await {
             let video_segment_cid = match self.add_video(data).await {
                 Ok(cid) => cid,
@@ -73,10 +73,10 @@ impl HashVideo {
                 }
             };
 
-            let msg = Timecode::Add(variants_node_cid.clone());
+            let msg = Archive::Video(variants_node_cid.clone());
 
-            if let Err(error) = self.timecode_tx.send(msg).await {
-                eprintln!("Timecode receiver hung up {}", error);
+            if let Err(error) = self.archive_tx.send(msg).await {
+                eprintln!("Archive receiver hung up {}", error);
             }
 
             let live_node_cid = match self.add_live(variants_node_cid).await {
