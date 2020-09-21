@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+//config as DAG node ?
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub streamer_peer_id: String,

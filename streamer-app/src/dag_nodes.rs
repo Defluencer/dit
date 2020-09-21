@@ -107,3 +107,19 @@ pub struct ChatContent {
 
     pub timestamp: IPLDLink,
 }
+
+/* Below are nodes used for chat moderation */
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+pub struct ChatIdentity {
+    #[serde(rename = "PeerId")]
+    pub peer_id: String, //TODO switch to CID when go-Ipfs 0.7 drops
+
+    #[serde(rename = "PublicKey")]
+    pub public_key: String, //TODO find crate with ETH address and signature types.
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Ban {
+    pub ban: ChatIdentity,
+}

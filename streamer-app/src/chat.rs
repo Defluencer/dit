@@ -2,6 +2,7 @@ use crate::chronicler::Archive;
 use crate::config::Config;
 use crate::dag_nodes::ChatMessage;
 
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::str;
 
@@ -20,6 +21,11 @@ pub struct ChatAggregator {
     archive_tx: Sender<Archive>,
 
     config: Config,
+    //use config instead?
+    /* blocked_peer_ids: HashSet<String>,
+    blocked_address: HashSet<String>,
+    allowed_peer_ids: HashSet<String>,
+    allowed_address: HashSet<String>, */
 }
 
 impl ChatAggregator {
@@ -50,7 +56,7 @@ impl ChatAggregator {
     }
 
     async fn process_msg(&mut self, msg: &PubsubSubResponse) {
-        if !is_verified_sender(msg) {
+        if !self.is_verified_sender(msg) {
             return;
         }
 
@@ -69,24 +75,24 @@ impl ChatAggregator {
             eprintln!("Archive receiver hung up {}", error);
         }
     }
-}
 
-fn is_verified_sender(response: &PubsubSubResponse) -> bool {
-    let encoded = match response.from.as_ref() {
-        Some(sender) => sender,
-        None => return false,
-    };
+    fn is_verified_sender(&self, response: &PubsubSubResponse) -> bool {
+        let encoded = match response.from.as_ref() {
+            Some(sender) => sender,
+            None => return false,
+        };
 
-    let decoded = Base::decode(&Base::Base64Pad, encoded).expect("Decoding sender failed");
+        let decoded = Base::decode(&Base::Base64Pad, encoded).expect("Decoding sender failed");
 
-    let cid = Cid::try_from(decoded).expect("CID from decoded sender failed");
+        let cid = Cid::try_from(decoded).expect("CID from decoded sender failed");
 
-    #[cfg(debug_assertions)]
-    println!("Sender => {}", cid);
+        #[cfg(debug_assertions)]
+        println!("Sender => {}", cid);
 
-    //TODO check peer id whitelist then blacklist
+        //TODO check peer id whitelist then blacklist
 
-    true
+        true
+    }
 }
 
 fn decode_message(response: &PubsubSubResponse) -> Option<ChatMessage> {
