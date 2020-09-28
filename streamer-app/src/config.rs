@@ -1,8 +1,26 @@
-use serde::Deserialize;
+use tokio::stream::StreamExt;
 
-//config as DAG node ?
+use hyper::body::Bytes;
 
-#[derive(Debug, Deserialize, Clone)]
+use ipfs_api::response::Error;
+use ipfs_api::IpfsClient;
+
+use serde::{Deserialize, Serialize};
+
+pub async fn get_config(ipfs: &IpfsClient) -> Config {
+    let config = ipfs
+        .name_resolve(None, false, false)
+        .await
+        .expect("IPFS name resolve failed");
+
+    let buffer: Result<Bytes, Error> = ipfs.dag_get(&config.path).collect().await;
+
+    let buffer = buffer.expect("IPFS DAG get failed");
+
+    serde_json::from_slice(&buffer).expect("Deserializing config failed")
+}
+
+#[derive(Serialize, Debug, Deserialize, Clone)]
 pub struct Config {
     pub streamer_peer_id: String,
     pub gossipsub_topics: Topics,
@@ -12,19 +30,21 @@ pub struct Config {
     pub pin_stream: bool,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 pub struct StreamerApp {
     pub socket_addr: String,
     pub ffmpeg: Option<Ffmpeg>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 pub struct Ffmpeg {
     pub socket_addr: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 pub struct Topics {
     pub video: String,
     pub chat: String,
 }
+
+//TODO impl default

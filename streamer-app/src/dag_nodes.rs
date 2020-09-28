@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -72,25 +72,20 @@ pub struct SecondNode {
 
 /* Below are nodes created during the live stream */
 
-/// Link all stream variants.
-/// Allow viewer to select video quality.
+/// Links all variants, allowing selection of video quality.
+/// Also link to the previous node.
 #[derive(Serialize, Debug)]
-pub struct VariantsNode {
+pub struct VideoNode {
     #[serde(rename = "quality")]
-    pub variants: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
-}
+    pub qualities: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
 
-/// Link the current stream variants dag node and the previous live dag node.
-/// Allow rewind/buffer previous video segments.
-#[derive(Serialize, Debug)]
-pub struct LiveNode {
-    pub current: IPLDLink,
     pub previous: Option<IPLDLink>,
 }
 
 /// Chat message optionaly signed with some form of private key
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChatMessage {
+    #[serde(rename = "publickey")]
     pub public_key: Option<String>,
 
     pub signature: Option<String>,
@@ -110,16 +105,28 @@ pub struct ChatContent {
 
 /* Below are nodes used for chat moderation */
 
+//TODO check if BrightID can be integrated
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub struct ChatIdentity {
-    #[serde(rename = "PeerId")]
+    #[serde(rename = "peerid")]
     pub peer_id: String, //TODO switch to CID when go-Ipfs 0.7 drops
 
-    #[serde(rename = "PublicKey")]
+    #[serde(rename = "publickey")]
     pub public_key: String, //TODO find crate with ETH address and signature types.
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Ban {
-    pub ban: ChatIdentity,
+pub struct Blacklist {
+    pub blacklist: HashSet<ChatIdentity>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Whitelist {
+    pub whitelist: HashSet<ChatIdentity>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Moderators {
+    pub mods: HashSet<ChatIdentity>,
 }

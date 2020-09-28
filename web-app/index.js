@@ -47,6 +47,8 @@ async function pubsubMessage(msg) {
 
     console.log(`New Node Previous => ${liveNode.value.previous}`)
 
+    //TODO update! live node is redundant
+
     const variants = await ipfs.dag.get(liveNode.value.current)
 
     updatePlaylists(variants)

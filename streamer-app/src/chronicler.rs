@@ -1,4 +1,3 @@
-use crate::config::Config;
 use crate::dag_nodes::{
     ChatMessage, DayNode, HourNode, IPLDLink, MinuteNode, SecondNode, StreamNode,
 };
@@ -24,25 +23,26 @@ pub struct Chronicler {
 
     archive_rx: Receiver<Archive>,
 
-    config: Config,
-
     video_chat_buffer: VecDeque<SecondNode>,
 
     minute_node: MinuteNode,
     hour_node: HourNode,
     day_node: DayNode,
+
+    pin_stream: bool,
+    video_segment_duration: usize,
 }
 
 impl Chronicler {
-    pub fn new(ipfs: IpfsClient, archive_rx: Receiver<Archive>, config: Config) -> Self {
+    pub async fn new(ipfs: IpfsClient, archive_rx: Receiver<Archive>) -> Self {
+        let config = crate::config::get_config(&ipfs).await;
+
         Self {
             ipfs,
 
             archive_rx,
 
             video_chat_buffer: VecDeque::with_capacity(120 / config.video_segment_duration), //120 == 2 minutes
-
-            config,
 
             minute_node: MinuteNode {
                 links_to_seconds: Vec::with_capacity(60),
@@ -55,6 +55,9 @@ impl Chronicler {
             day_node: DayNode {
                 links_to_hours: Vec::with_capacity(24),
             },
+
+            pin_stream: config.pin_stream,
+            video_segment_duration: config.video_segment_duration,
         }
     }
 
@@ -144,7 +147,7 @@ impl Chronicler {
 
         let link = IPLDLink { link: cid };
 
-        for _ in 0..self.config.video_segment_duration {
+        for _ in 0..self.video_segment_duration {
             self.minute_node.links_to_seconds.push(link.clone());
         }
     }
@@ -251,7 +254,7 @@ impl Chronicler {
             }
         };
 
-        if self.config.pin_stream {
+        if self.pin_stream {
             match self.ipfs.pin_add(&stream_cid, true).await {
                 Ok(_) => println!("Pinned Stream CID => {}", &stream_cid),
                 Err(e) => eprintln!("IPFS pin add failed {}", e),

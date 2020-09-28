@@ -1,8 +1,6 @@
 use crate::chronicler::Archive;
-use crate::config::Config;
-use crate::dag_nodes::ChatMessage;
+use crate::dag_nodes::{Blacklist, ChatMessage, Moderators, Whitelist};
 
-use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::str;
 
@@ -20,27 +18,24 @@ pub struct ChatAggregator {
 
     archive_tx: Sender<Archive>,
 
-    config: Config,
-    //use config instead?
-    /* blocked_peer_ids: HashSet<String>,
-    blocked_address: HashSet<String>,
-    allowed_peer_ids: HashSet<String>,
-    allowed_address: HashSet<String>, */
+    gossipsub_topic: String,
 }
 
 impl ChatAggregator {
-    pub fn new(ipfs: IpfsClient, archive_tx: Sender<Archive>, config: Config) -> Self {
+    pub async fn new(ipfs: IpfsClient, archive_tx: Sender<Archive>) -> Self {
+        let config = crate::config::get_config(&ipfs).await;
+
         Self {
             ipfs,
 
             archive_tx,
 
-            config,
+            gossipsub_topic: config.gossipsub_topics.chat,
         }
     }
 
     pub async fn aggregate(&mut self) {
-        let topic = &self.config.gossipsub_topics.chat;
+        let topic = &self.gossipsub_topic;
 
         let mut stream = self.ipfs.pubsub_sub(topic, true);
 
