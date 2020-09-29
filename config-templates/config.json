@@ -1,5 +1,4 @@
 {
-    "streamer_peer_id": "Qm...",
     "gossipsub_topics": {
         "video": "livelikevideo",
         "chat": "livelikechat"
@@ -12,5 +11,13 @@
     },
     "variants": 4,
     "video_segment_duration": 4,
-    "pin_stream": true
+    "blacklist": {
+        "/": "addCIDhere"
+    },
+    "whitelist": {
+        "/": "addCIDhere"
+    },
+    "mods": {
+        "/": "addCIDhere"
+    }
 }
