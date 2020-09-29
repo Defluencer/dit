@@ -1,6 +1,5 @@
 use crate::chronicler::Archive;
 use crate::services::put_requests;
-use crate::Config;
 
 use std::future::Future;
 use std::net::SocketAddr;
@@ -75,16 +74,10 @@ async fn shutdown_signal(mut archive_tx: Sender<Archive>) {
 }
 
 pub async fn start_server(
+    server_addr: SocketAddr,
     collector: Sender<(String, Bytes)>,
     archive_tx: Sender<Archive>,
-    config: Config,
 ) {
-    let server_addr = config
-        .streamer_app
-        .socket_addr
-        .parse::<SocketAddr>()
-        .expect("Parsing socket address failed");
-
     let service = MakeLiveLikeService::new(collector.clone());
 
     let server = Server::bind(&server_addr).serve(service);

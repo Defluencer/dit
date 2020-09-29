@@ -1,5 +1,5 @@
 use crate::chronicler::Archive;
-use crate::dag_nodes::{IPLDLink, VideoNode};
+use crate::dag_nodes::IPLDLink;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -13,7 +13,19 @@ use hyper::body::Bytes;
 use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
 
+use serde::Serialize;
+
 use cid::Cid;
+
+/// Links all variants, allowing selection of video quality.
+/// Also link to the previous node.
+#[derive(Serialize, Debug)]
+pub struct VideoNode {
+    #[serde(rename = "quality")]
+    pub qualities: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
+
+    pub previous: Option<IPLDLink>,
+}
 
 pub struct VideoAggregator {
     ipfs: IpfsClient,

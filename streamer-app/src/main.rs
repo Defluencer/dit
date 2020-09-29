@@ -9,8 +9,9 @@ mod video;
 
 use crate::chat::ChatAggregator;
 use crate::chronicler::Chronicler;
-use crate::config::Config;
 use crate::video::VideoAggregator;
+
+use std::net::SocketAddr;
 
 use tokio::sync::mpsc::channel;
 
@@ -32,20 +33,28 @@ async fn main() {
 
     let mut chat = ChatAggregator::new(ipfs.clone(), archive_tx.clone()).await;
 
+    let streamer_app_addr = config.streamer_app.socket_addr;
+
+    let server_addr = streamer_app_addr
+        .parse::<SocketAddr>()
+        .expect("Parsing socket address failed");
+
     if config.streamer_app.ffmpeg.is_some() {
+        let ffmpeg_addr = config.streamer_app.ffmpeg.unwrap().socket_addr;
+
         tokio::join!(
             chronicler.collect(),
             chat.aggregate(),
             video.aggregate(),
-            server::start_server(video_tx, archive_tx, config.clone()),
-            ffmpeg_transcoding::start(config),
+            server::start_server(server_addr, video_tx, archive_tx),
+            ffmpeg_transcoding::start(ffmpeg_addr, streamer_app_addr),
         );
     } else {
         tokio::join!(
             chronicler.collect(),
             chat.aggregate(),
             video.aggregate(),
-            server::start_server(video_tx, archive_tx, config),
+            server::start_server(server_addr, video_tx, archive_tx),
         );
     }
 }

@@ -1,8 +1,6 @@
-use crate::Config;
-
 use tokio::process::Command;
 
-pub async fn start(config: Config) {
+pub async fn start(ffmpeg_addr: String, stream_app_addr: String) {
     let mut command = Command::new("ffmpeg");
 
     command
@@ -10,10 +8,7 @@ pub async fn start(config: Config) {
             "-listen",
             "1",
             "-i",
-            &format!(
-                "rtmp://{}",
-                config.streamer_app.ffmpeg.as_ref().unwrap().socket_addr
-            ),
+            &format!("rtmp://{}", ffmpeg_addr),
             "-rtmp_live",
             "live",
             "-rtmp_buffer",
@@ -73,14 +68,14 @@ pub async fn start(config: Config) {
             "-master_pl_name",
             "master.m3u8",
             "-hls_segment_filename",
-            &format!("http://{}/%v/%d.ts", config.streamer_app.socket_addr),
+            &format!("http://{}/%v/%d.ts", stream_app_addr),
             "-http_persistent",
             "1",
             "-ignore_io_errors",
             "1",
             "-method",
             "PUT",
-            &format!("http://{}/%v/index.m3u8", config.streamer_app.socket_addr),
+            &format!("http://{}/%v/index.m3u8", stream_app_addr),
         ]);
 
     #[cfg(target_os = "windows")]

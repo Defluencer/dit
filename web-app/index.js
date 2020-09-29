@@ -17,6 +17,8 @@ async function main() {
     //<script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
     ipfs = await window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
+    //TODO use ENS name to get IPNS record then get config for the stream
+
     await ipfs.pubsub.subscribe(gossipsubTopic, msg => pubsubMessage(msg))
 
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
@@ -43,15 +45,11 @@ async function pubsubMessage(msg) {
     console.log(`PubSub reveived => ${cid}`)
     //console.log(`Previous => ${previousCid}`)
 
-    const liveNode = await ipfs.dag.get(cid)
+    const videoNode = await ipfs.dag.get(cid)
 
-    console.log(`New Node Previous => ${liveNode.value.previous}`)
+    console.log(`New Node Previous => ${videoNode.value.previous}`)
 
-    //TODO update! live node is redundant
-
-    const variants = await ipfs.dag.get(liveNode.value.current)
-
-    updatePlaylists(variants)
+    updatePlaylists(videoNode)
 
     //javascript object cannot be equal WTF???
     /* if (liveNode.value.previous == previousCid) {
@@ -127,17 +125,17 @@ function updatePlaylists(variants) {
     }
 }
 
-async function rebuildPlaylists(latestLive) {
-    const nodes = [latestLive]
+async function rebuildPlaylists(latestVideoNode) {
+    const nodes = [latestVideoNode]
 
     while (nodes[nodes.length - 1].value.previous !== previousCid) {
         const cid = nodes[nodes.length - 1].value.previous
 
-        const liveNode = await ipfs.dag.get(cid)
+        const videoNode = await ipfs.dag.get(cid)
 
-        if (liveNode.value.previous === null) break //Found first node of the stream, stop here.
+        if (videoNode.value.previous === null) break //Found first node of the stream, stop here.
 
-        nodes.push(liveNode)
+        nodes.push(videoNode)
 
         if (nodes.length >= hlsPlaylistSize) break //Found more node than the list size, stop here.
     }
@@ -147,9 +145,7 @@ async function rebuildPlaylists(latestLive) {
     for (const node of nodes) {
         //console.log(`Variants CID => ${node.value.current}`)
 
-        const variants = await ipfs.dag.get(node.value.current)
-
-        updatePlaylists(variants)
+        updatePlaylists(node)
     }
 }
 

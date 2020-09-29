@@ -1,6 +1,5 @@
-use crate::dag_nodes::{
-    ChatMessage, DayNode, HourNode, IPLDLink, MinuteNode, SecondNode, StreamNode,
-};
+use crate::chat::ChatMessage;
+use crate::dag_nodes::IPLDLink;
 
 use std::collections::VecDeque;
 use std::convert::TryFrom;
@@ -10,7 +9,47 @@ use tokio::sync::mpsc::Receiver;
 
 use ipfs_api::IpfsClient;
 
+use serde::Serialize;
+
 use cid::Cid;
+
+/// Stream Root CID.
+#[derive(Serialize, Debug)]
+pub struct StreamNode {
+    #[serde(rename = "time")]
+    pub timecode: IPLDLink, // ../<StreamHash>/time/..
+}
+
+/// Links all hour nodes for multiple hours of video.
+#[derive(Serialize, Debug)]
+pub struct DayNode {
+    #[serde(rename = "hour")]
+    pub links_to_hours: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/..
+}
+
+/// Links all minute nodes for 1 hour of video.
+#[derive(Serialize, Debug)]
+pub struct HourNode {
+    #[serde(rename = "minute")]
+    pub links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/..
+}
+
+/// Links all variants nodes for 1 minute of video.
+#[derive(Serialize, Debug)]
+pub struct MinuteNode {
+    #[serde(rename = "second")]
+    pub links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/..
+}
+
+/// Links video and chat nodes.
+#[derive(Serialize, Debug)]
+pub struct SecondNode {
+    #[serde(rename = "video")]
+    pub link_to_video: IPLDLink, // ../<StreamHash>/time/hour/1/minute/15/second/30/video/..
+
+    #[serde(rename = "chat")]
+    pub links_to_chat: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/chat/0/..
+}
 
 pub enum Archive {
     Chat(ChatMessage),
@@ -29,7 +68,6 @@ pub struct Chronicler {
     hour_node: HourNode,
     day_node: DayNode,
 
-    pin_stream: bool,
     video_segment_duration: usize,
 }
 
@@ -56,7 +94,6 @@ impl Chronicler {
                 links_to_hours: Vec::with_capacity(24),
             },
 
-            pin_stream: config.pin_stream,
             video_segment_duration: config.video_segment_duration,
         }
     }
@@ -71,6 +108,7 @@ impl Chronicler {
         }
     }
 
+    /// Link chat message to SecondNodes.
     async fn archive_chat_message(&mut self, msg: ChatMessage) {
         for node in self.video_chat_buffer.iter_mut() {
             if node.link_to_video != msg.data.timestamp {
@@ -96,6 +134,7 @@ impl Chronicler {
         }
     }
 
+    /// Buffers SecondNodes, waiting for chat messages to be linked.
     async fn archive_video_segment(&mut self, cid: Cid) {
         let link_variants = IPLDLink { link: cid };
 
@@ -204,7 +243,7 @@ impl Chronicler {
         self.day_node.links_to_hours.push(link);
     }
 
-    /// Create all remaining DAG nodes then print the final stream CID.
+    /// Create all remaining DAG nodes then pin and print the final stream CID.
     async fn finalize(&mut self) {
         println!("Finalizing Stream...");
 
@@ -254,13 +293,9 @@ impl Chronicler {
             }
         };
 
-        if self.pin_stream {
-            match self.ipfs.pin_add(&stream_cid, true).await {
-                Ok(_) => println!("Pinned Stream CID => {}", &stream_cid),
-                Err(e) => eprintln!("IPFS pin add failed {}", e),
-            }
-        } else {
-            println!("Unpinned Stream CID => {}", &stream_cid)
+        match self.ipfs.pin_add(&stream_cid, true).await {
+            Ok(_) => println!("Stream CID => {}", &stream_cid),
+            Err(e) => eprintln!("IPFS pin add failed {}", e),
         }
     }
 }
