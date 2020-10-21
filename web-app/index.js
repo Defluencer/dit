@@ -1,6 +1,6 @@
 'use strict'
 
-const streamerPeerId = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi"
+//const streamerPeerId = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi"
 const gossipsubTopic = "livelike"
 
 const video = document.getElementById('video')
@@ -8,18 +8,16 @@ const video = document.getElementById('video')
 var ipfs
 var hls
 
-async function main() {
-    if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
-
-    //<script src="https://cdn.jsdelivr.net/npm/ipfs/dist/index.min.js"></script>
-    //ipfs = await Ipfs.create({ repo: 'ipfs-' + Math.random() })
-
-    //<script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
+//TODO find a way to call this from wasm
+async function initIPFS() {
     ipfs = await window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
-    //TODO use ENS name to get IPNS record then get config for the stream
-
     await ipfs.pubsub.subscribe(gossipsubTopic, msg => pubsubMessage(msg))
+}
+
+//TODO find a way to call this from wasm
+async function initHLS() {
+    if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
 
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
     Hls.DefaultConfig.debug = false
@@ -36,7 +34,7 @@ async function main() {
 
 //var previousCid = null
 
-async function pubsubMessage(msg) {
+/* async function pubsubMessage(msg) {
     const from = msg.from
     const cid = msg.data
 
@@ -52,7 +50,7 @@ async function pubsubMessage(msg) {
     updatePlaylists(videoNode)
 
     //javascript object cannot be equal WTF???
-    /* if (liveNode.value.previous == previousCid) {
+    if (liveNode.value.previous == previousCid) {
         console.log("Updating Playlist")
 
         //console.log(`Variants CID => ${liveNode.value.current}`)
@@ -66,10 +64,10 @@ async function pubsubMessage(msg) {
         rebuildPlaylists(liveNode)
     }
 
-    previousCid = cid */
-}
+    previousCid = cid 
+} */
 
-const playlists = [['#EXTM3U',
+/* const playlists = [['#EXTM3U',
     '#EXT-X-VERSION:6',
     '#EXT-X-TARGETDURATION:4',
     '#EXT-X-MEDIA-SEQUENCE:0',
@@ -88,12 +86,12 @@ const playlists = [['#EXTM3U',
     '#EXT-X-VERSION:6',
     '#EXT-X-TARGETDURATION:4',
     '#EXT-X-MEDIA-SEQUENCE:0',
-    '#EXT-X-INDEPENDENT-SEGMENTS']]
+    '#EXT-X-INDEPENDENT-SEGMENTS']] */
 
-const hlsPlaylistSize = 5
-var mediaSequence = -hlsPlaylistSize
+//const hlsPlaylistSize = 5
+//var mediaSequence = -hlsPlaylistSize
 
-function updatePlaylists(variants) {
+/* function updatePlaylists(variants) {
     mediaSequence++
 
     if (mediaSequence > 0) {
@@ -123,9 +121,9 @@ function updatePlaylists(variants) {
     if (mediaSequence === -4) {
         hls.startLoad()
     }
-}
+} */
 
-async function rebuildPlaylists(latestVideoNode) {
+/* async function rebuildPlaylists(latestVideoNode) {
     const nodes = [latestVideoNode]
 
     while (nodes[nodes.length - 1].value.previous !== previousCid) {
@@ -147,9 +145,9 @@ async function rebuildPlaylists(latestVideoNode) {
 
         updatePlaylists(node)
     }
-}
+} */
 
-const master = ['#EXTM3U',
+/* const master = ['#EXTM3U',
     '#EXT-X-VERSION:6',
     '#EXT-X-STREAM-INF:BANDWIDTH=6811200,AVERAGE-BANDWIDTH=6000000,CODECS="avc1.42c02a,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=60.0',
     'livelike/1080p60/index.m3u8',
@@ -159,7 +157,7 @@ const master = ['#EXTM3U',
     'livelike/720p30/index.m3u8',
     '#EXT-X-STREAM-INF:BANDWIDTH=2411200,AVERAGE-BANDWIDTH=2000000,CODECS="avc1.42c01f,mp4a.40.2",RESOLUTION=854x480,FRAME-RATE=30.0',
     'livelike/480p30/index.m3u8',
-    '#EXT-X-INDEPENDENT-SEGMENTS']
+    '#EXT-X-INDEPENDENT-SEGMENTS'] */
 
 class HlsjsIPFSLoader {
     constructor(config) {

@@ -2,6 +2,7 @@
 
 members = [
     "streamer-app",
+    "web-app",
 ]
 
 [profile.dev]
