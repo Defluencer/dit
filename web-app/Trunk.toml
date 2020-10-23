@@ -18,10 +18,10 @@ ignore = []
 # The port to serve on.
 port = 8080
 # Open a browser tab once the initial build is complete.
-open = false
+open = true
 
 [clean]
 # The output dir for all final assets.
 dist = "dist"
 # Optionally perform a cargo clean.
-cargo = false
+cargo = true

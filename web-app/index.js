@@ -1,23 +1,16 @@
-'use strict'
-
-//const streamerPeerId = "QmX91oLTbANP7NV5yUYJvWYaRdtfiaLTELbYVX5bA8A9pi"
-const gossipsubTopic = "livelike"
-
 const video = document.getElementById('video')
 
 var ipfs
 var hls
 
-//TODO find a way to call this from wasm
-async function initIPFS() {
+import { pubsubMessage } from "example";
+
+async function main() {
+    if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
+
     ipfs = await window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
-    await ipfs.pubsub.subscribe(gossipsubTopic, msg => pubsubMessage(msg))
-}
-
-//TODO find a way to call this from wasm
-async function initHLS() {
-    if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
+    await ipfs.pubsub.subscribe("livelike", msg => pubsubMessage(msg))
 
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
     Hls.DefaultConfig.debug = false
@@ -27,137 +20,10 @@ async function initHLS() {
 
     hls = new Hls()
 
-    hls.loadSource('master.m3u8')
-
     hls.attachMedia(video)
+
+    hls.loadSource('master.m3u8')
 }
-
-//var previousCid = null
-
-/* async function pubsubMessage(msg) {
-    const from = msg.from
-    const cid = msg.data
-
-    if (from !== streamerPeerId) return
-
-    console.log(`PubSub reveived => ${cid}`)
-    //console.log(`Previous => ${previousCid}`)
-
-    const videoNode = await ipfs.dag.get(cid)
-
-    console.log(`New Node Previous => ${videoNode.value.previous}`)
-
-    updatePlaylists(videoNode)
-
-    //javascript object cannot be equal WTF???
-    if (liveNode.value.previous == previousCid) {
-        console.log("Updating Playlist")
-
-        //console.log(`Variants CID => ${liveNode.value.current}`)
-
-        const variants = await ipfs.dag.get(liveNode.value.current)
-
-        updatePlaylists(variants)
-    } else {
-        console.log("Rebuilding Playlist")
-
-        rebuildPlaylists(liveNode)
-    }
-
-    previousCid = cid 
-} */
-
-/* const playlists = [['#EXTM3U',
-    '#EXT-X-VERSION:6',
-    '#EXT-X-TARGETDURATION:4',
-    '#EXT-X-MEDIA-SEQUENCE:0',
-    '#EXT-X-INDEPENDENT-SEGMENTS']
-    , ['#EXTM3U',
-    '#EXT-X-VERSION:6',
-    '#EXT-X-TARGETDURATION:4',
-    '#EXT-X-MEDIA-SEQUENCE:0',
-    '#EXT-X-INDEPENDENT-SEGMENTS']
-    , ['#EXTM3U',
-    '#EXT-X-VERSION:6',
-    '#EXT-X-TARGETDURATION:4',
-    '#EXT-X-MEDIA-SEQUENCE:0',
-    '#EXT-X-INDEPENDENT-SEGMENTS']
-    , ['#EXTM3U',
-    '#EXT-X-VERSION:6',
-    '#EXT-X-TARGETDURATION:4',
-    '#EXT-X-MEDIA-SEQUENCE:0',
-    '#EXT-X-INDEPENDENT-SEGMENTS']] */
-
-//const hlsPlaylistSize = 5
-//var mediaSequence = -hlsPlaylistSize
-
-/* function updatePlaylists(variants) {
-    mediaSequence++
-
-    if (mediaSequence > 0) {
-        playlists[0].splice(5, 2)
-        playlists[1].splice(5, 2)
-        playlists[2].splice(5, 2)
-        playlists[3].splice(5, 2)
-
-        playlists[0][3] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
-        playlists[1][3] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
-        playlists[2][3] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
-        playlists[3][3] = `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`
-    }
-
-    playlists[0].push('#EXTINF:4.000,')
-    playlists[0].push(`/${variants.value.quality["1080p60"]}`)
-
-    playlists[1].push('#EXTINF:4.000,')
-    playlists[1].push(`/${variants.value.quality["720p60"]}`)
-
-    playlists[2].push('#EXTINF:4.000,')
-    playlists[2].push(`/${variants.value.quality["720p30"]}`)
-
-    playlists[3].push('#EXTINF:4.000,')
-    playlists[3].push(`/${variants.value.quality["480p30"]}`)
-
-    if (mediaSequence === -4) {
-        hls.startLoad()
-    }
-} */
-
-/* async function rebuildPlaylists(latestVideoNode) {
-    const nodes = [latestVideoNode]
-
-    while (nodes[nodes.length - 1].value.previous !== previousCid) {
-        const cid = nodes[nodes.length - 1].value.previous
-
-        const videoNode = await ipfs.dag.get(cid)
-
-        if (videoNode.value.previous === null) break //Found first node of the stream, stop here.
-
-        nodes.push(videoNode)
-
-        if (nodes.length >= hlsPlaylistSize) break //Found more node than the list size, stop here.
-    }
-
-    nodes.reverse() //Oldest nodes first
-
-    for (const node of nodes) {
-        //console.log(`Variants CID => ${node.value.current}`)
-
-        updatePlaylists(node)
-    }
-} */
-
-/* const master = ['#EXTM3U',
-    '#EXT-X-VERSION:6',
-    '#EXT-X-STREAM-INF:BANDWIDTH=6811200,AVERAGE-BANDWIDTH=6000000,CODECS="avc1.42c02a,mp4a.40.2",RESOLUTION=1920x1080,FRAME-RATE=60.0',
-    'livelike/1080p60/index.m3u8',
-    '#EXT-X-STREAM-INF:BANDWIDTH=5161200,AVERAGE-BANDWIDTH=4500000,CODECS="avc1.42c020,mp4a.40.2",RESOLUTION=1280x720,FRAME-RATE=60.0',
-    'livelike/720p60/index.m3u8',
-    '#EXT-X-STREAM-INF:BANDWIDTH=3511200,AVERAGE-BANDWIDTH=3000000,CODECS="avc1.42c01f,mp4a.40.2",RESOLUTION=1280x720,FRAME-RATE=30.0',
-    'livelike/720p30/index.m3u8',
-    '#EXT-X-STREAM-INF:BANDWIDTH=2411200,AVERAGE-BANDWIDTH=2000000,CODECS="avc1.42c01f,mp4a.40.2",RESOLUTION=854x480,FRAME-RATE=30.0',
-    'livelike/480p30/index.m3u8',
-    '#EXT-X-INDEPENDENT-SEGMENTS'] */
 
 class HlsjsIPFSLoader {
     constructor(config) {
