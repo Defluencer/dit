@@ -24,4 +24,4 @@ open = true
 # The output dir for all final assets.
 dist = "dist"
 # Optionally perform a cargo clean.
-cargo = true
+cargo = false

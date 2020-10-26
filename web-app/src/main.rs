@@ -1,6 +1,6 @@
 mod ipfs;
 
-use yew::prelude::*;
+use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 
 struct Model {
     link: ComponentLink<Self>,
@@ -34,7 +34,7 @@ impl Component for Model {
 }
 
 fn main() {
-    ipfs::init();
+    ipfs::init("livelike");
 
     yew::start_app::<Model>();
 }
