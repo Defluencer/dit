@@ -1,16 +1,20 @@
-const video = document.getElementById('video')
-
 var ipfs
 var hls
 
-import { pubsubMessage } from "example";
+const video = document.getElementById('video')
 
-async function main() {
+var masterPlaylist
+var fragmentPlaylist
+
+export async function initLibs(topic, pubsubMessage, masterCallback, fragmentCallback) {
     if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
 
     ipfs = await window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
-    await ipfs.pubsub.subscribe("livelike", msg => pubsubMessage(msg))
+    await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))
+
+    masterPlaylist = masterCallback
+    fragmentPlaylist = fragmentCallback
 
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
     Hls.DefaultConfig.debug = false
@@ -56,7 +60,7 @@ class HlsjsIPFSLoader {
 
         //return data when ask for master playlist
         if (filename === "master.m3u8") {
-            const res = master.join('\n')
+            const res = masterPlaylist()
 
             console.log(`${res}`)
 
@@ -70,9 +74,9 @@ class HlsjsIPFSLoader {
 
         //return data when ask for segment playlist
         if (filename === "index.m3u8") {
-            let res
+            let res = fragmentPlaylist()
 
-            //use js equivalent of a hash table???
+            /* //use js equivalent of a hash table???
             switch (urlParts[urlParts.length - 2]) {
                 case "1080p60":
                     res = playlists[0].join('\n')
@@ -86,7 +90,7 @@ class HlsjsIPFSLoader {
                 case "480p30":
                     res = playlists[3].join('\n')
                     break;
-            }
+            } */
 
             console.log(`${res}`)
 
@@ -152,5 +156,3 @@ function str2buf(str) {
 
     return buf;
 }
-
-main()
