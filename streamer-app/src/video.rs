@@ -17,8 +17,7 @@ use serde::Serialize;
 
 use cid::Cid;
 
-/// Links all variants, allowing selection of video quality.
-/// Also link to the previous node.
+/// Links all variants, allowing selection of video quality. Also link to the previous video node.
 #[derive(Serialize, Debug)]
 pub struct VideoNode {
     #[serde(rename = "quality")]
@@ -37,6 +36,8 @@ pub struct VideoAggregator {
     gossipsub_topic: String,
 
     video_node: VideoNode,
+
+    qualities: usize,
 }
 
 impl VideoAggregator {
@@ -45,7 +46,7 @@ impl VideoAggregator {
         video_rx: Receiver<(String, Bytes)>,
         archive_tx: Sender<Archive>,
     ) -> Self {
-        let config = crate::config::get_config(&ipfs).await;
+        //let config = crate::config::get_config(&ipfs).await;
 
         Self {
             ipfs,
@@ -53,13 +54,15 @@ impl VideoAggregator {
             archive_tx,
             video_rx,
 
-            gossipsub_topic: config.gossipsub_topics.video,
+            gossipsub_topic: "livelike".into(), /* config.gossipsub_topics.video */
 
             video_node: VideoNode {
-                qualities: HashMap::with_capacity(config.variants),
+                qualities: HashMap::with_capacity(4 /* config.variants */),
 
                 previous: None,
             },
+
+            qualities: 4,
         }
     }
 
@@ -129,7 +132,7 @@ impl VideoAggregator {
 
         self.video_node.qualities.insert(variant, link);
 
-        self.video_node.qualities.len() >= self.video_node.qualities.capacity()
+        self.video_node.qualities.len() >= self.qualities
     }
 
     /// Add stream variants dag node to IPFS. Return a CID.

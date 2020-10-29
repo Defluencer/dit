@@ -1,4 +1,6 @@
-use yew::services::ConsoleService;
+use std::sync::{Arc, RwLock};
+
+use crate::playlists::Playlists;
 
 use wasm_bindgen::prelude::{wasm_bindgen, Closure, JsValue};
 use wasm_bindgen::JsCast;
@@ -8,41 +10,31 @@ use js_sys::Function;
 #[wasm_bindgen(module = "/libs.js")]
 extern "C" {
     #[wasm_bindgen(js_name = "initLibs")]
-    fn init_libs(
-        topic: JsValue,
-        pubsub_callback: &Function,
-        master_callback: &Function,
-        frag_callback: &Function,
-    );
-}
+    fn init_libs(topic: JsValue, pubsub_callback: &Function, playlist_callback: &Function);
 
-fn pubsub_message(from: String, data: Vec<u8>) {
-    let data_string = String::from_utf8_lossy(&data);
-
-    ConsoleService::info(&format!("from={} data={}", &from, data_string));
-}
-
-fn load_master_playlist() -> String {
-    String::from("This is a Master Playlist")
-}
-
-fn load_fragment_playlist() -> String {
-    String::from("This is a Fragment Playlist")
+    #[wasm_bindgen(js_name = "startVideo")]
+    pub fn start_video();
 }
 
 pub fn init() {
-    let topic = "livelike";
+    let arc = Arc::new(RwLock::new(Playlists::new()));
 
-    let pubsub_closure = Closure::wrap(Box::new(pubsub_message) as Box<dyn Fn(String, Vec<u8>)>);
+    let arc_clone = arc.clone();
 
-    let master_closure = Closure::wrap(Box::new(load_master_playlist) as Box<dyn Fn() -> String>);
+    let playlist_closure = Closure::wrap(Box::new(move |url| match arc_clone.read() {
+        Ok(playlist) => playlist.get_playlist(url),
+        Err(_) => String::from("Lock Poisoned"),
+    }) as Box<dyn Fn(String) -> String>);
 
-    let frag_closure = Closure::wrap(Box::new(load_fragment_playlist) as Box<dyn Fn() -> String>);
+    let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
+        if let Ok(mut playlist) = arc.write() {
+            playlist.pubsub_message(from, data);
+        }
+    }) as Box<dyn FnMut(String, Vec<u8>)>);
 
     init_libs(
-        topic.into(),
+        "livelike".into(),
         pubsub_closure.into_js_value().unchecked_ref(),
-        master_closure.into_js_value().unchecked_ref(),
-        frag_closure.into_js_value().unchecked_ref(),
+        playlist_closure.into_js_value().unchecked_ref(),
     );
 }

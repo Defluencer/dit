@@ -1,4 +1,5 @@
 use crate::chronicler::Archive;
+use crate::config::get_config;
 use crate::dag_nodes::IPLDLink;
 
 use std::collections::HashSet;
@@ -77,7 +78,7 @@ pub struct ChatAggregator {
 
 impl ChatAggregator {
     pub async fn new(ipfs: IpfsClient, archive_tx: Sender<Archive>) -> Self {
-        let config = crate::config::get_config(&ipfs).await;
+        let config = get_config(&ipfs).await;
 
         let blacklist = get_blacklist(&ipfs, config.blacklist.link).await;
 

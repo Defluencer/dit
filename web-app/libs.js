@@ -1,20 +1,16 @@
 var ipfs
 var hls
 
-const video = document.getElementById('video')
+var getPlaylist
 
-var masterPlaylist
-var fragmentPlaylist
-
-export async function initLibs(topic, pubsubMessage, masterCallback, fragmentCallback) {
+export async function initLibs(topic, pubsubMessage, playlistCallback) {
     if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
 
     ipfs = await window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
     await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))
 
-    masterPlaylist = masterCallback
-    fragmentPlaylist = fragmentCallback
+    getPlaylist = playlistCallback
 
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
     Hls.DefaultConfig.debug = false
@@ -24,9 +20,15 @@ export async function initLibs(topic, pubsubMessage, masterCallback, fragmentCal
 
     hls = new Hls()
 
+    hls.loadSource('/livelike/master.m3u8')
+}
+
+export function startVideo() {
+    video = document.getElementById('video')
+
     hls.attachMedia(video)
 
-    hls.loadSource('master.m3u8')
+    hls.startLoad()
 }
 
 class HlsjsIPFSLoader {
@@ -58,41 +60,9 @@ class HlsjsIPFSLoader {
         const urlParts = context.url.split("/")
         var filename = urlParts[urlParts.length - 1]
 
-        //return data when ask for master playlist
-        if (filename === "master.m3u8") {
-            const res = masterPlaylist()
-
-            console.log(`${res}`)
-
-            const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
-            const response = { url: context.url, data: data }
-
-            callbacks.onSuccess(response, stats, context)
-
-            return;
-        }
-
         //return data when ask for segment playlist
-        if (filename === "index.m3u8") {
-            let res = fragmentPlaylist()
-
-            /* //use js equivalent of a hash table???
-            switch (urlParts[urlParts.length - 2]) {
-                case "1080p60":
-                    res = playlists[0].join('\n')
-                    break;
-                case "720p60":
-                    res = playlists[1].join('\n')
-                    break;
-                case "720p30":
-                    res = playlists[2].join('\n')
-                    break;
-                case "480p30":
-                    res = playlists[3].join('\n')
-                    break;
-            } */
-
-            console.log(`${res}`)
+        if (filename === "index.m3u8" || filename === "master.m3u8") {
+            let res = getPlaylist(context.url)
 
             const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
 
@@ -106,8 +76,13 @@ class HlsjsIPFSLoader {
             return;
         }
 
+        // [hash]/[quality] -> QMh3f3564hf5h/1080p60
+        var video_path = urlParts[urlParts.length - 2].concat('/', urlParts[urlParts.length - 1])
+
+        console.log(`${video_path}`)
+
         //return data when ask for video segment
-        cat(filename).then(res => {
+        cat(video_path).then(res => {
             const data = (context.responseType === 'arraybuffer') ? res : buf2str(res)
 
             stats.loaded = stats.total = data.length

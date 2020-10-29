@@ -1,4 +1,5 @@
 mod bindings;
+mod playlists;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 
@@ -27,6 +28,9 @@ impl Component for Model {
     fn view(&self) -> Html {
         html! {
             <>
+                <video id="video" width="1280" height="720" autoplay=true controls=true muted=true
+                poster="/live_like_poster.png">
+                </video>
             </>
         }
     }

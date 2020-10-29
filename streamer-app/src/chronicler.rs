@@ -1,4 +1,5 @@
-use crate::chat::ChatMessage;
+//use crate::chat::ChatMessage;
+//use crate::config::get_config;
 use crate::dag_nodes::IPLDLink;
 
 use std::collections::VecDeque;
@@ -52,7 +53,7 @@ pub struct SecondNode {
 }
 
 pub enum Archive {
-    Chat(ChatMessage),
+    //Chat(ChatMessage),
     Video(Cid),
     Finalize,
 }
@@ -73,14 +74,16 @@ pub struct Chronicler {
 
 impl Chronicler {
     pub async fn new(ipfs: IpfsClient, archive_rx: Receiver<Archive>) -> Self {
-        let config = crate::config::get_config(&ipfs).await;
+        //let config = get_config(&ipfs).await;
 
         Self {
             ipfs,
 
             archive_rx,
 
-            video_chat_buffer: VecDeque::with_capacity(120 / config.video_segment_duration), //120 == 2 minutes
+            video_chat_buffer: VecDeque::with_capacity(
+                120 / 4, /* config.video_segment_duration */
+            ), //120 == 2 minutes
 
             minute_node: MinuteNode {
                 links_to_seconds: Vec::with_capacity(60),
@@ -94,14 +97,14 @@ impl Chronicler {
                 links_to_hours: Vec::with_capacity(24),
             },
 
-            video_segment_duration: config.video_segment_duration,
+            video_segment_duration: 4, /* config.video_segment_duration */
         }
     }
 
     pub async fn collect(&mut self) {
         while let Some(event) = self.archive_rx.recv().await {
             match event {
-                Archive::Chat(msg) => self.archive_chat_message(msg).await,
+                //Archive::Chat(msg) => self.archive_chat_message(msg).await,
                 Archive::Video(cid) => self.archive_video_segment(cid).await,
                 Archive::Finalize => self.finalize().await,
             }
@@ -109,7 +112,7 @@ impl Chronicler {
     }
 
     /// Link chat message to SecondNodes.
-    async fn archive_chat_message(&mut self, msg: ChatMessage) {
+    /* async fn archive_chat_message(&mut self, msg: ChatMessage) {
         for node in self.video_chat_buffer.iter_mut() {
             if node.link_to_video != msg.data.timestamp {
                 continue;
@@ -132,7 +135,7 @@ impl Chronicler {
 
             break;
         }
-    }
+    } */
 
     /// Buffers SecondNodes, waiting for chat messages to be linked.
     async fn archive_video_segment(&mut self, cid: Cid) {

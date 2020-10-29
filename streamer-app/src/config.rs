@@ -1,4 +1,4 @@
-use crate::dag_nodes::IPLDLink;
+//use crate::dag_nodes::IPLDLink;
 
 use tokio::stream::StreamExt;
 
@@ -15,9 +15,9 @@ pub struct Config {
     pub streamer_app: StreamerApp,
     pub variants: usize,
     pub video_segment_duration: usize,
-    pub blacklist: IPLDLink,
-    pub whitelist: IPLDLink,
-    pub mods: IPLDLink,
+    //pub blacklist: IPLDLink,
+    //pub whitelist: IPLDLink,
+    //pub mods: IPLDLink,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -37,7 +37,7 @@ pub struct Ffmpeg {
     pub socket_addr: String,
 }
 
-pub async fn get_config(ipfs: &IpfsClient) -> Config {
+pub async fn _get_config(ipfs: &IpfsClient) -> Config {
     let config = ipfs
         .name_resolve(None, false, false)
         .await
