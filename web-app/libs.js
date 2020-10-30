@@ -15,20 +15,22 @@ export async function initLibs(topic, pubsubMessage, playlistCallback) {
     Hls.DefaultConfig.loader = HlsjsIPFSLoader
     Hls.DefaultConfig.debug = false
     Hls.DefaultConfig.liveDurationInfinity = true
-    Hls.DefaultConfig.autoStartLoad = false
-    //Hls.DefaultConfig.liveSyncDurationCount = 5
+    Hls.DefaultConfig.autoStartLoad = true
+    Hls.DefaultConfig.liveSyncDurationCount = 5
 
     hls = new Hls()
 
+    hls.on(Hls.Events.MEDIA_ATTACHED, onMediaAttached);
+}
+
+function onMediaAttached() {
     hls.loadSource('/livelike/master.m3u8')
 }
 
 export function startVideo() {
-    video = document.getElementById('video')
+    const video = document.getElementById('video')
 
     hls.attachMedia(video)
-
-    hls.startLoad()
 }
 
 class HlsjsIPFSLoader {
@@ -57,14 +59,16 @@ class HlsjsIPFSLoader {
         stats.tfirst = Math.max(performance.now(), stats.trequest)
         stats.loaded = 0
 
-        const urlParts = context.url.split("/")
-        var filename = urlParts[urlParts.length - 1]
+        const url = new URL(context.url);
 
-        //return data when ask for segment playlist
-        if (filename === "index.m3u8" || filename === "master.m3u8") {
+        const urlParts = url.pathname.split(".")
+        var extension = urlParts[urlParts.length - 1]
+
+        //return data when ask for playlist
+        if (extension === "m3u8") {
             let res = getPlaylist(context.url)
 
-            const data = (context.responseType === 'arraybuffer') ? str2buf(res) : res
+            const data = (context.responseType === 'text') ? res : str2buf(res)
 
             stats.loaded = stats.total = data.length
             stats.tload = Math.max(stats.tfirst, performance.now())
@@ -76,13 +80,8 @@ class HlsjsIPFSLoader {
             return;
         }
 
-        // [hash]/[quality] -> QMh3f3564hf5h/1080p60
-        var video_path = urlParts[urlParts.length - 2].concat('/', urlParts[urlParts.length - 1])
-
-        console.log(`${video_path}`)
-
         //return data when ask for video segment
-        cat(video_path).then(res => {
+        cat(url.pathname).then(res => {
             const data = (context.responseType === 'arraybuffer') ? res : buf2str(res)
 
             stats.loaded = stats.total = data.length
@@ -101,10 +100,10 @@ class HlsjsIPFSLoader {
     }
 }
 
-async function cat(cid) {
+async function cat(path) {
     let value = new Uint8Array(0)
 
-    for await (const buf of ipfs.cat(cid)) {
+    for await (const buf of ipfs.cat(path)) {
         const newBuf = new Uint8Array(value.length + buf.length)
 
         newBuf.set(value)

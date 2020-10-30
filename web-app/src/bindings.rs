@@ -16,7 +16,7 @@ extern "C" {
     pub fn start_video();
 }
 
-pub fn init() {
+pub fn init(topic: &str) {
     let arc = Arc::new(RwLock::new(Playlists::new()));
 
     let arc_clone = arc.clone();
@@ -30,10 +30,10 @@ pub fn init() {
         if let Ok(mut playlist) = arc.write() {
             playlist.pubsub_message(from, data);
         }
-    }) as Box<dyn FnMut(String, Vec<u8>)>);
+    }) as Box<dyn Fn(String, Vec<u8>)>);
 
     init_libs(
-        "livelike".into(),
+        topic.into(),
         pubsub_closure.into_js_value().unchecked_ref(),
         playlist_closure.into_js_value().unchecked_ref(),
     );

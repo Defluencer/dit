@@ -39,7 +39,7 @@ impl Playlists {
 
         let variant_1080_60 = VariantStream {
             is_i_frame,
-            uri: "/livelike/1080p60/index.m3u8".into(),
+            uri: PATH_1080_60.into(),
             bandwidth: "6811200".into(),
             average_bandwidth: Some("6000000".into()),
             codecs: Some("avc1.42c02a,mp4a.40.2".into()),
@@ -54,7 +54,7 @@ impl Playlists {
 
         let variant_720_60 = VariantStream {
             is_i_frame,
-            uri: "/livelike/720p60/index.m3u8".into(),
+            uri: PATH_720_60.into(),
             bandwidth: "5161200".to_string(),
             average_bandwidth: Some("4500000".to_string()),
             codecs: Some("avc1.42c020,mp4a.40.2".to_string()),
@@ -69,7 +69,7 @@ impl Playlists {
 
         let variant_720_30 = VariantStream {
             is_i_frame,
-            uri: "/livelike/720p30/index.m3u8".into(),
+            uri: PATH_720_30.into(),
             bandwidth: "3511200".to_string(),
             average_bandwidth: Some("3000000".to_string()),
             codecs: Some("avc1.42c01f,mp4a.40.2".to_string()),
@@ -84,7 +84,7 @@ impl Playlists {
 
         let variant_480_30 = VariantStream {
             is_i_frame,
-            uri: "/livelike/480p30/index.m3u8".into(),
+            uri: PATH_480_30.into(),
             bandwidth: "2411200".to_string(),
             average_bandwidth: Some("2000000".to_string()),
             codecs: Some("avc1.42c01f,mp4a.40.2".to_string()),
@@ -137,9 +137,6 @@ impl Playlists {
     }
 
     pub fn get_playlist(&self, url: String) -> String {
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("load url={}", &url));
-
         let url = Url::parse(&url).expect("Cannot Parse Url");
 
         let mut buf: Vec<u8> = Vec::new();
@@ -168,12 +165,7 @@ impl Playlists {
             _ => return String::from("Playlist Error"),
         };
 
-        let result = String::from_utf8(buf).expect("Invalid UTF-8");
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&result);
-
-        result
+        String::from_utf8(buf).expect("Invalid UTF-8")
     }
 
     fn update_playlists(&mut self, video_cid: &Cid) {
@@ -194,7 +186,7 @@ impl Playlists {
             return;
         }
 
-        let string = match std::str::from_utf8(&data) {
+        let data_utf8 = match std::str::from_utf8(&data) {
             Ok(string) => string,
             Err(_) => {
                 #[cfg(debug_assertions)]
@@ -204,7 +196,7 @@ impl Playlists {
             }
         };
 
-        let video_cid = match Cid::try_from(string) {
+        let video_cid = match Cid::try_from(data_utf8) {
             Ok(cid) => cid,
             Err(_) => {
                 #[cfg(debug_assertions)]
@@ -229,7 +221,7 @@ impl Playlists {
 
 fn update_playlist(playlist: &mut MediaPlaylist, cid: &Cid, quality: &str) {
     let segment = MediaSegment {
-        uri: format!("{}/{}", cid.to_string(), quality),
+        uri: format!("/ipfs/{}/quality/{}", cid.to_string(), quality),
         duration: 4.0,
         title: None,
         byte_range: None,

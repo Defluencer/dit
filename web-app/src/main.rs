@@ -37,7 +37,7 @@ impl Component for Model {
 }
 
 fn main() {
-    bindings::init();
+    bindings::init("livelike");
 
     yew::start_app::<Model>();
 }
