@@ -16,7 +16,9 @@ extern "C" {
     pub fn start_video();
 }
 
-pub fn init(topic: &str) {
+pub fn init() {
+    let topic = "livelike";
+
     let arc = Arc::new(RwLock::new(Playlists::new()));
 
     let arc_clone = arc.clone();
