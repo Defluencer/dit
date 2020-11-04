@@ -1776,10 +1776,8 @@ dependencies = [
  "cid",
  "js-sys",
  "m3u8-rs",
- "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-sys",
  "yew",
 ]
 

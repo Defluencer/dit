@@ -10,9 +10,3 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 m3u8-rs = "1.0"
 cid = "0.5"
-url = "2.1"
-
-[dependencies.web-sys]
-version = "0.3"
-features = [ "HtmlMediaElement", "Document", "Element"
-]

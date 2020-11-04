@@ -54,7 +54,7 @@ impl VideoAggregator {
             archive_tx,
             video_rx,
 
-            gossipsub_topic: "livelike".into(), /* config.gossipsub_topics.video */
+            gossipsub_topic: "livelikevideo".into(), /* config.gossipsub_topics.video */
 
             video_node: VideoNode {
                 qualities: HashMap::with_capacity(4 /* config.variants */),

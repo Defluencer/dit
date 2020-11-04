@@ -1,5 +1,4 @@
 use std::convert::TryFrom;
-use url::Url;
 
 use yew::services::ConsoleService;
 
@@ -8,15 +7,15 @@ use m3u8_rs::playlist::{MasterPlaylist, MediaPlaylist, MediaSegment, VariantStre
 use cid::Cid;
 
 // Hard-Coded for now...
-pub const PATH_MASTER: &str = "/livelike/master.m3u8";
-pub const PATH_1080_60: &str = "/livelike/1080p60/index.m3u8";
-pub const PATH_720_60: &str = "/livelike/720p60/index.m3u8";
-pub const PATH_720_30: &str = "/livelike/720p30/index.m3u8";
-pub const PATH_480_30: &str = "/livelike/480p30/index.m3u8";
+const PATH_MASTER: &str = "/livelike/master.m3u8";
+const PATH_1080_60: &str = "/livelike/1080p60/index.m3u8";
+const PATH_720_60: &str = "/livelike/720p60/index.m3u8";
+const PATH_720_30: &str = "/livelike/720p30/index.m3u8";
+const PATH_480_30: &str = "/livelike/480p30/index.m3u8";
 
-pub const HLS_LIST_SIZE: usize = 5;
+const HLS_LIST_SIZE: usize = 5;
 
-pub const STREAMER_PEER_ID: &str = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
+const STREAMER_PEER_ID: &str = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
 
 pub struct Playlists {
     master: MasterPlaylist,
@@ -25,8 +24,6 @@ pub struct Playlists {
     playlist_720_60: MediaPlaylist,
     playlist_720_30: MediaPlaylist,
     playlist_480_30: MediaPlaylist,
-
-    load: bool,
 }
 
 impl Playlists {
@@ -131,17 +128,13 @@ impl Playlists {
             playlist_720_60: playlist.clone(),
             playlist_720_30: playlist.clone(),
             playlist_480_30: playlist,
-
-            load: false,
         }
     }
 
-    pub fn get_playlist(&self, url: String) -> String {
-        let url = Url::parse(&url).expect("Cannot Parse Url");
-
+    pub fn get_playlist(&self, path: String) -> String {
         let mut buf: Vec<u8> = Vec::new();
 
-        match url.path() {
+        match path.as_ref() {
             PATH_MASTER => self
                 .master
                 .write_to(&mut buf)
@@ -168,11 +161,11 @@ impl Playlists {
         String::from_utf8(buf).expect("Invalid UTF-8")
     }
 
-    fn update_playlists(&mut self, video_cid: &Cid) {
-        update_playlist(&mut self.playlist_1080_60, video_cid, "1080p60");
-        update_playlist(&mut self.playlist_720_60, video_cid, "720p60");
-        update_playlist(&mut self.playlist_720_30, video_cid, "720p30");
-        update_playlist(&mut self.playlist_480_30, video_cid, "480p30");
+    pub fn has_segments(&self) -> bool {
+        !self.playlist_1080_60.segments.is_empty()
+            || !self.playlist_720_60.segments.is_empty()
+            || !self.playlist_720_30.segments.is_empty()
+            || !self.playlist_480_30.segments.is_empty()
     }
 
     pub fn pubsub_message(&mut self, from: String, data: Vec<u8>) {
@@ -207,21 +200,22 @@ impl Playlists {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Message => {}", video_cid.to_string()));
+        ConsoleService::info(&format!("Message => {}", video_cid));
 
         self.update_playlists(&video_cid);
+    }
 
-        if !self.load {
-            self.load = true;
-
-            crate::bindings::start_video();
-        }
+    fn update_playlists(&mut self, video_cid: &Cid) {
+        update_playlist(&mut self.playlist_1080_60, video_cid, "1080p60");
+        update_playlist(&mut self.playlist_720_60, video_cid, "720p60");
+        update_playlist(&mut self.playlist_720_30, video_cid, "720p30");
+        update_playlist(&mut self.playlist_480_30, video_cid, "480p30");
     }
 }
 
 fn update_playlist(playlist: &mut MediaPlaylist, cid: &Cid, quality: &str) {
     let segment = MediaSegment {
-        uri: format!("/ipfs/{}/quality/{}", cid.to_string(), quality),
+        uri: format!("/ipfs/{}/quality/{}", cid, quality),
         duration: 4.0,
         title: None,
         byte_range: None,

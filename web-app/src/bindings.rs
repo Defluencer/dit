@@ -1,42 +1,21 @@
-use std::sync::{Arc, RwLock};
-
-use crate::playlists::Playlists;
-
-use wasm_bindgen::prelude::{wasm_bindgen, Closure, JsValue};
-use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::{wasm_bindgen, JsValue};
 
 use js_sys::Function;
 
 #[wasm_bindgen(module = "/libs.js")]
 extern "C" {
-    #[wasm_bindgen(js_name = "initLibs")]
-    fn init_libs(topic: JsValue, pubsub_callback: &Function, playlist_callback: &Function);
+    #[wasm_bindgen(js_name = "subscribe")]
+    pub fn subscribe(topic: JsValue, pubsub_callback: &Function);
 
-    #[wasm_bindgen(js_name = "startVideo")]
-    pub fn start_video();
-}
+    #[wasm_bindgen(js_name = "initHLS")]
+    pub fn init_hls(playlist_callback: &Function);
 
-pub fn init() {
-    let topic = "livelike";
+    /* #[wasm_bindgen(js_name = "attachMedia")]
+    pub fn attach_media(); */
 
-    let arc = Arc::new(RwLock::new(Playlists::new()));
+    /* #[wasm_bindgen(js_name = "loadSource")]
+    pub fn load_source(); */
 
-    let arc_clone = arc.clone();
-
-    let playlist_closure = Closure::wrap(Box::new(move |url| match arc_clone.read() {
-        Ok(playlist) => playlist.get_playlist(url),
-        Err(_) => String::from("Lock Poisoned"),
-    }) as Box<dyn Fn(String) -> String>);
-
-    let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
-        if let Ok(mut playlist) = arc.write() {
-            playlist.pubsub_message(from, data);
-        }
-    }) as Box<dyn Fn(String, Vec<u8>)>);
-
-    init_libs(
-        topic.into(),
-        pubsub_closure.into_js_value().unchecked_ref(),
-        playlist_closure.into_js_value().unchecked_ref(),
-    );
+    #[wasm_bindgen(js_name = "startLoad")]
+    pub fn start_load();
 }

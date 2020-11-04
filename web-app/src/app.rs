@@ -1,9 +1,12 @@
-use crate::buttons::PlayButton;
+use crate::live_stream::LiveStreamManager;
+use crate::video::LiveStreamPlayer;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 
 pub struct App {
     _link: ComponentLink<Self>,
+
+    manager: LiveStreamManager,
 }
 
 impl Component for App {
@@ -11,7 +14,9 @@ impl Component for App {
     type Properties = ();
 
     fn create(_props: Self::Properties, _link: ComponentLink<Self>) -> Self {
-        Self { _link }
+        let manager = LiveStreamManager::new();
+
+        Self { _link, manager }
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
@@ -25,12 +30,12 @@ impl Component for App {
     fn view(&self) -> Html {
         html! {
             <>
-                <video id="video" width="1280" height="720" muted=true
-                poster="/live_like_poster.png">
-                </video>
-
-                <PlayButton />
+                <LiveStreamPlayer manager=self.manager.clone() />
             </>
         }
     }
+
+    /* fn rendered(&mut self, first_render: bool) {
+        if first_render {}
+    } */
 }

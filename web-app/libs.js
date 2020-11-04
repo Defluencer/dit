@@ -1,36 +1,118 @@
-var ipfs
-var hls
+const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
+
+export async function subscribe(topic, pubsubMessage) {
+    await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))
+}
 
 var getPlaylist
 
-export async function initLibs(topic, pubsubMessage, playlistCallback) {
+var hls
+
+export function initHLS(callback) {
     if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
 
-    ipfs = await window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
+    getPlaylist = callback
 
-    await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))
+    const config = {
+        autoStartLoad: false,
+        ///startPosition: -1,
+        debug: true,
+        //capLevelOnFPSDrop: false,
+        //capLevelToPlayerSize: false,
+        //defaultAudioCodec: undefined,
+        //initialLiveManifestSize: 1,
+        //maxBufferLength: 30,
+        //maxMaxBufferLength: 600,
+        //maxBufferSize: 60 * 1000 * 1000,
+        //maxBufferHole: 0.5,
+        //lowBufferWatchdogPeriod: 0.5,
+        //highBufferWatchdogPeriod: 3,
+        //nudgeOffset: 0.1,
+        //nudgeMaxRetry: 3,
+        //maxFragLookUpTolerance: 0.25,
+        liveSyncDurationCount: 5,
+        //liveMaxLatencyDurationCount: Infinity,
+        liveDurationInfinity: true,
+        //liveBackBufferLength: Infinity,
+        //enableWorker: true,
+        //enableSoftwareAES: true,
+        //manifestLoadingTimeOut: 10000,
+        //manifestLoadingMaxRetry: 1,
+        //manifestLoadingRetryDelay: 1000,
+        //manifestLoadingMaxRetryTimeout: 64000,
+        //startLevel: undefined,
+        //levelLoadingTimeOut: 10000,
+        //levelLoadingMaxRetry: 4,
+        //levelLoadingRetryDelay: 1000,
+        //levelLoadingMaxRetryTimeout: 64000,
+        //fragLoadingTimeOut: 20000,
+        //fragLoadingMaxRetry: 6,
+        //fragLoadingRetryDelay: 1000,
+        //fragLoadingMaxRetryTimeout: 64000,
+        //startFragPrefetch: false,
+        //testBandwidth: true,
+        //fpsDroppedMonitoringPeriod: 5000,
+        //fpsDroppedMonitoringThreshold: 0.2,
+        //appendErrorMaxRetry: 3,
+        loader: HlsjsIPFSLoader,
+        //fLoader: customFragmentLoader,
+        //pLoader: customPlaylistLoader,
+        //xhrSetup: XMLHttpRequestSetupCallback,
+        //fetchSetup: FetchSetupCallback,
+        //abrController: AbrController,
+        //bufferController: BufferController,
+        //capLevelController: CapLevelController,
+        //fpsController: FPSController,
+        //timelineController: TimelineController,
+        //enableWebVTT: true,
+        //enableCEA708Captions: true,
+        //stretchShortVideoTrack: false,
+        //maxAudioFramesDrift: 1,
+        //forceKeyFrameOnDiscontinuity: true,
+        //abrEwmaFastLive: 3.0,
+        //abrEwmaSlowLive: 9.0,
+        //abrEwmaFastVoD: 3.0,
+        //abrEwmaSlowVoD: 9.0,
+        //abrEwmaDefaultEstimate: 500000,
+        //abrBandWidthFactor: 0.95,
+        //abrBandWidthUpFactor: 0.7,
+        //abrMaxWithRealBitrate: false,
+        //maxStarvationDelay: 4,
+        //maxLoadingDelay: 4,
+        //minAutoBitrate: 0,
+        //emeEnabled: false,
+        //widevineLicenseUrl: undefined,
+        //drmSystemOptions: {},
+        //requestMediaKeySystemAccessFunc: requestMediaKeySystemAccess
+    }
 
-    getPlaylist = playlistCallback
+    hls = new Hls(config)
 
-    Hls.DefaultConfig.loader = HlsjsIPFSLoader
-    Hls.DefaultConfig.debug = false
-    Hls.DefaultConfig.liveDurationInfinity = true
-    Hls.DefaultConfig.autoStartLoad = true
-    Hls.DefaultConfig.liveSyncDurationCount = 5
-
-    hls = new Hls()
-
-    hls.on(Hls.Events.MEDIA_ATTACHED, onMediaAttached);
-}
-
-function onMediaAttached() {
-    hls.loadSource('/livelike/master.m3u8')
-}
-
-export function startVideo() {
     const video = document.getElementById('video')
 
     hls.attachMedia(video)
+
+    hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+        hls.loadSource('/livelike/master.m3u8')
+    });
+
+    /* hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.startLoad()
+    }) */
+}
+
+/* export function attachMedia() {
+    const video = document.getElementById('video')
+
+    hls.attachMedia(video)
+} */
+
+/* export function loadSource() {
+    hls.loadSource('/livelike/master.m3u8')
+} */
+
+export function startLoad() {
+    hls.startLoad()
 }
 
 class HlsjsIPFSLoader {
@@ -66,7 +148,9 @@ class HlsjsIPFSLoader {
 
         //return data when ask for playlist
         if (extension === "m3u8") {
-            let res = getPlaylist(context.url)
+            let res = getPlaylist(url.pathname)
+
+            //TODO fix getPlaylist unreachable???
 
             const data = (context.responseType === 'text') ? res : str2buf(res)
 

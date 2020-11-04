@@ -27,7 +27,7 @@ async fn main() {
     //let config = config::get_config(&ipfs).await;
     let config = Config {
         gossipsub_topics: Topics {
-            video: "livelike".into(),
+            video: "livelikevideo".into(),
             chat: "livelikechat".into(),
         },
         streamer_app: StreamerApp {

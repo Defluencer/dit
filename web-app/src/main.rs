@@ -1,10 +1,9 @@
 mod app;
 mod bindings;
-mod buttons;
+mod live_stream;
 mod playlists;
+mod video;
 
 fn main() {
-    bindings::init();
-
     yew::start_app::<app::App>();
 }
