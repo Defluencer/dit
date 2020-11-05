@@ -161,13 +161,6 @@ impl Playlists {
         String::from_utf8(buf).expect("Invalid UTF-8")
     }
 
-    pub fn has_segments(&self) -> bool {
-        !self.playlist_1080_60.segments.is_empty()
-            || !self.playlist_720_60.segments.is_empty()
-            || !self.playlist_720_30.segments.is_empty()
-            || !self.playlist_480_30.segments.is_empty()
-    }
-
     pub fn pubsub_message(&mut self, from: String, data: Vec<u8>) {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));

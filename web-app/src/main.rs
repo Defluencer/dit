@@ -1,8 +1,8 @@
 mod app;
 mod bindings;
-mod live_stream;
+mod live_stream_manager;
+mod live_stream_player;
 mod playlists;
-mod video;
 
 fn main() {
     yew::start_app::<app::App>();

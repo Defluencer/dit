@@ -1,17 +1,19 @@
 const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
+var getPlaylists
+
+var hls
+
 export async function subscribe(topic, pubsubMessage) {
     await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))
 }
 
-var getPlaylist
+export function playlistCallback(callback) {
+    getPlaylists = callback
+}
 
-var hls
-
-export function initHLS(callback) {
+export function initHLS() {
     if (!Hls.isSupported()) throw new Error('HLS is not supported by your browser!')
-
-    getPlaylist = callback
 
     const config = {
         autoStartLoad: false,
@@ -20,7 +22,7 @@ export function initHLS(callback) {
         //capLevelOnFPSDrop: false,
         //capLevelToPlayerSize: false,
         //defaultAudioCodec: undefined,
-        //initialLiveManifestSize: 1,
+        initialLiveManifestSize: 1,
         //maxBufferLength: 30,
         //maxMaxBufferLength: 600,
         //maxBufferSize: 60 * 1000 * 1000,
@@ -30,12 +32,12 @@ export function initHLS(callback) {
         //nudgeOffset: 0.1,
         //nudgeMaxRetry: 3,
         //maxFragLookUpTolerance: 0.25,
-        liveSyncDurationCount: 5,
-        //liveMaxLatencyDurationCount: Infinity,
+        liveSyncDurationCount: 1,
+        liveMaxLatencyDurationCount: 5,
         liveDurationInfinity: true,
-        //liveBackBufferLength: Infinity,
+        liveBackBufferLength: 0,
         //enableWorker: true,
-        //enableSoftwareAES: true,
+        enableSoftwareAES: false,
         //manifestLoadingTimeOut: 10000,
         //manifestLoadingMaxRetry: 1,
         //manifestLoadingRetryDelay: 1000,
@@ -49,7 +51,7 @@ export function initHLS(callback) {
         //fragLoadingMaxRetry: 6,
         //fragLoadingRetryDelay: 1000,
         //fragLoadingMaxRetryTimeout: 64000,
-        //startFragPrefetch: false,
+        startFragPrefetch: true,
         //testBandwidth: true,
         //fpsDroppedMonitoringPeriod: 5000,
         //fpsDroppedMonitoringThreshold: 0.2,
@@ -64,8 +66,8 @@ export function initHLS(callback) {
         //capLevelController: CapLevelController,
         //fpsController: FPSController,
         //timelineController: TimelineController,
-        //enableWebVTT: true,
-        //enableCEA708Captions: true,
+        enableWebVTT: false,
+        enableCEA708Captions: false,
         //stretchShortVideoTrack: false,
         //maxAudioFramesDrift: 1,
         //forceKeyFrameOnDiscontinuity: true,
@@ -88,31 +90,35 @@ export function initHLS(callback) {
 
     hls = new Hls(config)
 
-    const video = document.getElementById('video')
+    /* const video = document.getElementById('video')
 
-    hls.attachMedia(video)
+    hls.attachMedia(video) */
 
-    hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+    /* hls.on(Hls.Events.MEDIA_ATTACHED, () => {
         hls.loadSource('/livelike/master.m3u8')
-    });
+    }); */
 
     /* hls.on(Hls.Events.MANIFEST_PARSED, () => {
         hls.startLoad()
     }) */
 }
 
-/* export function attachMedia() {
+export function attachMedia() {
     const video = document.getElementById('video')
 
     hls.attachMedia(video)
-} */
+}
 
-/* export function loadSource() {
+export function loadSource() {
     hls.loadSource('/livelike/master.m3u8')
-} */
+}
 
 export function startLoad() {
     hls.startLoad()
+}
+
+export function destroy() {
+    hls.destroy()
 }
 
 class HlsjsIPFSLoader {
@@ -148,9 +154,7 @@ class HlsjsIPFSLoader {
 
         //return data when ask for playlist
         if (extension === "m3u8") {
-            let res = getPlaylist(url.pathname)
-
-            //TODO fix getPlaylist unreachable???
+            let res = getPlaylists(url.pathname)
 
             const data = (context.responseType === 'text') ? res : str2buf(res)
 
