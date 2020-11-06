@@ -1,42 +1,40 @@
-#![allow(dead_code, unused_variables)]
-
-use crate::live_stream_manager::LiveStreamManager;
-use crate::live_stream_player::LiveStreamPlayer;
+use crate::components::{Home, LiveStreamPlayer, Navbar, VODPlayer};
+use crate::routing::Route;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
+use yew_router::prelude::*;
 
-pub struct App {
-    link: ComponentLink<Self>,
-
-    live_stream: LiveStreamManager,
-}
-
-//TODO add router & tabs
+pub struct App {}
 
 impl Component for App {
     type Message = ();
     type Properties = ();
 
-    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let live_stream = LiveStreamManager::new();
-
-        live_stream.playlists_updating();
-
-        Self { link, live_stream }
+    fn create(_props: Self::Properties, _: ComponentLink<Self>) -> Self {
+        Self {}
     }
 
-    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
         false
     }
 
-    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
         false
     }
 
     fn view(&self) -> Html {
         html! {
             <>
-                <LiveStreamPlayer live_stream=self.live_stream.clone() />
+                <Navbar />
+                <Router<Route>
+                    render = Router::render(move |switch: Route| {
+                        match switch {
+                            Route::Live => html! {<LiveStreamPlayer />},
+                            Route::Video => html! {<VODPlayer />},
+                            Route::Home => html! {<Home />},
+                        }
+                    })
+                />
             </>
         }
     }
