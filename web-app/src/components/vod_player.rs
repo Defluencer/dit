@@ -29,11 +29,11 @@ impl Component for VODPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <>
+            <div>
                 /* <video id="video" inline=true muted=true controls=true poster="/live_like_poster.png">
                 </video> */
                 {"W.I.P."}
-            </>
+            </div>
         }
     }
 

@@ -7,6 +7,9 @@ extern "C" {
     #[wasm_bindgen(js_name = "subscribe")]
     pub fn subscribe(topic: JsValue, pubsub_callback: &Function);
 
+    #[wasm_bindgen(js_name = "publish")]
+    pub fn publish(topic: JsValue, message: JsValue);
+
     #[wasm_bindgen(js_name = "playlistCallback")]
     pub fn playlist_callback(playlist_callback: &Function);
 

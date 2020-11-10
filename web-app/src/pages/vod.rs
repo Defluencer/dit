@@ -1,8 +1,8 @@
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 
-pub struct Home {}
+pub struct VideoOnDemand {}
 
-impl Component for Home {
+impl Component for VideoOnDemand {
     type Message = ();
     type Properties = ();
 
@@ -20,9 +20,7 @@ impl Component for Home {
 
     fn view(&self) -> Html {
         html! {
-            <>
-                {"Welcome! This is a home page."}
-            </>
+            <div> {"Video On Demand Page -> W.I.P."} </div>
         }
     }
 }

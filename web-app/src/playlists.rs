@@ -1,7 +1,3 @@
-use std::convert::TryFrom;
-
-use yew::services::ConsoleService;
-
 use m3u8_rs::playlist::{MasterPlaylist, MediaPlaylist, MediaSegment, VariantStream};
 
 use cid::Cid;
@@ -14,8 +10,6 @@ const PATH_720_30: &str = "/livelike/720p30/index.m3u8";
 const PATH_480_30: &str = "/livelike/480p30/index.m3u8";
 
 const HLS_LIST_SIZE: usize = 5;
-
-const STREAMER_PEER_ID: &str = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
 
 pub struct Playlists {
     master: MasterPlaylist,
@@ -161,52 +155,15 @@ impl Playlists {
         String::from_utf8(buf).expect("Invalid UTF-8")
     }
 
-    pub fn pubsub_message(&mut self, from: String, data: Vec<u8>) {
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Sender => {}", from));
-
-        if from != STREAMER_PEER_ID {
-            #[cfg(debug_assertions)]
-            ConsoleService::warn("Unauthorized Sender");
-
-            return;
-        }
-
-        let data_utf8 = match std::str::from_utf8(&data) {
-            Ok(string) => string,
-            Err(_) => {
-                #[cfg(debug_assertions)]
-                ConsoleService::warn("Message Invalid UTF-8");
-
-                return;
-            }
-        };
-
-        let video_cid = match Cid::try_from(data_utf8) {
-            Ok(cid) => cid,
-            Err(_) => {
-                #[cfg(debug_assertions)]
-                ConsoleService::warn("Message Invalid CID");
-
-                return;
-            }
-        };
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Message => {}", video_cid));
-
-        self.update_playlists(&video_cid);
-    }
-
-    fn update_playlists(&mut self, video_cid: &Cid) {
-        update_playlist(&mut self.playlist_1080_60, video_cid, "1080p60");
-        update_playlist(&mut self.playlist_720_60, video_cid, "720p60");
-        update_playlist(&mut self.playlist_720_30, video_cid, "720p30");
-        update_playlist(&mut self.playlist_480_30, video_cid, "480p30");
+    pub fn update_live_playlists(&mut self, video_cid: &Cid) {
+        update_live_playlist(&mut self.playlist_1080_60, video_cid, "1080p60");
+        update_live_playlist(&mut self.playlist_720_60, video_cid, "720p60");
+        update_live_playlist(&mut self.playlist_720_30, video_cid, "720p30");
+        update_live_playlist(&mut self.playlist_480_30, video_cid, "480p30");
     }
 }
 
-fn update_playlist(playlist: &mut MediaPlaylist, cid: &Cid, quality: &str) {
+fn update_live_playlist(playlist: &mut MediaPlaylist, cid: &Cid, quality: &str) {
     let segment = MediaSegment {
         uri: format!("/ipfs/{}/quality/{}", cid, quality),
         duration: 4.0,

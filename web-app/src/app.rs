@@ -1,4 +1,5 @@
-use crate::components::{Home, LiveStreamPlayer, Navbar, VODPlayer};
+use crate::components::Navbar;
+use crate::pages::{Home, LiveStream, VideoOnDemand};
 use crate::routing::Route;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
@@ -29,8 +30,8 @@ impl Component for App {
                 <Router<Route>
                     render = Router::render(move |switch: Route| {
                         match switch {
-                            Route::Live => html! {<LiveStreamPlayer />},
-                            Route::Video => html! {<VODPlayer />},
+                            Route::Live => html! {<LiveStream />},
+                            Route::Video => html! {<VideoOnDemand />},
                             Route::Home => html! {<Home />},
                         }
                     })

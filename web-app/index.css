@@ -1,37 +1,25 @@
-body {
-    font-family: "Source Sans Pro", sans-serif;
-    -webkit-font-smoothing: subpixel-antialiased;
-    color: #333;
-    background: #f7f7f7;
-    padding-bottom: calc(24px + env(safe-area-inset-bottom));
-}
-
-.navbar {
-    height: 44px;
-    background: #dd2c00;
-    color: white;
-    box-shadow: 0px 5px 12px 0px rgba(46, 51, 51, 0.18);
+.nav_background {
     position: sticky;
+    width: 100%;
+    height: 50px;
     top: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    background: rgb(255, 100, 247);
 }
 
-.navbar_home {
-    font-weight: bold;
-    font-size: 24px;
-    margin-left: 10px;
+nav {
+    margin: 0;
+    padding: 0;
 }
 
-.navbar_live {
-    font-weight: bold;
-    font-size: 24px;
-    margin-left: 10px;
+.navbar_tab {
+    color: white;
+    padding: 15px;
+    border-right: 1px solid rgb(0, 0, 0);
+    float: left;
+    text-decoration: none;
 }
 
-.navbar_video {
-    font-weight: bold;
-    font-size: 24px;
-    margin-left: 10px;
+video {
+    width: 100%;
+    height: auto;
 }

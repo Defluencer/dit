@@ -8,6 +8,10 @@ export async function subscribe(topic, pubsubMessage) {
     await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))
 }
 
+export async function publish(topic, message) {
+    await ipfs.pubsub.publish(topic, message)
+}
+
 export function playlistCallback(callback) {
     getPlaylists = callback
 }

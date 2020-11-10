@@ -26,22 +26,18 @@ impl Component for Navbar {
         type Anchor = RouterAnchor<Route>;
 
         html! {
-            <div class="navbar">
-                <div class="navbar_home">
+            <div class="nav_background">
+                <nav>
                     <Anchor route=Route::Home classes="navbar_tab">
                         <div>{"Live-Like"}</div>
                     </Anchor>
-                </div>
-                <div class="navbar_live">
                     <Anchor route=Route::Live classes="navbar_tab">
                         <div>{"Live Stream"}</div>
                     </Anchor>
-                </div>
-                <div class="navbar_video">
                     <Anchor route=Route::Video classes="navbar_tab">
                         <div>{"Video"}</div>
                     </Anchor>
-                </div>
+                </nav>
             </div>
         }
     }
