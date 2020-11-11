@@ -12,8 +12,16 @@ export async function publish(topic, message) {
     await ipfs.pubsub.publish(topic, message)
 }
 
-export function playlistCallback(callback) {
+export async function unsubscribe(topic) {
+    await ipfs.pubsub.unsubscribe(topic)
+}
+
+export function registerPlaylistCallback(callback) {
     getPlaylists = callback
+}
+
+export function unregisterPlaylistCallback() {
+    getPlaylists = null
 }
 
 export function initHLS() {

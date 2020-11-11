@@ -25,7 +25,6 @@ impl Component for LiveStream {
             <div>
                 <LiveStreamPlayer />
                 <ChatWindow />
-                {"Video On Demand Page -> W.I.P."}
             </div>
         }
     }

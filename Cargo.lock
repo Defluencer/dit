@@ -1710,6 +1710,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ac64ead5ea5f05873d7c12b545865ca2b8d28adfc50a49b84770a3a97265d42"
 dependencies = [
  "cfg-if",
+ "serde",
+ "serde_json",
  "wasm-bindgen-macro",
 ]
 
@@ -1781,6 +1783,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "yew",
  "yew-router",
+ "yewtil",
 ]
 
 [[package]]
@@ -1931,4 +1934,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49bf2f66f0e61d65d1637523fa1faedd5aa291cf9cb8d8fb200678472279b672"
 dependencies = [
  "nom",
+]
+
+[[package]]
+name = "yewtil"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "003f4f533ee696c1f69d753db2c66096dec5700a93bd0bc801ab5891fec041c6"
+dependencies = [
+ "futures",
+ "log",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "yew",
 ]

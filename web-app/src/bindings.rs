@@ -10,21 +10,27 @@ extern "C" {
     #[wasm_bindgen(js_name = "publish")]
     pub fn publish(topic: JsValue, message: JsValue);
 
-    #[wasm_bindgen(js_name = "playlistCallback")]
-    pub fn playlist_callback(playlist_callback: &Function);
+    #[wasm_bindgen(js_name = "unsubscribe")]
+    pub fn unsubscribe(topic: JsValue);
+
+    #[wasm_bindgen(js_name = "registerPlaylistCallback")]
+    pub fn register_playlist_callback(playlist_callback: &Function);
+
+    #[wasm_bindgen(js_name = "unregisterPlaylistCallback")]
+    pub fn unregister_playlist_callback();
 
     #[wasm_bindgen(js_name = "initHLS")]
     pub fn init_hls();
 
     #[wasm_bindgen(js_name = "attachMedia")]
-    pub fn attach_media();
+    pub fn hls_attach_media();
 
     #[wasm_bindgen(js_name = "loadSource")]
-    pub fn load_source();
+    pub fn hls_load_master_playlist();
 
     #[wasm_bindgen(js_name = "startLoad")]
-    pub fn start_load();
+    pub fn hls_start_load();
 
     #[wasm_bindgen(js_name = "destroy")]
-    pub fn destroy();
+    pub fn hls_destroy();
 }

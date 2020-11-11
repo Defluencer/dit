@@ -1,9 +1,20 @@
 use crate::components::Navbar;
 use crate::pages::{Home, LiveStream, VideoOnDemand};
-use crate::routing::Route;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
-use yew_router::prelude::*;
+use yew_router::prelude::{Router, Switch};
+
+#[derive(Switch, Debug, Clone)]
+pub enum Route {
+    #[to = "/vod"]
+    Video,
+
+    #[to = "/live"]
+    Live,
+
+    #[to = "/"]
+    Home,
+}
 
 pub struct App {}
 

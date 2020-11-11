@@ -15,10 +15,7 @@ use cid::Cid;
 const TOPIC: &str = "livelikevideo";
 const STREAMER_PEER_ID: &str = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
 
-//TODO check for mem leaks
-
-/// Register callback and subscribe to video updates.
-/// Ownership is then transfered to JS GC.
+/// Initialized HLS, subscribe to video updates. Callbacks ownership is then transfered to JS GC.
 pub fn load_live_stream() {
     let live_playlists = Arc::new(RwLock::new(Playlists::new()));
 
@@ -29,16 +26,16 @@ pub fn load_live_stream() {
         Err(_) => String::from("RwLock Poisoned"),
     }) as Box<dyn Fn(String) -> String>);
 
-    bindings::playlist_callback(playlist_closure.into_js_value().unchecked_ref());
+    bindings::register_playlist_callback(playlist_closure.into_js_value().unchecked_ref());
 
     bindings::init_hls();
 
-    bindings::load_source();
+    bindings::hls_load_master_playlist();
 
     let loaded = Arc::new(AtomicBool::new(false));
 
     let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
-        let cid = match pubsub_message(from, data) {
+        let cid = match pubsub_video(from, data) {
             Some(cid) => cid,
             None => return,
         };
@@ -54,14 +51,25 @@ pub fn load_live_stream() {
         }
 
         if !loaded.compare_and_swap(false, true, Ordering::Relaxed) {
-            bindings::start_load();
+            bindings::hls_start_load();
         }
     }) as Box<dyn Fn(String, Vec<u8>)>);
 
     bindings::subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
 }
 
-fn pubsub_message(from: String, data: Vec<u8>) -> Option<Cid> {
+// TODO make sure registering callbacks is not every time the page is loaded
+
+/// Destroy HLS, unsubscribe from video updates then JS GC free callbacks
+pub fn unload_live_stream() {
+    bindings::hls_destroy();
+
+    bindings::unregister_playlist_callback();
+
+    bindings::unsubscribe(TOPIC.into());
+}
+
+fn pubsub_video(from: String, data: Vec<u8>) -> Option<Cid> {
     #[cfg(debug_assertions)]
     ConsoleService::info(&format!("Sender => {}", from));
 

@@ -1,15 +1,39 @@
 use crate::bindings;
 
-use std::collections::HashSet;
-use std::sync::{Arc, RwLock};
+//use std::collections::HashSet;
+//use std::sync::{Arc, RwLock};
 
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
 
 use yew::services::ConsoleService;
-use yew::worker::{Agent, AgentLink, HandlerId, Public};
+//use yew::worker::{Agent, AgentLink, HandlerId, Public};
+use yew::Callback;
 
 const TOPIC: &str = "livelikechat";
+
+pub fn load_live_chat(cb: Callback<String>) {
+    let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
+        let msg = match pubsub_message(from, data) {
+            Some(msg) => msg,
+            None => return,
+        };
+
+        cb.emit(msg);
+    }) as Box<dyn Fn(String, Vec<u8>)>);
+
+    bindings::subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
+}
+
+pub fn unload_live_chat() {
+    bindings::unsubscribe(TOPIC.into());
+}
+
+pub fn send_chat(msg: String) {
+    bindings::publish(TOPIC.into(), msg.into());
+}
+
+// Trunk doesn't support web worker yet...
 
 //use serde::{Deserialize, Serialize};
 
@@ -18,12 +42,12 @@ pub enum Request {
     ChatMsg(String),
 } */
 
-pub struct ChatManager {
+/* pub struct ChatManager {
     _link: Arc<RwLock<AgentLink<ChatManager>>>,
     subscribers: Arc<RwLock<HashSet<HandlerId>>>,
-}
+} */
 
-impl Agent for ChatManager {
+/* impl Agent for ChatManager {
     type Reach = Public<Self>;
     type Message = ();
     type Input = String;
@@ -72,6 +96,7 @@ impl Agent for ChatManager {
             Err(_) => {
                 #[cfg(debug_assertions)]
                 ConsoleService::error("RwLock Poisoned");
+
                 return;
             }
         };
@@ -85,13 +110,14 @@ impl Agent for ChatManager {
             Err(_) => {
                 #[cfg(debug_assertions)]
                 ConsoleService::error("RwLock Poisoned");
+
                 return;
             }
         };
 
         subscribers.remove(&id);
     }
-}
+} */
 
 fn pubsub_message(from: String, data: Vec<u8>) -> Option<String> {
     #[cfg(debug_assertions)]
