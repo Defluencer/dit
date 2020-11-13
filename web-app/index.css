@@ -1,25 +1,79 @@
+body {
+    display: block;
+    margin: 0;
+    width: 100%;
+    height: auto;
+}
+
 .nav_background {
     position: sticky;
     width: 100%;
-    height: 50px;
+    height: 5vh;
     top: 0;
-    background: rgb(255, 100, 247);
+    background-color: rgb(255, 74, 255, 1);
+    display: block;
+    float: left;
 }
 
 nav {
-    margin: 0;
-    padding: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 .navbar_tab {
     color: white;
-    padding: 15px;
+    padding-right: 15px;
+    padding-left: 15px;
     border-right: 1px solid rgb(0, 0, 0);
     float: left;
     text-decoration: none;
+    cursor: pointer;
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.live_stream_page {
+    width: 100%;
+    height: 95vh;
+    float: left;
+    display: block;
 }
 
 video {
+    width: 80%;
+    height: 93vh;
+    float: left;
+    object-fit: contain;
+}
+
+.chat_window {
+    width: 20%;
+    height: 100%;
+    float: right;
+    display: block;
+}
+
+.chats {
+    display: block;
+    overflow: auto;
+    height: 82vh;
+    max-height: 82vh;
+}
+
+.chat_message {
+    display: block;
+}
+
+.input_text {
+    display: inline-block;
     width: 100%;
-    height: auto;
+    text-align: center;
+}
+
+.send_button {
+    display: inline-block;
+    width: 100%;
+    text-align: center;
 }

@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::rc::Rc;
 
 use crate::agents::{load_live_chat, send_chat, unload_live_chat};
@@ -11,7 +12,7 @@ pub struct ChatWindow {
 
     temp_msg: String,
 
-    chat_messages: Vec<ChatMessage>,
+    chat_messages: VecDeque<ChatMessageData>,
 
     next_id: usize,
 }
@@ -34,7 +35,7 @@ impl Component for ChatWindow {
         Self {
             link,
             temp_msg: "No message yet.".into(),
-            chat_messsages: Vec::with_capacity(20),
+            chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
         }
     }
@@ -42,13 +43,17 @@ impl Component for ChatWindow {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Received(message) => {
-                let data = ChatMessageData {
+                let message_data = ChatMessageData {
                     id: self.next_id,
                     sender_name: Rc::from("Placeholder Name"),
                     message: Rc::from(message),
                 };
 
-                self.chat_messsages.push(data);
+                self.chat_messages.push_back(message_data);
+
+                if self.chat_messages.len() >= 20 {
+                    self.chat_messages.pop_front();
+                }
 
                 self.next_id += 1;
 
@@ -74,17 +79,21 @@ impl Component for ChatWindow {
     fn view(&self) -> Html {
         html! {
             <div class="chat_window">
-                <button onclick=self.link.callback(|_| Msg::Sent)>{ "Send" }</button>
+                <div class="chats">
+                    {
+                        for self.chat_messages.iter().rev().map(|cm| html! {
+                            <ChatMessage key=cm.id.to_string() message_data=cm />
+                        })
+                    }
+                </div>
 
-                <textarea
+                <textarea class="input_text"
                     rows=5
                     oninput=self.link.callback(|e: InputData| Msg::Input(e.value))
                     placeholder="Input text here...">
                 </textarea>
 
-                <div class="chats">
-                    { for self.chat_messages.iter().map(|cm| cm.render()) }
-                </div>
+                <button class="send_button" onclick=self.link.callback(|_| Msg::Sent)>{ "Send" }</button>
             </div>
         }
     }
