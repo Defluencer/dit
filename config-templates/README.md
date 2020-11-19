@@ -1,4 +1,4 @@
-
+# Configuration
 - config.json
     - gossipsub_topics
         - video
