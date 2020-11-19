@@ -1,5 +1,4 @@
-use crate::chronicler::Archive;
-use crate::config::get_config;
+use crate::actors::archivist::Archive;
 use crate::dag_nodes::IPLDLink;
 
 use std::collections::HashSet;
@@ -68,36 +67,26 @@ pub struct ChatAggregator {
     archive_tx: Sender<Archive>,
 
     gossipsub_topic: String,
+    //blacklist: Blacklist,
 
-    blacklist: Blacklist,
+    //whitelist: Whitelist,
 
-    whitelist: Whitelist,
-
-    _mods: Moderators,
+    //mods: Moderators,
 }
 
 impl ChatAggregator {
-    pub async fn new(ipfs: IpfsClient, archive_tx: Sender<Archive>) -> Self {
-        let config = get_config(&ipfs).await;
-
-        let blacklist = get_blacklist(&ipfs, config.blacklist.link).await;
-
-        let whitelist = get_whitelist(&ipfs, config.whitelist.link).await;
-
-        let mods = get_mods(&ipfs, config.mods.link).await;
-
+    pub fn new(ipfs: IpfsClient, archive_tx: Sender<Archive>, gossipsub_topic: String) -> Self {
         Self {
             ipfs,
 
             archive_tx,
 
-            gossipsub_topic: config.gossipsub_topics.chat,
+            gossipsub_topic,
+            //blacklist,
 
-            blacklist,
+            //whitelist,
 
-            whitelist,
-
-            _mods: mods,
+            //mods: mods,
         }
     }
 
@@ -105,6 +94,8 @@ impl ChatAggregator {
         let topic = &self.gossipsub_topic;
 
         let mut stream = self.ipfs.pubsub_sub(topic, true);
+
+        println!("Chat Online...");
 
         while let Some(result) = stream.next().await {
             match result {
@@ -138,6 +129,7 @@ impl ChatAggregator {
         }
     }
 
+    /// Decode chat messages from Base64 then serialize to ChatMessage
     fn decode_message(&self, response: &PubsubSubResponse) -> Option<ChatMessage> {
         let encoded = response.data.as_ref()?;
 
@@ -162,17 +154,21 @@ impl ChatAggregator {
         Some(chat_message)
     }
 
+    /// Verify signature authenticity
     fn is_auth_signature(&self, _msg: &ChatMessage) -> bool {
         //TODO
         true
     }
 
-    fn is_allowed(&self, identity: &ChatIdentity) -> bool {
-        self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)
+    /// Verify identity against white & black lists
+    fn is_allowed(&self, _identity: &ChatIdentity) -> bool {
+        //TODO
+        true
+        //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)
     }
 }
 
-async fn get_whitelist(ipfs: &IpfsClient, cid: Cid) -> Whitelist {
+async fn _get_whitelist(ipfs: &IpfsClient, cid: Cid) -> Whitelist {
     let buffer: Result<Bytes, Error> = ipfs.dag_get(&cid.to_string()).collect().await;
 
     let buffer = buffer.expect("IPFS DAG get failed");
@@ -180,7 +176,7 @@ async fn get_whitelist(ipfs: &IpfsClient, cid: Cid) -> Whitelist {
     serde_json::from_slice(&buffer).expect("Deserializing config failed")
 }
 
-async fn get_blacklist(ipfs: &IpfsClient, cid: Cid) -> Blacklist {
+async fn _get_blacklist(ipfs: &IpfsClient, cid: Cid) -> Blacklist {
     let buffer: Result<Bytes, Error> = ipfs.dag_get(&cid.to_string()).collect().await;
 
     let buffer = buffer.expect("IPFS DAG get failed");
@@ -188,7 +184,7 @@ async fn get_blacklist(ipfs: &IpfsClient, cid: Cid) -> Blacklist {
     serde_json::from_slice(&buffer).expect("Deserializing config failed")
 }
 
-async fn get_mods(ipfs: &IpfsClient, cid: Cid) -> Moderators {
+async fn _get_mods(ipfs: &IpfsClient, cid: Cid) -> Moderators {
     let buffer: Result<Bytes, Error> = ipfs.dag_get(&cid.to_string()).collect().await;
 
     let buffer = buffer.expect("IPFS DAG get failed");

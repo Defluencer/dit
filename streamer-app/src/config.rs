@@ -20,6 +20,25 @@ pub struct Config {
     //pub mods: IPLDLink,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            gossipsub_topics: Topics {
+                video: "livelikevideo".into(),
+                chat: "livelikechat".into(),
+            },
+            streamer_app: StreamerApp {
+                socket_addr: "127.0.0.1:2526".into(),
+                ffmpeg: Some(Ffmpeg {
+                    socket_addr: "127.0.0.1:2525".into(),
+                }),
+            },
+            variants: 4,
+            video_segment_duration: 4,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Topics {
     pub video: String,
@@ -37,15 +56,28 @@ pub struct Ffmpeg {
     pub socket_addr: String,
 }
 
-pub async fn _get_config(ipfs: &IpfsClient) -> Config {
-    let config = ipfs
-        .name_resolve(None, false, false)
-        .await
-        .expect("IPFS name resolve failed");
+pub async fn get_config(ipfs: &IpfsClient) -> Config {
+    let config = match ipfs.name_resolve(None, false, false).await {
+        Ok(cid) => cid,
+        Err(_) => {
+            let config = Config::default();
+
+            eprintln!("Cannot load config. Fallback -> {:#?}", config);
+
+            return config;
+        }
+    };
 
     let buffer: Result<Bytes, Error> = ipfs.dag_get(&config.path).collect().await;
 
-    let buffer = buffer.expect("IPFS DAG get failed");
+    match buffer {
+        Ok(buffer) => serde_json::from_slice(&buffer).expect("Deserializing config failed"),
+        Err(_) => {
+            let config = Config::default();
 
-    serde_json::from_slice(&buffer).expect("Deserializing config failed")
+            eprintln!("Cannot load config. Fallback -> {:#?}", config);
+
+            config
+        }
+    }
 }

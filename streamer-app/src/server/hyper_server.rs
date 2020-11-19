@@ -1,5 +1,5 @@
-use crate::chronicler::Archive;
-use crate::services::put_requests;
+use crate::actors::Archive;
+use crate::server::services::put_requests;
 
 use std::future::Future;
 use std::net::SocketAddr;
@@ -69,7 +69,7 @@ async fn shutdown_signal(mut archive_tx: Sender<Archive>) {
     let msg = Archive::Finalize;
 
     if let Err(error) = archive_tx.send(msg).await {
-        eprintln!("Timecode receiver hung up {}", error);
+        eprintln!("Archive receiver hung up {}", error);
     }
 }
 

@@ -1,5 +1,4 @@
-//use crate::chat::ChatMessage;
-//use crate::config::get_config;
+use crate::actors::chat::ChatMessage;
 use crate::dag_nodes::IPLDLink;
 
 use std::collections::VecDeque;
@@ -53,16 +52,17 @@ pub struct SecondNode {
 }
 
 pub enum Archive {
-    //Chat(ChatMessage),
+    Chat(ChatMessage),
     Video(Cid),
     Finalize,
 }
 
-pub struct Chronicler {
+pub struct Archivist {
     ipfs: IpfsClient,
 
     archive_rx: Receiver<Archive>,
 
+    buffer_cap: usize,
     video_chat_buffer: VecDeque<SecondNode>,
 
     minute_node: MinuteNode,
@@ -72,18 +72,21 @@ pub struct Chronicler {
     video_segment_duration: usize,
 }
 
-impl Chronicler {
-    pub async fn new(ipfs: IpfsClient, archive_rx: Receiver<Archive>) -> Self {
-        //let config = get_config(&ipfs).await;
+impl Archivist {
+    pub fn new(
+        ipfs: IpfsClient,
+        archive_rx: Receiver<Archive>,
+        video_segment_duration: usize,
+    ) -> Self {
+        let buffer_cap = 120 / video_segment_duration;
 
         Self {
             ipfs,
 
             archive_rx,
 
-            video_chat_buffer: VecDeque::with_capacity(
-                120 / 4, /* config.video_segment_duration */
-            ), //120 == 2 minutes
+            buffer_cap,
+            video_chat_buffer: VecDeque::with_capacity(buffer_cap), //120 == 2 minutes
 
             minute_node: MinuteNode {
                 links_to_seconds: Vec::with_capacity(60),
@@ -97,14 +100,16 @@ impl Chronicler {
                 links_to_hours: Vec::with_capacity(24),
             },
 
-            video_segment_duration: 4, /* config.video_segment_duration */
+            video_segment_duration,
         }
     }
 
     pub async fn collect(&mut self) {
+        println!("Archive Online...");
+
         while let Some(event) = self.archive_rx.recv().await {
             match event {
-                //Archive::Chat(msg) => self.archive_chat_message(msg).await,
+                Archive::Chat(msg) => self.archive_chat_message(msg).await,
                 Archive::Video(cid) => self.archive_video_segment(cid).await,
                 Archive::Finalize => self.finalize().await,
             }
@@ -112,7 +117,7 @@ impl Chronicler {
     }
 
     /// Link chat message to SecondNodes.
-    /* async fn archive_chat_message(&mut self, msg: ChatMessage) {
+    async fn archive_chat_message(&mut self, msg: ChatMessage) {
         for node in self.video_chat_buffer.iter_mut() {
             if node.link_to_video != msg.data.timestamp {
                 continue;
@@ -135,7 +140,7 @@ impl Chronicler {
 
             break;
         }
-    } */
+    }
 
     /// Buffers SecondNodes, waiting for chat messages to be linked.
     async fn archive_video_segment(&mut self, cid: Cid) {
@@ -148,19 +153,19 @@ impl Chronicler {
 
         self.video_chat_buffer.push_back(second_node);
 
-        if self.video_chat_buffer.len() < self.video_chat_buffer.capacity() {
+        if self.video_chat_buffer.len() < self.buffer_cap {
             return;
         }
 
         self.collect_second().await;
 
-        if self.minute_node.links_to_seconds.len() < self.minute_node.links_to_seconds.capacity() {
+        if self.minute_node.links_to_seconds.len() < 60 {
             return;
         }
 
         self.collect_minute().await;
 
-        if self.hour_node.links_to_minutes.len() < self.hour_node.links_to_minutes.capacity() {
+        if self.hour_node.links_to_minutes.len() < 60 {
             return;
         }
 
@@ -189,6 +194,7 @@ impl Chronicler {
 
         let link = IPLDLink { link: cid };
 
+        //since duration > 1 sec
         for _ in 0..self.video_segment_duration {
             self.minute_node.links_to_seconds.push(link.clone());
         }
@@ -267,7 +273,7 @@ impl Chronicler {
         #[cfg(debug_assertions)]
         println!("{}", serde_json::to_string_pretty(node).unwrap());
 
-        let json_string = serde_json::to_string(node).expect("Can't serialize hours node");
+        let json_string = serde_json::to_string(node).expect("Can't serialize day node");
 
         let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => {

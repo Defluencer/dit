@@ -1,16 +1,10 @@
-//mod chat;
-mod chronicler;
+mod actors;
 mod config;
 mod dag_nodes;
-mod ffmpeg_transcoding;
 mod server;
-mod services;
-mod video;
 
-//use crate::chat::ChatAggregator;
-use crate::chronicler::Chronicler;
-use crate::config::{Config, Ffmpeg, StreamerApp, Topics};
-use crate::video::VideoAggregator;
+use crate::actors::{start_transcoding, Archivist, ChatAggregator, VideoAggregator};
+use crate::server::start_server;
 
 use std::net::SocketAddr;
 
@@ -20,57 +14,54 @@ use ipfs_api::IpfsClient;
 
 #[tokio::main]
 async fn main() {
-    println!("Streamer Application Initialization...");
+    println!("Initialization...");
 
     let ipfs = IpfsClient::default();
 
-    //let config = config::get_config(&ipfs).await;
-    let config = Config {
-        gossipsub_topics: Topics {
-            video: "livelikevideo".into(),
-            chat: "livelikechat".into(),
-        },
-        streamer_app: StreamerApp {
-            socket_addr: "127.0.0.1:2526".into(),
-            ffmpeg: Some(Ffmpeg {
-                socket_addr: "127.0.0.1:2525".into(),
-            }),
-        },
-        variants: 4,
-        video_segment_duration: 4,
-    };
+    let config = config::get_config(&ipfs).await;
 
     let (archive_tx, archive_rx) = channel(25);
-    let mut chronicler = Chronicler::new(ipfs.clone(), archive_rx).await;
+    let mut archivist = Archivist::new(ipfs.clone(), archive_rx, config.video_segment_duration);
 
     let (video_tx, video_rx) = channel(config.variants);
-    let mut video = VideoAggregator::new(ipfs.clone(), video_rx, archive_tx.clone()).await;
+    let mut video = VideoAggregator::new(
+        ipfs.clone(),
+        video_rx,
+        archive_tx.clone(),
+        config.gossipsub_topics.video,
+        config.variants,
+    );
 
-    //let mut chat = ChatAggregator::new(ipfs.clone(), archive_tx.clone()).await;
+    let mut chat = ChatAggregator::new(
+        ipfs.clone(),
+        archive_tx.clone(),
+        config.gossipsub_topics.chat,
+    );
 
-    let streamer_app_addr = config.streamer_app.socket_addr;
-
-    let server_addr = streamer_app_addr
+    let server_addr = config
+        .streamer_app
+        .socket_addr
         .parse::<SocketAddr>()
         .expect("Parsing socket address failed");
 
-    if config.streamer_app.ffmpeg.is_some() {
-        let ffmpeg_addr = config.streamer_app.ffmpeg.unwrap().socket_addr;
-
-        tokio::join!(
-            chronicler.collect(),
-            //chat.aggregate(),
-            video.aggregate(),
-            server::start_server(server_addr, video_tx, archive_tx),
-            ffmpeg_transcoding::start(ffmpeg_addr, streamer_app_addr),
-        );
-    } else {
-        tokio::join!(
-            chronicler.collect(),
-            //chat.aggregate(),
-            video.aggregate(),
-            server::start_server(server_addr, video_tx, archive_tx),
-        );
+    match config.streamer_app.ffmpeg {
+        Some(ffmpeg) => {
+            tokio::join!(
+                archivist.collect(),
+                chat.aggregate(),
+                video.aggregate(),
+                start_server(server_addr, video_tx, archive_tx),
+                start_transcoding(ffmpeg.socket_addr, config.streamer_app.socket_addr),
+            );
+        }
+        None => {
+            tokio::join!(
+                archivist.collect(),
+                chat.aggregate(),
+                video.aggregate(),
+                start_server(server_addr, video_tx, archive_tx),
+            );
+        }
     }
 }
 
@@ -82,7 +73,7 @@ mod tests {
     async fn get_config_test() {
         let ipfs = IpfsClient::default();
 
-        let config = crate::config::_get_config(&ipfs).await;
+        let config = crate::config::get_config(&ipfs).await;
 
         assert_eq!(config.variants, 4);
     }

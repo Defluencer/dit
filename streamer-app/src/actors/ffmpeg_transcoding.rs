@@ -1,6 +1,6 @@
 use tokio::process::Command;
 
-pub async fn start(ffmpeg_addr: String, stream_app_addr: String) {
+pub async fn start_transcoding(ffmpeg_addr: String, stream_app_addr: String) {
     let mut command = Command::new("ffmpeg");
 
     command
@@ -83,7 +83,7 @@ pub async fn start(ffmpeg_addr: String, stream_app_addr: String) {
 
     let handle = match command.spawn() {
         Ok(result) => {
-            println!("Local transcoding starting... Do not close the windows while streaming!");
+            println!("Transcoding Online...");
 
             result
         }

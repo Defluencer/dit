@@ -29,7 +29,7 @@ impl Component for Navbar {
             <div class="nav_background">
                 <nav>
                     <Anchor route=Route::Home classes="navbar_tab">
-                        <div>{"Live-Like"}</div>
+                        <div>{"Home"}</div>
                     </Anchor>
                     <Anchor route=Route::Live classes="navbar_tab">
                         <div>{"Live Stream"}</div>

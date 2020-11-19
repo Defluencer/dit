@@ -1,4 +1,4 @@
-use crate::chronicler::Archive;
+use crate::actors::archivist::Archive;
 use crate::dag_nodes::IPLDLink;
 
 use std::collections::HashMap;
@@ -21,9 +21,9 @@ use cid::Cid;
 #[derive(Serialize, Debug)]
 pub struct VideoNode {
     #[serde(rename = "quality")]
-    pub qualities: HashMap<String, IPLDLink>, // ../<StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
+    pub qualities: HashMap<String, IPLDLink>, // <StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
 
-    pub previous: Option<IPLDLink>,
+    pub previous: Option<IPLDLink>, // <StreamHash>/time/hour/0/minute/36/second/12/video/previous/..
 }
 
 pub struct VideoAggregator {
@@ -41,32 +41,34 @@ pub struct VideoAggregator {
 }
 
 impl VideoAggregator {
-    pub async fn new(
+    pub fn new(
         ipfs: IpfsClient,
         video_rx: Receiver<(String, Bytes)>,
         archive_tx: Sender<Archive>,
+        gossipsub_topic: String,
+        variants: usize,
     ) -> Self {
-        //let config = crate::config::get_config(&ipfs).await;
-
         Self {
             ipfs,
 
             archive_tx,
             video_rx,
 
-            gossipsub_topic: "livelikevideo".into(), /* config.gossipsub_topics.video */
+            gossipsub_topic,
 
             video_node: VideoNode {
-                qualities: HashMap::with_capacity(4 /* config.variants */),
+                qualities: HashMap::with_capacity(variants),
 
                 previous: None,
             },
 
-            qualities: 4,
+            qualities: variants,
         }
     }
 
     pub async fn aggregate(&mut self) {
+        println!("Video Online...");
+
         while let Some((variant, data)) = self.video_rx.recv().await {
             let video_segment_cid = match self.add_video(data).await {
                 Ok(cid) => cid,

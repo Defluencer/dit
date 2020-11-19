@@ -58,8 +58,6 @@ pub fn load_live_stream() {
     bindings::subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
 }
 
-// TODO make sure registering callbacks is not every time the page is loaded
-
 /// Destroy HLS, unsubscribe from video updates then JS GC free callbacks
 pub fn unload_live_stream() {
     bindings::hls_destroy();
@@ -105,3 +103,51 @@ fn pubsub_video(from: String, data: Vec<u8>) -> Option<Cid> {
 
     Some(video_cid)
 }
+
+//Rebuild playlists by following the dag node link chain.
+/* async fn rebuild_playlists(
+    latest_dag_node: DagNode,
+    playlists: &Arc<RwLock<Playlists>>,
+    previous_cid: &Option<String>,
+    ipfs: &IpfsClient,
+) {
+    let mut missing_nodes = Vec::with_capacity(HLS_LIST_SIZE);
+
+    missing_nodes.push(latest_dag_node);
+
+    while missing_nodes.last().unwrap().previous != *previous_cid {
+        //Fill the vec with all the missing nodes.
+
+        let dag_node_cid = match missing_nodes.last().unwrap().previous.as_ref() {
+            Some(cid) => cid,
+            None => {
+                //Found first node of the stream, stop here.
+                break;
+            }
+        };
+
+        let dag_node = match get_dag_node(ipfs, dag_node_cid).await {
+            Ok(data) => data,
+            Err(error) => {
+                eprintln!("IPFS dag get failed {}", error);
+                return;
+            }
+        };
+
+        missing_nodes.push(dag_node);
+
+        if missing_nodes.len() >= HLS_LIST_SIZE {
+            //Found more node than the list size, stop here.
+            break;
+        }
+    }
+
+    let mut playlists = playlists.write().await;
+
+    for dag_node in missing_nodes.into_iter().rev() {
+        #[cfg(debug_assertions)]
+        println!("Missing {:#?}", &dag_node);
+
+        update_playlists(dag_node, &mut playlists);
+    }
+} */

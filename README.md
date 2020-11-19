@@ -2,38 +2,40 @@
 The Live-Like project aim to decentralize live streaming. Provide the same popular moderation tools and allow content creators to receive 100% of users donations.
 
 ## Roadmap
-- Live Streaming: Mostly working but could use some polish. Some customizations.
+- Live Streaming: Mostly working.
 - VOD: Can save stream as timecode adressable video. Can't view yet.
-- Live Chat: In Design.
+- Live Chat: Can send and receive messages. No identity yet.
 - Moderation: In Design.
 - Community: Some thoughts.
 - Ecosystem: Wild dreams!
 
 ## Setup
- - Make sure your broadcast software output is set to FFMPEG local address.
- - Make sure FFMPEG is on PATH. (Optional) To use a custom FFMPEG script remove the "ffmpeg" object from livelike_config.json
- - Compile streamer-app, in debug mode.
- - Bundle streamer-app & livelike_config.json together.
- - Set "streamer_peer_id" to the peer id of the ipfs node that will be used to stream.
- - Set "gossipsub_topic" to something unique to you.
- - Set "streamerPeerId" & "gossipsubTopic" in index.js to the same values.
- - Add the web-app folder to IPFS or deploy as website.
+### Streaming
+- Customize template config.json then IPFS add, pin and name publish the config file.
+- Broadcast software set to FFMPEG using rtmp. (egg: rtmp://127.0.0.1:2525)
+- Make sure FFMPEG is on PATH.
+- (Optional) Remove the "ffmpeg" object from config.json if using custom FFMPEG scripts.
+### Web
+- Customize Web-app.
+- IPFS add and pin the www folder.
+- Upload CID to ENS or other DNS.
 
-## Streaming
- - Start IPFS with PUBSUB enabled.
- - Start streamer-app.
- - Start your broadcast software.
- - Stream!
-
-## Viewing
- - Start IPFS with PUBSUB enabled.
- - Set IPFS CORS to allow calls from link or website.
- - Open IPFS link or website.
+## Live
+- Start IPFS with PUBSUB enabled.
+- Start streamer-app.
+- Start your broadcast software.
+- Stream!
 
 ## V.O.D.
- - Stop your broadcast software.
- - Press Ctrl-c in streamer-app to save the stream locally.
- - Upload to Filecoin using final stream CID.
+- Stop your broadcast software.
+- Wait 15 seconds for the app to catch up.
+- Press Ctrl-c in streamer-app to save the stream locally (video & chat).
+- Upload to Filecoin using final stream CID.
+
+## Viewers
+- Start IPFS with PUBSUB enabled.
+- Set IPFS CORS to allow website.
+- Open website.
 
 ## License
 Licensed under either of
@@ -52,3 +54,4 @@ dual licensed as above, without any additional terms or conditions.
 
 ## Financial Support
 - https://gitcoin.co/grants/1084/live-like
+- sionois.eth
