@@ -1,0 +1,23 @@
+{
+    "gossipsub_topics": {
+        "video": "livelikevideo",
+        "chat": "livelikechat"
+    },
+    "streamer_app": {
+        "socket_addr": "127.0.0.1:2526",
+        "ffmpeg": {
+            "socket_addr": "127.0.0.1:2525"
+        }
+    },
+    "variants": 4,
+    "video_segment_duration": 4,
+    "blacklist": {
+        "/": "addCIDhere"
+    },
+    "whitelist": {
+        "/": "addCIDhere"
+    },
+    "mods": {
+        "/": "addCIDhere"
+    }
+}

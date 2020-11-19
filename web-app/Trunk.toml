@@ -1,0 +1,25 @@
+[build]
+# The index HTML file to drive the bundling process.
+target = "index.html"
+# Build in release mode.
+release = false
+# The output dir for all final assets.
+dist = "www"
+# The public URL from which assets are to be served.
+public_url = "/"
+
+[watch]
+# Additional paths to ignore.
+ignore = []
+
+[serve]
+# The port to serve on.
+port = 8080
+# Open a browser tab once the initial build is complete.
+open = true
+
+[clean]
+# The output dir for all final assets.
+dist = "www"
+# Optionally perform a cargo clean.
+cargo = false

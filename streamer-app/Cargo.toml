@@ -9,7 +9,7 @@ licence = "MIT OR Apache-2.0"
 
 [dependencies]
 tokio = { version = "*", features = ["signal", "macros", "process", "rt-threaded", "sync"] }
-ipfs-api = { git = "https://github.com/SionoiS/rust-ipfs-api", branch = "config" }
+ipfs-api = "0.8.0-rc.2"
 cid = "*"
 multibase = "*"
 hyper = "*"

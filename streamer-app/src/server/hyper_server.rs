@@ -1,6 +1,5 @@
-use crate::hash_timecode::Timecode;
-use crate::services::put_requests;
-use crate::Config;
+use crate::actors::Archive;
+use crate::server::services::put_requests;
 
 use std::future::Future;
 use std::net::SocketAddr;
@@ -62,34 +61,28 @@ impl<T> Service<T> for MakeLiveLikeService {
     }
 }
 
-async fn shutdown_signal(mut timecode_tx: Sender<Timecode>) {
+async fn shutdown_signal(mut archive_tx: Sender<Archive>) {
     ctrl_c()
         .await
         .expect("Failed to install CTRL+C signal handler");
 
-    let msg = Timecode::Finalize;
+    let msg = Archive::Finalize;
 
-    if let Err(error) = timecode_tx.send(msg).await {
-        eprintln!("Timecode receiver hung up {}", error);
+    if let Err(error) = archive_tx.send(msg).await {
+        eprintln!("Archive receiver hung up {}", error);
     }
 }
 
 pub async fn start_server(
+    server_addr: SocketAddr,
     collector: Sender<(String, Bytes)>,
-    timecode_tx: Sender<Timecode>,
-    config: Config,
+    archive_tx: Sender<Archive>,
 ) {
-    let server_addr = config
-        .streamer_app
-        .socket_addr
-        .parse::<SocketAddr>()
-        .expect("Parsing socket address failed");
-
     let service = MakeLiveLikeService::new(collector.clone());
 
     let server = Server::bind(&server_addr).serve(service);
 
-    let graceful = server.with_graceful_shutdown(shutdown_signal(timecode_tx));
+    let graceful = server.with_graceful_shutdown(shutdown_signal(archive_tx));
 
     if let Err(e) = graceful.await {
         eprintln!("Server error {}", e);

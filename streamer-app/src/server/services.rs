@@ -80,26 +80,3 @@ pub async fn put_requests(
 
     Ok(res)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn path_parent() {
-        let full_path = "/1080p60/356.ts";
-        let path = Path::new(full_path);
-
-        /* let file_name = "356";
-
-        let file = path.file_stem().unwrap();
-
-        assert_eq!(file, file_name); */
-
-        let folder_name = "1080p60";
-
-        let parent = path.parent().unwrap().file_name().unwrap();
-
-        assert_eq!(parent, folder_name);
-    }
-}
