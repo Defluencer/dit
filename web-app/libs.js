@@ -200,7 +200,7 @@ class HlsjsIPFSLoader {
     }
 }
 
-async function cat(path) {
+export async function cat(path) {
     let value = new Uint8Array(0)
 
     for await (const buf of ipfs.cat(path)) {

@@ -1,9 +1,12 @@
 use wasm_bindgen::prelude::{wasm_bindgen, JsValue};
 
-use js_sys::Function;
+use js_sys::{Function, Uint8Array};
 
 #[wasm_bindgen(module = "/libs.js")]
 extern "C" {
+    #[wasm_bindgen(js_name = "cat")]
+    pub fn ipfs_cat(path: &str) -> Uint8Array;
+
     #[wasm_bindgen(js_name = "subscribe")]
     pub fn subscribe(topic: JsValue, pubsub_callback: &Function);
 
