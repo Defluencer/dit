@@ -1,27 +1,44 @@
-use crate::bindings;
-use wasm_bindgen::closure::Closure;
-//use crate::vod_manager::VODManager;
+use crate::agents::VODManager;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
-use yew::services::ConsoleService;
 
-use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, Url};
-
-//use js_sys::Uint8Array;
+use web_sys::HtmlMediaElement;
 
 use wasm_bindgen::JsCast;
 
-pub struct VODPlayer {}
+pub struct VODPlayer {
+    link: ComponentLink<Self>,
+
+    manager: VODManager,
+
+    video: Option<HtmlMediaElement>,
+}
+
+pub enum Msg {
+    Add,
+    Load,
+}
 
 impl Component for VODPlayer {
-    type Message = ();
+    type Message = Msg;
     type Properties = ();
 
-    fn create(_props: Self::Properties, _link: ComponentLink<Self>) -> Self {
-        Self {}
+    fn create(_props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let manager = VODManager::new();
+
+        Self {
+            link,
+            manager,
+            video: None,
+        }
     }
 
-    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
+    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        match msg {
+            Msg::Add => self.manager.add_source_buffer(),
+            Msg::Load => self.manager.load_test_video(),
+        }
+
         false
     }
 
@@ -32,8 +49,13 @@ impl Component for VODPlayer {
     fn view(&self) -> Html {
         html! {
             <div>
-                <video id="video" muted=true controls=true poster="../live_like_poster.png">
-                </video>
+                <video id="video" poster="../live_like_poster.png" />
+                <button onclick=self.link.callback(|_| Msg::Add)>
+                    { "Add" }
+                </button>
+                <button onclick=self.link.callback(|_| Msg::Load)>
+                    { "Load" }
+                </button>
             </div>
         }
     }
@@ -53,48 +75,14 @@ impl Component for VODPlayer {
                 .dyn_into()
                 .unwrap();
 
-            //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.MediaSource.html#method.new
-            let media_source = MediaSource::new().unwrap();
-
-            //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.Url.html#method.create_object_url_with_source
-            let url = Url::create_object_url_with_source(&media_source).unwrap();
-
             //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.HtmlVideoElement.html#method.set_src
-            video.set_src(&url);
+            video.set_src(&self.manager.url);
 
-            let closure = Closure::wrap(Box::new(on_source_open) as Box<dyn Fn(&MediaSource)>);
+            video.set_autoplay(false);
+            video.set_controls(true);
+            video.set_muted(true);
 
-            media_source.set_onsourceopen(Some(closure.into_js_value().unchecked_ref()));
+            self.video = Some(video);
         }
     }
-
-    /* fn destroy(&mut self) {
-        bindings::destroy();
-    } */
-}
-
-fn on_source_open(media_source: &MediaSource) {
-    if media_source.ready_state() != MediaSourceReadyState::Open {
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Ready State => {:?}", media_source.ready_state()));
-
-        //TODO find why ready state return __nonexhaustive
-        return;
-    }
-
-    //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.MediaSource.html#method.add_source_buffer
-    //https://developer.mozilla.org/en-US/docs/Web/Media/Formats/codecs_parameter
-    let source_buffer = media_source
-        .add_source_buffer(r#"video/mp4;codecs="avc1.42c01f,mp4a.40.2""#)
-        .unwrap();
-
-    //load video from ipfs
-    let data = bindings::ipfs_cat(
-    "bafyreibcxaz3iyotaeds6vzs7xdwlpvzp3w7gy6p37i3m46iglo7nwjoou/time/hour/0/minute/0/second/0/video/quality/1080p60",
-);
-
-    //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.SourceBuffer.html#method.append_buffer_with_u8_array
-    source_buffer
-        .append_buffer_with_array_buffer_view(&data)
-        .unwrap();
 }
