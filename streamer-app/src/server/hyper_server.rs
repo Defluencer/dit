@@ -16,7 +16,7 @@ use hyper::{Body, Error, Request, Response, Server};
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
 struct LiveLikeService {
-    collector: Sender<(String, Bytes)>,
+    collector: Sender<(String, Bytes, bool)>,
 }
 
 impl Service<Request<Body>> for LiveLikeService {
@@ -34,11 +34,11 @@ impl Service<Request<Body>> for LiveLikeService {
 }
 
 struct MakeLiveLikeService {
-    collector: Sender<(String, Bytes)>,
+    collector: Sender<(String, Bytes, bool)>,
 }
 
 impl MakeLiveLikeService {
-    fn new(collector: Sender<(String, Bytes)>) -> Self {
+    fn new(collector: Sender<(String, Bytes, bool)>) -> Self {
         Self { collector }
     }
 }
@@ -75,7 +75,7 @@ async fn shutdown_signal(mut archive_tx: Sender<Archive>) {
 
 pub async fn start_server(
     server_addr: SocketAddr,
-    collector: Sender<(String, Bytes)>,
+    collector: Sender<(String, Bytes, bool)>,
     archive_tx: Sender<Archive>,
 ) {
     let service = MakeLiveLikeService::new(collector.clone());

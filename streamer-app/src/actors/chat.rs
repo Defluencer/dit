@@ -7,15 +7,15 @@ use std::str;
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc::Sender;
 
-use hyper::body::Bytes;
+//use hyper::body::Bytes;
 
-use ipfs_api::response::Error;
+//use ipfs_api::response::Error;
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
 use serde::{Deserialize, Serialize};
 
-use cid::Cid;
+//use cid::Cid;
 use multibase::Base;
 
 //TODO check if BrightID can be integrated
@@ -166,28 +166,4 @@ impl ChatAggregator {
         true
         //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)
     }
-}
-
-async fn _get_whitelist(ipfs: &IpfsClient, cid: Cid) -> Whitelist {
-    let buffer: Result<Bytes, Error> = ipfs.dag_get(&cid.to_string()).collect().await;
-
-    let buffer = buffer.expect("IPFS DAG get failed");
-
-    serde_json::from_slice(&buffer).expect("Deserializing config failed")
-}
-
-async fn _get_blacklist(ipfs: &IpfsClient, cid: Cid) -> Blacklist {
-    let buffer: Result<Bytes, Error> = ipfs.dag_get(&cid.to_string()).collect().await;
-
-    let buffer = buffer.expect("IPFS DAG get failed");
-
-    serde_json::from_slice(&buffer).expect("Deserializing config failed")
-}
-
-async fn _get_mods(ipfs: &IpfsClient, cid: Cid) -> Moderators {
-    let buffer: Result<Bytes, Error> = ipfs.dag_get(&cid.to_string()).collect().await;
-
-    let buffer = buffer.expect("IPFS DAG get failed");
-
-    serde_json::from_slice(&buffer).expect("Deserializing config failed")
 }

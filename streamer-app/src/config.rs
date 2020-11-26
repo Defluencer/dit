@@ -57,27 +57,19 @@ pub struct Ffmpeg {
 }
 
 pub async fn get_config(ipfs: &IpfsClient) -> Config {
-    let config = match ipfs.name_resolve(None, false, false).await {
-        Ok(cid) => cid,
-        Err(_) => {
-            let config = Config::default();
+    if let Ok(config) = ipfs.name_resolve(None, false, false).await {
+        let buffer: Result<Bytes, Error> = ipfs.dag_get(&config.path).collect().await;
 
-            eprintln!("Cannot load config. Fallback -> {:#?}", config);
-
-            return config;
-        }
-    };
-
-    let buffer: Result<Bytes, Error> = ipfs.dag_get(&config.path).collect().await;
-
-    match buffer {
-        Ok(buffer) => serde_json::from_slice(&buffer).expect("Deserializing config failed"),
-        Err(_) => {
-            let config = Config::default();
-
-            eprintln!("Cannot load config. Fallback -> {:#?}", config);
-
-            config
+        if let Ok(buffer) = buffer {
+            if let Ok(config) = serde_json::from_slice(&buffer) {
+                return config;
+            }
         }
     }
+
+    let config = Config::default();
+
+    eprintln!("Cannot load config. Fallback -> {:#?}", config);
+
+    config
 }

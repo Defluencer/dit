@@ -294,7 +294,7 @@ impl Archivist {
 
         let json_string = serde_json::to_string(&stream).expect("Can't serialize stream node");
 
-        let stream_cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
+        let stream_cid_string = match self.ipfs.dag_put(Cursor::new(json_string)).await {
             Ok(response) => response.cid.cid_string,
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
@@ -302,8 +302,8 @@ impl Archivist {
             }
         };
 
-        match self.ipfs.pin_add(&stream_cid, true).await {
-            Ok(_) => println!("Stream CID => {}", &stream_cid),
+        match self.ipfs.pin_add(&stream_cid_string, true).await {
+            Ok(_) => println!("Stream CID => {}", &stream_cid_string),
             Err(e) => eprintln!("IPFS pin add failed {}", e),
         }
     }

@@ -1,7 +1,6 @@
 use crate::bindings;
 use crate::playlists::Playlists;
 
-use std::convert::TryFrom;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -88,7 +87,7 @@ fn pubsub_video(from: String, data: Vec<u8>) -> Option<Cid> {
         }
     };
 
-    let video_cid = match Cid::try_from(data_utf8) {
+    let video_cid = match serde_json::from_str(&data_utf8) {
         Ok(cid) => cid,
         Err(_) => {
             #[cfg(debug_assertions)]

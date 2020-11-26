@@ -8,7 +8,7 @@ use hyper::{Body, Error, Method, Request, Response, StatusCode};
 
 pub async fn put_requests(
     req: Request<Body>,
-    mut collector: Sender<(String, Bytes)>,
+    mut collector: Sender<(String, Bytes, bool)>,
 ) -> Result<Response<Body>, Error> {
     #[cfg(debug_assertions)]
     println!("{:#?}", req);
@@ -28,8 +28,8 @@ pub async fn put_requests(
 
     let path = Path::new(parts.uri.path());
 
-    //Ignore all except .ts video files
-    if path.extension() == None || path.extension().unwrap() != "ts" {
+    //Ignore .m3u8 files
+    if path.extension() == None || path.extension().unwrap() == "m3u8" {
         *res.status_mut() = StatusCode::NO_CONTENT;
 
         let header_value = HeaderValue::from_str(path.to_str().unwrap()).unwrap();
@@ -47,7 +47,9 @@ pub async fn put_requests(
     #[cfg(debug_assertions)]
     println!("Bytes received => {}", video_data.len());
 
-    let parent = path
+    let init = path.extension().unwrap() == "mp4";
+
+    let variant = path
         .parent()
         .expect("Orphan path!")
         .file_name()
@@ -56,7 +58,7 @@ pub async fn put_requests(
         .into_string()
         .expect("Dir name is invalid Unicode!");
 
-    let msg = (parent, video_data);
+    let msg = (variant, video_data, init);
 
     if let Err(error) = collector.send(msg).await {
         eprintln!("Collector hung up {}", error);

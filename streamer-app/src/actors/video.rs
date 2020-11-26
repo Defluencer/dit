@@ -20,10 +20,16 @@ use cid::Cid;
 /// Links all variants, allowing selection of video quality. Also link to the previous video node.
 #[derive(Serialize, Debug)]
 pub struct VideoNode {
-    #[serde(rename = "quality")]
-    pub qualities: HashMap<String, IPLDLink>, // <StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/init/1080p60/..
+    #[serde(rename = "init")]
+    pub initialization_segments: HashMap<String, IPLDLink>,
 
-    pub previous: Option<IPLDLink>, // <StreamHash>/time/hour/0/minute/36/second/12/video/previous/..
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
+    #[serde(rename = "quality")]
+    pub qualities: HashMap<String, IPLDLink>,
+
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/previous/..
+    pub previous: Option<IPLDLink>,
 }
 
 pub struct VideoAggregator {
@@ -31,7 +37,7 @@ pub struct VideoAggregator {
 
     archive_tx: Sender<Archive>,
 
-    video_rx: Receiver<(String, Bytes)>,
+    video_rx: Receiver<(String, Bytes, bool)>,
 
     gossipsub_topic: String,
 
@@ -43,7 +49,7 @@ pub struct VideoAggregator {
 impl VideoAggregator {
     pub fn new(
         ipfs: IpfsClient,
-        video_rx: Receiver<(String, Bytes)>,
+        video_rx: Receiver<(String, Bytes, bool)>,
         archive_tx: Sender<Archive>,
         gossipsub_topic: String,
         variants: usize,
@@ -57,8 +63,8 @@ impl VideoAggregator {
             gossipsub_topic,
 
             video_node: VideoNode {
+                initialization_segments: HashMap::with_capacity(variants),
                 qualities: HashMap::with_capacity(variants),
-
                 previous: None,
             },
 
@@ -69,7 +75,7 @@ impl VideoAggregator {
     pub async fn aggregate(&mut self) {
         println!("Video Online...");
 
-        while let Some((variant, data)) = self.video_rx.recv().await {
+        while let Some((variant, data, init)) = self.video_rx.recv().await {
             let video_segment_cid = match self.add_video(data).await {
                 Ok(cid) => cid,
                 Err(e) => {
@@ -78,7 +84,7 @@ impl VideoAggregator {
                 }
             };
 
-            if !self.add_variant(variant, video_segment_cid) {
+            if !self.add_variant(variant, video_segment_cid, init) {
                 continue;
             }
 
@@ -93,7 +99,7 @@ impl VideoAggregator {
                 }
             };
 
-            let msg = Archive::Video(video_node_cid.clone());
+            let msg = Archive::Video(video_node_cid);
 
             if let Err(error) = self.archive_tx.send(msg).await {
                 eprintln!("Archive receiver hung up {}", error);
@@ -129,12 +135,20 @@ impl VideoAggregator {
     }
 
     /// Add CID to stream variants dag node. Return true if all stream variants were added.
-    fn add_variant(&mut self, variant: String, cid: Cid) -> bool {
+    fn add_variant(&mut self, variant: String, cid: Cid, init: bool) -> bool {
         let link = IPLDLink { link: cid };
 
-        self.video_node.qualities.insert(variant, link);
+        if init {
+            self.video_node
+                .initialization_segments
+                .insert(variant, link);
 
-        self.video_node.qualities.len() >= self.qualities
+            false
+        } else {
+            self.video_node.qualities.insert(variant, link);
+
+            self.video_node.qualities.len() >= self.qualities
+        }
     }
 
     /// Add stream variants dag node to IPFS. Return a CID.
