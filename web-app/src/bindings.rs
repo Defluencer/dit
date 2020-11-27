@@ -4,6 +4,9 @@ use js_sys::{Function, Uint8Array};
 
 #[wasm_bindgen(module = "/libs.js")]
 extern "C" {
+    #[wasm_bindgen(js_name = "testMedia")]
+    pub fn test_media();
+
     #[wasm_bindgen(js_name = "cat")]
     pub fn ipfs_cat(path: &str) -> Uint8Array;
 

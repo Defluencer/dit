@@ -1,22 +1,23 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
 use crate::bindings;
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
-use web_sys::{MediaSource, MediaSourceReadyState, SourceBuffer, Url};
+use web_sys::{MediaSource, MediaSourceReadyState, /* SourceBuffer, */ Url};
 
 use yew::services::ConsoleService;
 
-const MIME_TYPE: &str = r#"video/mp4;codecs="avc1.42c01f,mp4a.40.2""#;
+const MIME_TYPE: &str = r#"video/mp4; codecs="avc1.42c01f, mp4a.40.2""#;
 
 pub struct VODManager {
     media_source: MediaSource,
 
-    source_buffer: Option<SourceBuffer>,
-
     pub url: String,
 
-    count: usize,
+    count: Arc<AtomicUsize>,
 }
 
 impl VODManager {
@@ -39,23 +40,14 @@ impl VODManager {
         //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.Url.html#method.create_object_url_with_source
         let url = Url::create_object_url_with_source(&media_source).unwrap();
 
+        let count = Arc::new(AtomicUsize::new(0));
+
         Self {
             media_source,
-            source_buffer: None,
             url,
-            count: 0,
+            count,
         }
     }
-
-    /* pub fn register_callbacks(&mut self) {
-        let callback = Closure::wrap(Box::new(|media_source: &MediaSource| {
-            #[cfg(debug_assertions)]
-            ConsoleService::info(&format!("Ready State => {:?}", media_source.ready_state()));
-        }) as Box<dyn Fn(&MediaSource)>);
-
-        self.media_source
-            .set_onsourceopen(Some(callback.into_js_value().unchecked_ref()));
-    } */
 
     pub fn add_source_buffer(&mut self) {
         let ready_state = self.media_source.ready_state();
@@ -88,7 +80,44 @@ impl VODManager {
             }
         };
 
-        let callback = Closure::wrap(Box::new(on_update_end) as Box<dyn Fn()>);
+        let init_segment = bindings::ipfs_cat("bafyreic6hsipoya2rpn3eankfplts6yvxevuztakn2uof4flnbt2ipwlue/time/hour/0/minute/0/second/0/video/init/720p30");
+
+        //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.SourceBuffer.html#method.append_buffer_with_array_buffer_view
+        if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(&init_segment) {
+            //This is bugged doesn't work. Overload resolution failed.
+            #[cfg(debug_assertions)]
+            ConsoleService::warn(&format!("{:?}", e));
+
+            return;
+        }
+
+        let source_buffer = Arc::new(source_buffer);
+
+        let sb = source_buffer.clone();
+
+        let atomic_count = self.count.clone();
+
+        let callback = Closure::wrap(Box::new(move || {
+            #[cfg(debug_assertions)]
+            ConsoleService::info("onupdateend");
+
+            let count = atomic_count.load(Ordering::SeqCst);
+
+            if count > 20 {
+                return;
+            }
+
+            let path = format!("bafyreic6hsipoya2rpn3eankfplts6yvxevuztakn2uof4flnbt2ipwlue/time/hour/0/minute/0/second/{}/video/quality/720p30", count);
+
+            let video_segment = bindings::ipfs_cat(&path);
+
+            atomic_count.fetch_add(4, Ordering::SeqCst);
+
+            if let Err(e) = sb.append_buffer_with_array_buffer_view(&video_segment) {
+                #[cfg(debug_assertions)]
+                ConsoleService::warn(&format!("{:?}", e));
+            }
+        }) as Box<dyn Fn()>);
         source_buffer.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
 
         let callback = Closure::wrap(Box::new(on_update_start) as Box<dyn Fn()>);
@@ -96,47 +125,6 @@ impl VODManager {
 
         let callback = Closure::wrap(Box::new(on_error) as Box<dyn Fn()>);
         source_buffer.set_onerror(Some(callback.into_js_value().unchecked_ref()));
-
-        self.source_buffer = Some(source_buffer);
-    }
-
-    pub fn load_init_segment(&mut self) {
-        //load video from ipfs
-        let mut test_video_init = bindings::ipfs_cat(
-            "bafyreic6hsipoya2rpn3eankfplts6yvxevuztakn2uof4flnbt2ipwlue/time/hour/0/minute/0/second/0/video/init/720p30",
-        ).to_vec();
-
-        //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.SourceBuffer.html#method.append_buffer_with_u8_array
-        if let Err(e) = self
-            .source_buffer
-            .as_ref()
-            .unwrap()
-            .append_buffer_with_u8_array(&mut test_video_init)
-        {
-            #[cfg(debug_assertions)]
-            ConsoleService::warn(&format!("{:?}", e));
-            return;
-        }
-    }
-
-    pub fn load_test_video(&mut self) {
-        let path = format!("bafyreic6hsipoya2rpn3eankfplts6yvxevuztakn2uof4flnbt2ipwlue/time/hour/0/minute/0/second/{}/video/quality/720p30", self.count);
-
-        self.count += 4;
-
-        let mut test_video = bindings::ipfs_cat(&path).to_vec();
-
-        //https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.SourceBuffer.html#method.append_buffer_with_u8_array
-        if let Err(e) = self
-            .source_buffer
-            .as_ref()
-            .unwrap()
-            .append_buffer_with_u8_array(&mut test_video)
-        {
-            #[cfg(debug_assertions)]
-            ConsoleService::warn(&format!("{:?}", e));
-            return;
-        }
     }
 }
 
@@ -148,6 +136,8 @@ fn on_source_close() {
 fn on_source_open() {
     #[cfg(debug_assertions)]
     ConsoleService::info("onsourceopen");
+
+    //This is bugged doesn't work. media_source.ready_state() != Open at this point
 }
 
 fn on_source_ended() {
@@ -155,7 +145,7 @@ fn on_source_ended() {
     ConsoleService::info("onsourceended");
 }
 
-fn on_update_end() {
+fn _on_update_end() {
     #[cfg(debug_assertions)]
     ConsoleService::info("onupdateend");
 }

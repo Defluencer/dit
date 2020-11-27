@@ -1,4 +1,5 @@
 use crate::agents::VODManager;
+//use crate::bindings;
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -39,8 +40,8 @@ impl Component for VODPlayer {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Add => self.manager.add_source_buffer(),
-            Msg::Init => self.manager.load_init_segment(),
-            Msg::Load => self.manager.load_test_video(),
+            Msg::Init => { /* self.manager.load_init_segment() */ }
+            Msg::Load => { /* self.manager.load_test_video() */ }
         }
 
         false
@@ -159,6 +160,8 @@ impl Component for VODPlayer {
             video.set_muted(true);
 
             self.video = Some(video);
+
+            //bindings::test_media();
         }
     }
 }

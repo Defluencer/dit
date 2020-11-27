@@ -230,3 +230,59 @@ function str2buf(str) {
 
     return buf;
 }
+
+var mediaSource
+
+var video
+
+var sourceBuffer
+
+const mimeType = 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"'
+
+var seconds = 0
+
+function ipfsPath(seconds) {
+    var video = `bafyreic6hsipoya2rpn3eankfplts6yvxevuztakn2uof4flnbt2ipwlue/time/hour/0/minute/0/second/${seconds}/video/quality/720p30`
+
+    return video
+}
+
+export async function testMedia() {
+    video = document.getElementById('video')
+
+    mediaSource = new MediaSource()
+
+    video.src = URL.createObjectURL(mediaSource)
+
+    mediaSource.addEventListener('sourceopen', onSourceOpen)
+}
+
+async function onSourceOpen() {
+    console.log(mediaSource.readyState)
+
+    if (!MediaSource.isTypeSupported(mimeType)) {
+        return
+    }
+
+    sourceBuffer = mediaSource.addSourceBuffer(mimeType)
+
+    sourceBuffer.addEventListener('updateend', onUpdateEnd)
+
+    var initSeg = await cat('bafyreic6hsipoya2rpn3eankfplts6yvxevuztakn2uof4flnbt2ipwlue/time/hour/0/minute/0/second/0/video/init/720p30')
+
+    sourceBuffer.appendBuffer(initSeg)
+}
+
+async function onUpdateEnd() {
+    var path = ipfsPath(seconds)
+
+    seconds += 4
+
+    if (seconds > 20) {
+        return
+    }
+
+    var seg = await cat(path)
+
+    sourceBuffer.appendBuffer(seg)
+}
