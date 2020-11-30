@@ -1,4 +1,4 @@
-use crate::agents::{load_live_stream, unload_live_stream};
+//use crate::agents::{load_live_stream, unload_live_stream};
 use crate::bindings;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
@@ -10,7 +10,7 @@ impl Component for LiveStreamPlayer {
     type Properties = ();
 
     fn create(_props: Self::Properties, _link: ComponentLink<Self>) -> Self {
-        load_live_stream();
+        //load_live_stream();
 
         Self {}
     }
@@ -25,18 +25,18 @@ impl Component for LiveStreamPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video id="video" muted=true controls=true poster="../live_like_poster.png">
-            </video>
+            <video id="video" autoplay=true controls=true muted=true poster="../live_like_poster.png" />
         }
     }
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            bindings::hls_attach_media(); // Must be called after <video> element is rendered
+            //bindings::hls_attach_media(); // Must be called after <video> element is rendered
+            bindings::load_stream("livelikevideo");
         }
     }
 
     fn destroy(&mut self) {
-        unload_live_stream();
+        //unload_live_stream();
     }
 }

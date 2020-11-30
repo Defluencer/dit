@@ -4,8 +4,11 @@ use js_sys::{Function, Uint8Array};
 
 #[wasm_bindgen(module = "/libs.js")]
 extern "C" {
-    #[wasm_bindgen(js_name = "testMedia")]
-    pub fn test_media();
+    #[wasm_bindgen(js_name = "loadStream")]
+    pub fn load_stream(topic: &str);
+
+    #[wasm_bindgen(js_name = "loadVideo")]
+    pub fn load_video(cid: &str);
 
     #[wasm_bindgen(js_name = "cat")]
     pub fn ipfs_cat(path: &str) -> Uint8Array;
@@ -18,25 +21,4 @@ extern "C" {
 
     #[wasm_bindgen(js_name = "unsubscribe")]
     pub fn unsubscribe(topic: JsValue);
-
-    #[wasm_bindgen(js_name = "registerPlaylistCallback")]
-    pub fn register_playlist_callback(playlist_callback: &Function);
-
-    #[wasm_bindgen(js_name = "unregisterPlaylistCallback")]
-    pub fn unregister_playlist_callback();
-
-    #[wasm_bindgen(js_name = "initHLS")]
-    pub fn init_hls();
-
-    #[wasm_bindgen(js_name = "attachMedia")]
-    pub fn hls_attach_media();
-
-    #[wasm_bindgen(js_name = "loadSource")]
-    pub fn hls_load_master_playlist();
-
-    #[wasm_bindgen(js_name = "startLoad")]
-    pub fn hls_start_load();
-
-    #[wasm_bindgen(js_name = "destroy")]
-    pub fn hls_destroy();
 }
