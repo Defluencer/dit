@@ -1,72 +1,88 @@
 use crate::bindings;
-use crate::playlists::Playlists;
 
+//use std::convert::TryFrom;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
-use wasm_bindgen::prelude::Closure;
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::spawn_local;
+
+use js_sys::Uint8Array;
+use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url};
 
 use yew::services::ConsoleService;
 
-use cid::Cid;
+//use cid::Cid;
 
 const TOPIC: &str = "livelikevideo";
 const STREAMER_PEER_ID: &str = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
+const MIME_TYPE: &str = r#"video/mp4; codecs="avc1.42c01f, mp4a.40.2""#;
 
-/// Initialized HLS, subscribe to video updates. Callbacks ownership is then transfered to JS GC.
 pub fn load_live_stream() {
-    let live_playlists = Arc::new(RwLock::new(Playlists::new()));
+    if !MediaSource::is_type_supported(MIME_TYPE) {
+        ConsoleService::warn(&format!("MIME Type {:?} unsupported", MIME_TYPE));
+        return;
+    }
 
-    let playlists = live_playlists.clone();
+    let window = web_sys::window().unwrap();
+    let document = window.document().unwrap();
 
-    let playlist_closure = Closure::wrap(Box::new(move |path| match playlists.read() {
-        Ok(playlists) => playlists.get_playlist(path),
-        Err(_) => String::from("RwLock Poisoned"),
-    }) as Box<dyn Fn(String) -> String>);
+    let video: HtmlMediaElement = document
+        .get_element_by_id("video")
+        .unwrap()
+        .dyn_into()
+        .unwrap();
 
-    bindings::register_playlist_callback(playlist_closure.into_js_value().unchecked_ref());
+    let media_source = Arc::new(MediaSource::new().unwrap()); //move into closure
+    let media_source_clone = media_source.clone(); //used to set callback
 
-    bindings::init_hls();
+    let url = Url::create_object_url_with_source(&media_source).unwrap();
+    video.set_src(&url);
 
-    bindings::hls_load_master_playlist();
+    let initialized = Arc::new(AtomicBool::new(false)); //is init segment loaded?
 
-    let loaded = Arc::new(AtomicBool::new(false));
+    // media_source sourceopen callback
+    let callback = Closure::wrap(Box::new(move || {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("sourceopen");
 
-    let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
-        let cid = match pubsub_video(from, data) {
-            Some(cid) => cid,
-            None => return,
-        };
-
-        match live_playlists.write() {
-            Ok(mut playlist) => playlist.update_live_playlists(&cid),
-            Err(_) => {
-                #[cfg(debug_assertions)]
-                ConsoleService::error("RwLock Poisoned");
-
+        let source_buffer = match media_source.add_source_buffer(MIME_TYPE) {
+            Ok(sb) => sb,
+            Err(e) => {
+                ConsoleService::warn(&format!("{:?}", e));
                 return;
             }
-        }
+        };
 
-        if !loaded.compare_and_swap(false, true, Ordering::Relaxed) {
-            bindings::hls_start_load();
-        }
-    }) as Box<dyn Fn(String, Vec<u8>)>);
+        let initialized = initialized.clone();
+        let source_buffer = Arc::new(source_buffer); // move into closure
 
-    bindings::subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
+        // pubsub subscribe callback
+        let callback = Closure::wrap(Box::new(move |from, data| {
+            let cid = match decode_cid(from, data) {
+                Some(cid) => cid,
+                None => return,
+            };
+
+            if !initialized.compare_and_swap(false, true, Ordering::SeqCst) {
+                let path = format!("{}/init/720p30", &cid);
+
+                spawn_local(cat_and_buffer(path, source_buffer.clone()));
+            }
+
+            let path = format!("{}/quality/720p30", &cid);
+
+            spawn_local(cat_and_buffer(path, source_buffer.clone()));
+        }) as Box<dyn Fn(String, Vec<u8>)>);
+
+        bindings::subscribe(TOPIC.into(), callback.into_js_value().unchecked_ref());
+    }) as Box<dyn Fn()>);
+
+    media_source_clone.set_onsourceopen(Some(callback.into_js_value().unchecked_ref()));
 }
 
-/// Destroy HLS, unsubscribe from video updates then JS GC free callbacks
-pub fn unload_live_stream() {
-    bindings::hls_destroy();
-
-    bindings::unregister_playlist_callback();
-
-    bindings::unsubscribe(TOPIC.into());
-}
-
-fn pubsub_video(from: String, data: Vec<u8>) -> Option<Cid> {
+fn decode_cid(from: String, data: Vec<u8>) -> Option<String> {
     #[cfg(debug_assertions)]
     ConsoleService::info(&format!("Sender => {}", from));
 
@@ -77,7 +93,7 @@ fn pubsub_video(from: String, data: Vec<u8>) -> Option<Cid> {
         return None;
     }
 
-    let data_utf8 = match std::str::from_utf8(&data) {
+    let data_utf8 = match String::from_utf8(data) {
         Ok(string) => string,
         Err(_) => {
             #[cfg(debug_assertions)]
@@ -87,7 +103,7 @@ fn pubsub_video(from: String, data: Vec<u8>) -> Option<Cid> {
         }
     };
 
-    let video_cid = match serde_json::from_str(&data_utf8) {
+    /* let video_cid = match Cid::try_from(data_utf8) {
         Ok(cid) => cid,
         Err(_) => {
             #[cfg(debug_assertions)]
@@ -95,12 +111,40 @@ fn pubsub_video(from: String, data: Vec<u8>) -> Option<Cid> {
 
             return None;
         }
-    };
+    }; */
 
     #[cfg(debug_assertions)]
-    ConsoleService::info(&format!("Message => {}", video_cid));
+    ConsoleService::info(&format!("Message => {}", data_utf8));
 
-    Some(video_cid)
+    Some(data_utf8)
+}
+
+async fn cat_and_buffer(path: String, source_buffer: Arc<SourceBuffer>) {
+    let segment = match bindings::ipfs_cat(&path).await {
+        Ok(vs) => vs,
+        Err(e) => {
+            ConsoleService::warn(&format!("{:?}", e));
+            return;
+        }
+    };
+
+    let segment: &Uint8Array = segment.unchecked_ref();
+
+    wait_for_buffer(source_buffer.clone()).await;
+
+    if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(segment) {
+        ConsoleService::warn(&format!("{:?}", e));
+        return;
+    }
+}
+
+async fn wait_for_buffer(source_buffer: Arc<SourceBuffer>) {
+    bindings::wait_until(
+        Closure::wrap(Box::new(move || !source_buffer.updating()) as Box<dyn Fn() -> bool>)
+            .into_js_value()
+            .unchecked_ref(),
+    )
+    .await
 }
 
 //Rebuild playlists by following the dag node link chain.

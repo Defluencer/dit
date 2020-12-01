@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::{wasm_bindgen, JsValue};
 
-use js_sys::{Function, Uint8Array};
+use js_sys::Function;
 
 #[wasm_bindgen(module = "/libs.js")]
 extern "C" {
@@ -10,8 +10,11 @@ extern "C" {
     #[wasm_bindgen(js_name = "loadVideo")]
     pub fn load_video(cid: &str);
 
-    #[wasm_bindgen(js_name = "cat")]
-    pub fn ipfs_cat(path: &str) -> Uint8Array;
+    #[wasm_bindgen(js_name = "cat", catch)]
+    pub async fn ipfs_cat(path: &str) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(js_name = "waitUntil")]
+    pub async fn wait_until(fn_bool: &Function);
 
     #[wasm_bindgen(js_name = "subscribe")]
     pub fn subscribe(topic: JsValue, pubsub_callback: &Function);
