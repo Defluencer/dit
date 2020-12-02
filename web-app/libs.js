@@ -12,6 +12,12 @@ export async function unsubscribe(topic) {
     await ipfs.pubsub.unsubscribe(topic)
 }
 
+export async function dagGet(cid) {
+    const result = await ipfs.dag.get(cid)
+
+    return result.value
+}
+
 /// Get data from IPFS. Return Uint8Array
 export async function cat(path) {
     let value = new Uint8Array(0)

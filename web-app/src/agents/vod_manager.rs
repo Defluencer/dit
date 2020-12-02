@@ -12,10 +12,9 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url};
 
 use yew::services::ConsoleService;
 
-const TEST_CID: &str = "bafyreic6hsipoya2rpn3eankfplts6yvxevuztakn2uof4flnbt2ipwlue";
 const MIME_TYPE: &str = r#"video/mp4; codecs="avc1.42c01f, mp4a.40.2""#;
 
-pub fn load_video() {
+pub fn load_video(video_cid: String) {
     if !MediaSource::is_type_supported(MIME_TYPE) {
         ConsoleService::warn(&format!("MIME Type {:?} unsupported", MIME_TYPE));
         return;
@@ -30,8 +29,7 @@ pub fn load_video() {
         .dyn_into()
         .unwrap();
 
-    let media_source = Arc::new(MediaSource::new().unwrap()); //move into closure
-    let media_source_clone = media_source.clone(); // used to set callback
+    let media_source = MediaSource::new().unwrap();
 
     let url = Url::create_object_url_with_source(&media_source).unwrap();
 
@@ -41,10 +39,38 @@ pub fn load_video() {
     let minutes = Arc::new(AtomicUsize::new(0));
     let hours = Arc::new(AtomicUsize::new(0));
 
-    // media_source sourceopen callback
-    let callback = Closure::wrap(Box::new(move || {
+    media_source_on_source_open(
+        video_cid.clone(),
+        seconds.clone(),
+        minutes.clone(),
+        hours.clone(),
+        media_source.clone(),
+    );
+
+    video_on_progress(
+        video_cid.clone(),
+        seconds.clone(),
+        minutes.clone(),
+        hours.clone(),
+        video.clone(),
+        media_source.clone(),
+    );
+
+    video_on_seeking(video_cid, seconds, minutes, hours, video, media_source);
+}
+
+fn media_source_on_source_open(
+    video_cid: String,
+    seconds: Arc<AtomicUsize>,
+    minutes: Arc<AtomicUsize>,
+    hours: Arc<AtomicUsize>,
+    media_source: MediaSource,
+) {
+    let media_source_clone = media_source.clone();
+
+    let closure = move || {
         #[cfg(debug_assertions)]
-        ConsoleService::info("onsourceopen");
+        ConsoleService::info("sourceopen");
 
         let source_buffer = match media_source.add_source_buffer(MIME_TYPE) {
             Ok(sb) => sb,
@@ -54,142 +80,168 @@ pub fn load_video() {
             }
         };
 
-        let path = format!(
-            "{}/time/hour/0/minute/0/second/0/video/init/720p30",
-            TEST_CID
+        source_buffer_on_update_end(
+            video_cid.clone(),
+            seconds.clone(),
+            minutes.clone(),
+            hours.clone(),
+            source_buffer.clone(),
         );
 
-        let source_buffer = Arc::new(source_buffer); // move into future
-        let source_buffer_clone = source_buffer.clone(); // used to set callback
+        let path = &format!(
+            "{}/time/hour/0/minute/0/second/0/video/init/720p30",
+            &video_cid
+        );
 
-        spawn_local(cat_and_buffer(path, source_buffer));
+        let future = cat_and_buffer(path, source_buffer);
 
-        let seconds = seconds.clone();
-        let minutes = minutes.clone();
-        let hours = hours.clone();
+        spawn_local(future);
+    };
 
-        let source_buffer = source_buffer_clone.clone(); // move into closure
-
-        // source_buffer updateend callback
-        let callback = Closure::wrap(Box::new(move || {
-            #[cfg(debug_assertions)]
-            ConsoleService::info("onupdateend");
-
-            let current_seconds = seconds.fetch_add(4, Ordering::SeqCst); //returns previous value
-
-            let current_minutes = if current_seconds >= 60 {
-                seconds.store(0, Ordering::SeqCst);
-
-                minutes.fetch_add(1, Ordering::SeqCst) //returns previous value
-            } else {
-                minutes.load(Ordering::SeqCst)
-            };
-
-            let current_hours = if current_minutes >= 60 {
-                minutes.store(0, Ordering::SeqCst);
-
-                hours.fetch_add(1, Ordering::SeqCst) //returns previous value
-            } else {
-                hours.load(Ordering::SeqCst)
-            };
-
-            let path = format!(
-                "{}/time/hour/{}/minute/{}/second/{}/video/quality/720p30",
-                TEST_CID, current_hours, current_minutes, current_seconds,
-            );
-
-            spawn_local(cat_and_buffer(path, source_buffer.clone()));
-        }) as Box<dyn Fn()>);
-
-        source_buffer_clone.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
-    }) as Box<dyn Fn()>);
-
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
     media_source_clone.set_onsourceopen(Some(callback.into_js_value().unchecked_ref()));
-
-    /* let callback = Closure::wrap(Box::new(on_source_ended) as Box<dyn Fn()>);
-    media_source.set_onsourceended(Some(callback.into_js_value().unchecked_ref())); */
-
-    /* let callback = Closure::wrap(Box::new(on_source_close) as Box<dyn Fn()>);
-    media_source.set_onsourceclosed(Some(callback.into_js_value().unchecked_ref())); */
-
-    /* let callback = Closure::wrap(Box::new(on_update_start) as Box<dyn Fn()>);
-    source_buffer.set_onupdatestart(Some(callback.into_js_value().unchecked_ref())); */
-
-    /* let callback = Closure::wrap(Box::new(on_error) as Box<dyn Fn()>);
-    source_buffer.set_onerror(Some(callback.into_js_value().unchecked_ref())); */
-
-    /* let callback = Closure::wrap(Box::new(on_abort) as Box<dyn Fn()>);
-    video.set_onabort(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_canplay) as Box<dyn Fn()>);
-    video.set_oncanplay(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_canplaythrough) as Box<dyn Fn()>);
-    video.set_oncanplaythrough(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_durationchange) as Box<dyn Fn()>);
-    video.set_ondurationchange(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_emptied) as Box<dyn Fn()>);
-    video.set_onemptied(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_ended) as Box<dyn Fn()>);
-    video.set_onended(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_ended) as Box<dyn Fn()>);
-    video.set_onended(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_error) as Box<dyn Fn()>);
-    video.set_onerror(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_loadeddata) as Box<dyn Fn()>);
-    video.set_onloadeddata(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_loadedmetadata) as Box<dyn Fn()>);
-    video.set_onloadedmetadata(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_loadstart) as Box<dyn Fn()>);
-    video.set_onloadstart(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_pause) as Box<dyn Fn()>);
-    video.set_onpause(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_play) as Box<dyn Fn()>);
-    video.set_onplay(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_playing) as Box<dyn Fn()>);
-    video.set_onplaying(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_progress) as Box<dyn Fn()>);
-    video.set_onprogress(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_ratechange) as Box<dyn Fn()>);
-    video.set_onratechange(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_seeked) as Box<dyn Fn()>);
-    video.set_onseeked(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_seeking) as Box<dyn Fn()>);
-    video.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_stalled) as Box<dyn Fn()>);
-    video.set_onstalled(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_suspend) as Box<dyn Fn()>);
-    video.set_onsuspend(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_timeupdate) as Box<dyn Fn()>);
-    video.set_ontimeupdate(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_volumechange) as Box<dyn Fn()>);
-    video.set_onvolumechange(Some(callback.into_js_value().unchecked_ref()));
-
-    let callback = Closure::wrap(Box::new(on_waiting) as Box<dyn Fn()>);
-    video.set_onwaiting(Some(callback.into_js_value().unchecked_ref())); */
 }
 
-async fn cat_and_buffer(path: String, source_buffer: Arc<SourceBuffer>) {
-    let init_segment = match bindings::ipfs_cat(&path).await {
+fn source_buffer_on_update_end(
+    video_cid: String,
+    seconds: Arc<AtomicUsize>,
+    minutes: Arc<AtomicUsize>,
+    hours: Arc<AtomicUsize>,
+    source_buffer: SourceBuffer,
+) {
+    let source_buffer_clone = source_buffer.clone();
+
+    let closure = move || {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("updateend");
+
+        source_buffer.set_onupdateend(None);
+
+        append_next_segment(
+            &video_cid,
+            seconds.clone(),
+            minutes.clone(),
+            hours.clone(),
+            source_buffer.clone(),
+        );
+    };
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
+    source_buffer_clone.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
+}
+
+fn video_on_progress(
+    video_cid: String,
+    seconds: Arc<AtomicUsize>,
+    minutes: Arc<AtomicUsize>,
+    hours: Arc<AtomicUsize>,
+    video: HtmlMediaElement,
+    media_source: MediaSource,
+) {
+    let closure = move || {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("progress");
+
+        let source_buffer = media_source.source_buffers().get(0).unwrap();
+
+        append_next_segment(
+            &video_cid,
+            seconds.clone(),
+            minutes.clone(),
+            hours.clone(),
+            source_buffer,
+        );
+    };
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
+    video.set_onprogress(Some(callback.into_js_value().unchecked_ref()));
+}
+
+fn video_on_seeking(
+    video_cid: String,
+    seconds: Arc<AtomicUsize>,
+    minutes: Arc<AtomicUsize>,
+    hours: Arc<AtomicUsize>,
+    video: HtmlMediaElement,
+    media_source: MediaSource,
+) {
+    let video_clone = video.clone();
+
+    let closure = move || {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("seeking");
+
+        let source_buffer = media_source.source_buffers().get(0).unwrap();
+
+        if let Err(e) = source_buffer.abort() {
+            ConsoleService::warn(&format!("{:?}", e));
+        }
+
+        let current_time = video_clone.current_time();
+
+        let hour = current_time as usize / 3600;
+        hours.store(hour, Ordering::SeqCst);
+
+        let rem_minutes = current_time.rem_euclid(3600.0);
+
+        let minute = rem_minutes as usize / 60;
+        minutes.store(minute, Ordering::SeqCst);
+
+        let rem_seconds = rem_minutes.rem_euclid(60.0);
+
+        let second = rem_seconds as usize;
+        seconds.store(second, Ordering::SeqCst);
+
+        append_next_segment(
+            &video_cid,
+            seconds.clone(),
+            minutes.clone(),
+            hours.clone(),
+            source_buffer,
+        );
+    };
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
+    video.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
+}
+
+fn append_next_segment(
+    video_cid: &str,
+    seconds: Arc<AtomicUsize>,
+    minutes: Arc<AtomicUsize>,
+    hours: Arc<AtomicUsize>,
+    source_buffer: SourceBuffer,
+) {
+    let current_seconds = seconds.fetch_add(4, Ordering::SeqCst); //returns previous value
+
+    let current_minutes = if current_seconds >= 60 {
+        seconds.store(0, Ordering::SeqCst);
+
+        minutes.fetch_add(1, Ordering::SeqCst) //returns previous value
+    } else {
+        minutes.load(Ordering::SeqCst)
+    };
+
+    let current_hours = if current_minutes >= 60 {
+        minutes.store(0, Ordering::SeqCst);
+
+        hours.fetch_add(1, Ordering::SeqCst) //returns previous value
+    } else {
+        hours.load(Ordering::SeqCst)
+    };
+
+    let path = &format!(
+        "{}/time/hour/{}/minute/{}/second/{}/video/quality/720p30",
+        &video_cid, current_hours, current_minutes, current_seconds,
+    );
+
+    let future = cat_and_buffer(path, source_buffer);
+
+    spawn_local(future);
+}
+
+async fn cat_and_buffer(path: &str, source_buffer: SourceBuffer) {
+    let segment = match bindings::ipfs_cat(&path).await {
         Ok(vs) => vs,
         Err(e) => {
             ConsoleService::warn(&format!("{:?}", e));
@@ -197,145 +249,20 @@ async fn cat_and_buffer(path: String, source_buffer: Arc<SourceBuffer>) {
         }
     };
 
-    let init_segment: &Uint8Array = init_segment.unchecked_ref();
+    let segment: &Uint8Array = segment.unchecked_ref();
 
-    if source_buffer.updating() {
-        ConsoleService::warn("Buffer still updating abort append buffer");
-        return;
-    }
+    wait_for_buffer(source_buffer.clone()).await;
 
-    if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(init_segment) {
+    if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(segment) {
         ConsoleService::warn(&format!("{:?}", e));
         return;
     }
 }
 
-/* fn on_source_close() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("onsourceclose");
+async fn wait_for_buffer(source_buffer: SourceBuffer) {
+    let closure = move || !source_buffer.updating();
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn() -> bool>);
+
+    bindings::wait_until(callback.into_js_value().unchecked_ref()).await
 }
-
-fn on_source_ended() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("onsourceended");
-}
-
-fn on_update_start() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("onupdatestart");
-}
-
-fn on_error() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("onerror");
-} */
-
-/* fn on_abort() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("abort");
-} */
-
-/* fn on_canplay() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("canplay");
-} */
-
-/* fn on_canplaythrough() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("canplaythrough");
-} */
-
-/* fn on_durationchange() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("durationchange");
-} */
-
-/* fn on_emptied() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("emptied");
-} */
-
-/* fn on_ended() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("ended");
-} */
-
-/* fn on_error() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("error");
-} */
-
-/* fn on_loadeddata() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("loadeddata");
-} */
-
-/* fn on_loadedmetadata() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("loadedmetadata");
-} */
-
-/* fn on_loadstart() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("loadstart");
-} */
-
-/* fn on_pause() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("pause");
-} */
-
-/* fn on_play() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("play");
-} */
-
-/* fn on_playing() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("playing");
-} */
-
-/* fn on_progress() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("progress");
-} */
-
-/* fn on_ratechange() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("ratechange");
-} */
-
-/* fn on_seeked() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("seeked");
-} */
-
-/* fn on_seeking() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("seeking");
-} */
-
-/* fn on_stalled() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("stalled");
-} */
-
-/* fn on_suspend() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("suspend");
-} */
-
-/* fn on_timeupdate() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("timeupdate");
-} */
-
-/* fn on_volumechange() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("volumechange");
-} */
-
-/* fn on_waiting() {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("waiting");
-} */

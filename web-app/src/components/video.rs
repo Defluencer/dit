@@ -1,14 +1,18 @@
-use crate::agents::load_live_stream;
-use crate::bindings;
+use crate::agents::load_video;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 #[derive(Clone, Debug, Eq, PartialEq, Properties)]
-pub struct LiveStreamPlayer {
-    pub topic: String,
+pub struct Video {
+    //title
+
+    //duration
+
+    //thumbnail cid
+    pub video_cid: String,
 }
 
-impl Component for LiveStreamPlayer {
+impl Component for Video {
     type Message = ();
     type Properties = Self;
 
@@ -26,17 +30,13 @@ impl Component for LiveStreamPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video id="video" autoplay=true controls=true muted=true poster="../live_like_poster.png" />
+            <video id="video" autoplay=true muted=true controls=true poster="../live_like_poster.png" />
         }
     }
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            load_live_stream(self.topic.clone());
+            load_video(self.video_cid.clone());
         }
-    }
-
-    fn destroy(&mut self) {
-        bindings::ipfs_unsubscribe(self.topic.clone().into());
     }
 }

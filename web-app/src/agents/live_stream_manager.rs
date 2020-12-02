@@ -15,11 +15,10 @@ use yew::services::ConsoleService;
 
 //use cid::Cid;
 
-const TOPIC: &str = "livelikevideo";
 const STREAMER_PEER_ID: &str = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
 const MIME_TYPE: &str = r#"video/mp4; codecs="avc1.42c01f, mp4a.40.2""#;
 
-pub fn load_live_stream() {
+pub fn load_live_stream(topic: String) {
     if !MediaSource::is_type_supported(MIME_TYPE) {
         ConsoleService::warn(&format!("MIME Type {:?} unsupported", MIME_TYPE));
         return;
@@ -34,16 +33,24 @@ pub fn load_live_stream() {
         .dyn_into()
         .unwrap();
 
-    let media_source = Arc::new(MediaSource::new().unwrap()); //move into closure
-    let media_source_clone = media_source.clone(); //used to set callback
+    let media_source = MediaSource::new().unwrap();
 
     let url = Url::create_object_url_with_source(&media_source).unwrap();
     video.set_src(&url);
 
-    let initialized = Arc::new(AtomicBool::new(false)); //is init segment loaded?
+    let initialized = Arc::new(AtomicBool::new(false));
 
-    // media_source sourceopen callback
-    let callback = Closure::wrap(Box::new(move || {
+    media_source_on_source_open(topic, initialized, media_source);
+}
+
+fn media_source_on_source_open(
+    topic: String,
+    initialized: Arc<AtomicBool>,
+    media_source: MediaSource,
+) {
+    let media_source_clone = media_source.clone();
+
+    let closure = move || {
         #[cfg(debug_assertions)]
         ConsoleService::info("sourceopen");
 
@@ -56,30 +63,65 @@ pub fn load_live_stream() {
         };
 
         let initialized = initialized.clone();
-        let source_buffer = Arc::new(source_buffer); // move into closure
 
-        // pubsub subscribe callback
-        let callback = Closure::wrap(Box::new(move |from, data| {
-            let cid = match decode_cid(from, data) {
-                Some(cid) => cid,
-                None => return,
-            };
+        ipfs_sub(&topic, initialized, source_buffer);
+    };
 
-            if !initialized.compare_and_swap(false, true, Ordering::SeqCst) {
-                let path = format!("{}/init/720p30", &cid);
-
-                spawn_local(cat_and_buffer(path, source_buffer.clone()));
-            }
-
-            let path = format!("{}/quality/720p30", &cid);
-
-            spawn_local(cat_and_buffer(path, source_buffer.clone()));
-        }) as Box<dyn Fn(String, Vec<u8>)>);
-
-        bindings::subscribe(TOPIC.into(), callback.into_js_value().unchecked_ref());
-    }) as Box<dyn Fn()>);
-
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
     media_source_clone.set_onsourceopen(Some(callback.into_js_value().unchecked_ref()));
+}
+
+fn ipfs_sub(topic: &str, initialized: Arc<AtomicBool>, source_buffer: SourceBuffer) {
+    let closure = move |from, data| {
+        let cid = match decode_cid(from, data) {
+            Some(cid) => cid,
+            None => return,
+        };
+
+        if !initialized.compare_and_swap(false, true, Ordering::SeqCst) {
+            let path = &format!("{}/init/720p30", &cid);
+
+            let future = cat_and_buffer(path, source_buffer.clone());
+
+            spawn_local(future);
+        }
+
+        let path = &format!("{}/quality/720p30", &cid);
+
+        let future = cat_and_buffer(path, source_buffer.clone());
+
+        spawn_local(future);
+    };
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn(String, Vec<u8>)>);
+    bindings::ipfs_subscribe(topic.into(), callback.into_js_value().unchecked_ref());
+}
+
+async fn cat_and_buffer(path: &str, source_buffer: SourceBuffer) {
+    let segment = match bindings::ipfs_cat(path).await {
+        Ok(vs) => vs,
+        Err(e) => {
+            ConsoleService::warn(&format!("{:?}", e));
+            return;
+        }
+    };
+
+    let segment: &Uint8Array = segment.unchecked_ref();
+
+    wait_for_buffer(source_buffer.clone()).await;
+
+    if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(segment) {
+        ConsoleService::warn(&format!("{:?}", e));
+        return;
+    }
+}
+
+async fn wait_for_buffer(source_buffer: SourceBuffer) {
+    let closure = move || !source_buffer.updating();
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn() -> bool>);
+
+    bindings::wait_until(callback.into_js_value().unchecked_ref()).await
 }
 
 fn decode_cid(from: String, data: Vec<u8>) -> Option<String> {
@@ -117,34 +159,6 @@ fn decode_cid(from: String, data: Vec<u8>) -> Option<String> {
     ConsoleService::info(&format!("Message => {}", data_utf8));
 
     Some(data_utf8)
-}
-
-async fn cat_and_buffer(path: String, source_buffer: Arc<SourceBuffer>) {
-    let segment = match bindings::ipfs_cat(&path).await {
-        Ok(vs) => vs,
-        Err(e) => {
-            ConsoleService::warn(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let segment: &Uint8Array = segment.unchecked_ref();
-
-    wait_for_buffer(source_buffer.clone()).await;
-
-    if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(segment) {
-        ConsoleService::warn(&format!("{:?}", e));
-        return;
-    }
-}
-
-async fn wait_for_buffer(source_buffer: Arc<SourceBuffer>) {
-    bindings::wait_until(
-        Closure::wrap(Box::new(move || !source_buffer.updating()) as Box<dyn Fn() -> bool>)
-            .into_js_value()
-            .unchecked_ref(),
-    )
-    .await
 }
 
 //Rebuild playlists by following the dag node link chain.

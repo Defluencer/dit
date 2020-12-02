@@ -14,7 +14,7 @@ ignore = []
 
 [serve]
 # The port to serve on.
-port = 8080
+port = 8081
 # Open a browser tab once the initial build is complete.
 open = true
 

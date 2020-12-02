@@ -22,15 +22,15 @@ pub fn load_live_chat(cb: Callback<String>) {
         cb.emit(msg);
     }) as Box<dyn Fn(String, Vec<u8>)>);
 
-    bindings::subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
+    bindings::ipfs_subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
 }
 
 pub fn unload_live_chat() {
-    bindings::unsubscribe(TOPIC.into());
+    bindings::ipfs_unsubscribe(TOPIC.into());
 }
 
 pub fn send_chat(msg: String) {
-    bindings::publish(TOPIC.into(), msg.into());
+    bindings::ipfs_publish(TOPIC.into(), msg.into());
 }
 
 fn pubsub_message(from: String, data: Vec<u8>) -> Option<String> {
