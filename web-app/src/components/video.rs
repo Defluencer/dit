@@ -36,7 +36,7 @@ impl Component for Video {
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            load_video(self.video_cid.clone());
+            load_video(self.video_cid.clone(), 22.0);
         }
     }
 }

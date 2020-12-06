@@ -69,16 +69,12 @@ pub struct Archivist {
     hour_node: HourNode,
     day_node: DayNode,
 
-    video_segment_duration: usize,
+    segment_duration: usize,
 }
 
 impl Archivist {
-    pub fn new(
-        ipfs: IpfsClient,
-        archive_rx: Receiver<Archive>,
-        video_segment_duration: usize,
-    ) -> Self {
-        let buffer_cap = 120 / video_segment_duration;
+    pub fn new(ipfs: IpfsClient, archive_rx: Receiver<Archive>, segment_duration: usize) -> Self {
+        let buffer_cap = 120 / segment_duration;
 
         Self {
             ipfs,
@@ -100,7 +96,7 @@ impl Archivist {
                 links_to_hours: Vec::with_capacity(24),
             },
 
-            video_segment_duration,
+            segment_duration,
         }
     }
 
@@ -195,7 +191,7 @@ impl Archivist {
         let link = IPLDLink { link: cid };
 
         //since duration > 1 sec
-        for _ in 0..self.video_segment_duration {
+        for _ in 0..self.segment_duration {
             self.minute_node.links_to_seconds.push(link.clone());
         }
     }

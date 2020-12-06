@@ -7,4 +7,4 @@ pub use archivist::Archive;
 pub use archivist::Archivist;
 pub use chat::ChatAggregator;
 pub use ffmpeg_transcoding::start_transcoding;
-pub use video::VideoAggregator;
+pub use video::{VideoAggregator, VideoData};

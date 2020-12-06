@@ -3,14 +3,21 @@
         "video": "livelikevideo",
         "chat": "livelikechat"
     },
-    "streamer_app": {
-        "socket_addr": "127.0.0.1:2526",
-        "ffmpeg": {
-            "socket_addr": "127.0.0.1:2525"
+    "addresses": {
+        "app_addr": "127.0.0.1:2526",
+        "ffmpeg_addr": "127.0.0.1:2525"
+    },
+    "tracks": {
+        "1080p60": {
+            "codec": "insert codec",
+            "bandwidth": 12345
+        },
+        "720p60": {
+            "codec": "insert codec",
+            "bandwidth": 12345
         }
     },
-    "variants": 4,
-    "video_segment_duration": 4,
+    "segment_duration": 4,
     "blacklist": {
         "/": "addCIDhere"
     },

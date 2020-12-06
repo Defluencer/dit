@@ -156,13 +156,13 @@ impl ChatAggregator {
 
     /// Verify signature authenticity
     fn is_auth_signature(&self, _msg: &ChatMessage) -> bool {
-        //TODO
+        //TODO verify signature
         true
     }
 
     /// Verify identity against white & black lists
     fn is_allowed(&self, _identity: &ChatIdentity) -> bool {
-        //TODO
+        //TODO verify white & black list
         true
         //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)
     }

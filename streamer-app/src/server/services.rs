@@ -1,14 +1,19 @@
+use crate::actors::VideoData;
+
 use std::path::Path;
 
 use tokio::sync::mpsc::Sender;
 
-use hyper::body::Bytes;
 use hyper::header::{HeaderValue, LOCATION};
 use hyper::{Body, Error, Method, Request, Response, StatusCode};
 
+const M3U8: &str = "m3u8";
+const MP4: &str = "mp4";
+const FMP4: &str = "fmp4";
+
 pub async fn put_requests(
     req: Request<Body>,
-    mut collector: Sender<(String, Bytes, bool)>,
+    mut collector: Sender<VideoData>,
 ) -> Result<Response<Body>, Error> {
     #[cfg(debug_assertions)]
     println!("{:#?}", req);
@@ -17,7 +22,14 @@ pub async fn put_requests(
 
     let (parts, body) = req.into_parts();
 
-    if parts.method != Method::PUT {
+    let path = Path::new(parts.uri.path());
+
+    if parts.method != Method::PUT
+        || path.extension() == None
+        || (path.extension().unwrap() != M3U8
+            && path.extension().unwrap() != FMP4
+            && path.extension().unwrap() != MP4)
+    {
         *res.status_mut() = StatusCode::NOT_FOUND;
 
         #[cfg(debug_assertions)]
@@ -26,10 +38,7 @@ pub async fn put_requests(
         return Ok(res);
     }
 
-    let path = Path::new(parts.uri.path());
-
-    //Ignore .m3u8 files
-    if path.extension() == None || path.extension().unwrap() == "m3u8" {
+    if path.extension().unwrap() == M3U8 {
         *res.status_mut() = StatusCode::NO_CONTENT;
 
         let header_value = HeaderValue::from_str(path.to_str().unwrap()).unwrap();
@@ -42,12 +51,10 @@ pub async fn put_requests(
         return Ok(res);
     }
 
-    let video_data = hyper::body::to_bytes(body).await?;
+    let data = hyper::body::to_bytes(body).await?;
 
     #[cfg(debug_assertions)]
-    println!("Bytes received => {}", video_data.len());
-
-    let init = path.extension().unwrap() == "mp4";
+    println!("Bytes received => {}", data.len());
 
     let variant = path
         .parent()
@@ -58,7 +65,13 @@ pub async fn put_requests(
         .into_string()
         .expect("Dir name is invalid Unicode!");
 
-    let msg = (variant, video_data, init);
+    let msg = if path.extension().unwrap() == FMP4 {
+        VideoData::Media(variant, data)
+    } else if path.extension().unwrap() == MP4 {
+        VideoData::Initialization(variant, data)
+    } else {
+        panic!("Not fmp4 or mp4");
+    };
 
     if let Err(error) = collector.send(msg).await {
         eprintln!("Collector hung up {}", error);
