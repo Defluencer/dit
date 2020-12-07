@@ -1,6 +1,6 @@
 use crate::bindings;
 
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
 use wasm_bindgen::closure::Closure;
@@ -17,6 +17,7 @@ use yew::services::ConsoleService;
 type Tracks = Arc<RwLock<Vec<Track>>>;
 
 struct Track {
+    level: usize,
     quality: String,
     codec: String,
     source_buffer: SourceBuffer,
@@ -40,7 +41,7 @@ pub fn load_video(video_cid: String, duration: f64) {
 
     let tracks = Arc::new(RwLock::new(Vec::with_capacity(4)));
 
-    let _level = Arc::new(AtomicU8::new(0));
+    let current_level = Arc::new(AtomicUsize::new(0));
 
     /* video_on_seeking(
         video_cid.clone(),
@@ -52,19 +53,7 @@ pub fn load_video(video_cid: String, duration: f64) {
         level.clone(),
     ); */
 
-    on_media_source_add_buffer(
-        video_cid.clone(),
-        duration,
-        media_source.clone(),
-        tracks.clone(),
-    );
-
-    on_media_source_open(
-        video_cid.clone(),
-        duration,
-        media_source.clone(),
-        tracks.clone(),
-    );
+    on_media_source_open(video_cid, duration, media_source, tracks);
 }
 
 fn on_media_source_open(
@@ -83,7 +72,12 @@ fn on_media_source_open(
 
         media_source.set_duration(duration);
 
-        let future = add_source_buffers(video_cid.clone(), media_source.clone(), tracks.clone());
+        let future = add_source_buffers(
+            video_cid.clone(),
+            duration,
+            media_source.clone(),
+            tracks.clone(),
+        );
 
         spawn_local(future);
     };
@@ -92,11 +86,14 @@ fn on_media_source_open(
     media_source_clone.set_onsourceopen(Some(callback.into_js_value().unchecked_ref()));
 }
 
-async fn add_source_buffers(video_cid: String, media_source: MediaSource, tracks: Tracks) {
+async fn add_source_buffers(
+    video_cid: String,
+    duration: f64,
+    media_source: MediaSource,
+    tracks: Tracks,
+) {
     let codecs_path = "/time/hour/0/minute/0/second/0/video/setup/codec";
     let qualities_path = "/time/hour/0/minute/0/second/0/video/setup/quality";
-
-    //TODO dag get setup node instead
 
     let codecs_result = match bindings::ipfs_dag_get(&video_cid, codecs_path).await {
         Ok(result) => result,
@@ -114,13 +111,12 @@ async fn add_source_buffers(video_cid: String, media_source: MediaSource, tracks
         }
     };
 
-    let dag_codecs: Vec<String> = from_value(codecs_result).expect("Can't deserialize codecs");
-    let dag_qualities: Vec<String> =
-        from_value(qualities_result).expect("Can't deserialize qualities");
+    let codecs: Vec<String> = from_value(codecs_result).expect("Can't deserialize codecs");
+    let qualities: Vec<String> = from_value(qualities_result).expect("Can't deserialize qualities");
 
     let mut new_tracks = Vec::with_capacity(4);
 
-    for (codec, quality) in dag_codecs.into_iter().zip(dag_qualities.into_iter()) {
+    for (level, (codec, quality)) in codecs.into_iter().zip(qualities.into_iter()).enumerate() {
         if !MediaSource::is_type_supported(&codec) {
             ConsoleService::warn(&format!("MIME Type {:?} unsupported", &codec));
             continue;
@@ -130,7 +126,26 @@ async fn add_source_buffers(video_cid: String, media_source: MediaSource, tracks
             .add_source_buffer(&codec)
             .expect("Can't add source buffer");
 
+        if level == 0 {
+            // Only lowest quality start buffering.
+            on_source_buffer_update_end(
+                video_cid.clone(),
+                duration,
+                quality.clone(),
+                media_source.clone(),
+                source_buffer.clone(),
+            );
+        }
+
+        let path = format!(
+            "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
+            &video_cid, level
+        );
+
+        cat_and_buffer(path, source_buffer.clone()).await;
+
         new_tracks.push(Track {
+            level,
             codec,
             quality,
             source_buffer,
@@ -140,68 +155,6 @@ async fn add_source_buffers(video_cid: String, media_source: MediaSource, tracks
     if let Ok(mut tracks) = tracks.write() {
         *tracks = new_tracks;
     }
-}
-
-fn on_media_source_add_buffer(
-    video_cid: String,
-    duration: f64,
-    media_source: MediaSource,
-    tracks: Tracks,
-) {
-    let buffer_list = media_source.source_buffers();
-
-    let closure = move || {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("addsourcebuffer");
-
-        let list = media_source.source_buffers();
-
-        let count = list.length();
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Buffers Count {}", count));
-
-        let list_index = count - 1;
-
-        // Assume last buffer is newest.
-        let source_buffer = list.get(list_index).expect("Less than one buffer");
-
-        // Search Tracks then append init segment to buffer.
-        if let Ok(tracks) = tracks.read() {
-            // TODO Remove search if buffer list index always equal track index.
-            for (i, track) in tracks.iter().enumerate() {
-                if track.source_buffer == source_buffer {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::info(&format!("List index {}, Track index {}", list_index, i));
-
-                    if i == 0 {
-                        // Only lowest quality start buffering.
-                        on_source_buffer_update_end(
-                            video_cid.clone(),
-                            duration,
-                            track.quality.clone(),
-                            media_source.clone(),
-                            source_buffer.clone(),
-                        );
-                    }
-
-                    let path = &format!(
-                        "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
-                        &video_cid, i
-                    );
-
-                    let future = cat_and_buffer(path, source_buffer);
-
-                    spawn_local(future);
-
-                    break;
-                }
-            }
-        }
-    };
-
-    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
-    buffer_list.set_onaddsourcebuffer(Some(callback.into_js_value().unchecked_ref()));
 }
 
 fn on_source_buffer_update_end(
@@ -235,14 +188,13 @@ fn on_source_buffer_update_end(
     source_buffer_clone.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
 }
 
-/* fn video_on_seeking(
+fn video_on_seeking(
     video_cid: String,
-    second: Arc<AtomicU8>,
-    minute: Arc<AtomicU8>,
-    hour: Arc<AtomicU8>,
+    duration: f64,
     video: HtmlMediaElement,
-    buffers: Buffers,
-    level: Arc<AtomicU8>,
+    media_source: MediaSource,
+    current_level: Arc<AtomicUsize>,
+    tracks: Tracks,
 ) {
     let video_clone = video.clone();
 
@@ -250,39 +202,39 @@ fn on_source_buffer_update_end(
         #[cfg(debug_assertions)]
         ConsoleService::info("seeking");
 
-        let source_buffer = media_source.source_buffers().get(0).unwrap();
+        let level = current_level.load(Ordering::SeqCst);
+        let tracks = tracks.read().expect("Lock Poisoned");
+
+        let source_buffer = tracks[level].source_buffer.clone();
+        let quality = &tracks[level].quality;
 
         if let Err(e) = source_buffer.abort() {
             ConsoleService::warn(&format!("{:?}", e));
+            return;
         }
 
-        let current_time = video_clone.current_time();
+        let (hours, minutes, seconds) = match source_buffer.buffered() {
+            Ok(time_ranges) => match time_ranges.end(0) {
+                Ok(end) => {
+                    let seek_end_buff = video.current_time() + 30.0;
 
-        let hour = current_time as usize / 3600;
-        hours.store(hour, Ordering::SeqCst);
+                    if end >= seek_end_buff {
+                        return;
+                    } else {
+                        seconds_to_timecode(end)
+                    }
+                }
+                Err(_) => seconds_to_timecode(video.current_time()),
+            },
+            Err(_) => seconds_to_timecode(video.current_time()),
+        };
 
-        let rem_minutes = current_time.rem_euclid(3600.0);
-
-        let minute = rem_minutes as usize / 60;
-        minutes.store(minute, Ordering::SeqCst);
-
-        let rem_seconds = rem_minutes.rem_euclid(60.0);
-
-        let second = rem_seconds as usize;
-        seconds.store(second, Ordering::SeqCst);
-
-        append_next_segment(
-            &video_cid,
-            seconds.clone(),
-            minutes.clone(),
-            hours.clone(),
-            source_buffer,
-        );
+        //TODO buffer new segment
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
-    video.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
-} */
+    video_clone.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
+}
 
 fn append_next_segment(
     video_cid: &str,
@@ -295,9 +247,13 @@ fn append_next_segment(
         Ok(time_ranges) => match time_ranges.end(0) {
             Ok(end) => {
                 if end >= duration {
-                    media_source.end_of_stream();
+                    #[cfg(debug_assertions)]
+                    ConsoleService::info("end of stream");
+
+                    media_source.end_of_stream().unwrap();
                     return;
                 } else {
+                    //TODO change hard-coded media segment length
                     seconds_to_timecode(end + 4.0)
                 }
             }
@@ -306,7 +262,7 @@ fn append_next_segment(
         Err(_) => (0, 0, 0),
     };
 
-    let path = &format!(
+    let path = format!(
         "{}/time/hour/{}/minute/{}/second/{}/video/quality/{}",
         &video_cid, hours, minutes, seconds, quality
     );
@@ -316,7 +272,7 @@ fn append_next_segment(
     spawn_local(future);
 }
 
-async fn cat_and_buffer(path: &str, source_buffer: SourceBuffer) {
+async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
     let segment = match bindings::ipfs_cat(&path).await {
         Ok(vs) => vs,
         Err(e) => {

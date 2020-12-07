@@ -34,7 +34,7 @@ async fn main() {
         config.tracks,
     );
     let video_handle = tokio::spawn(async move {
-        video.aggregate().await;
+        video.start_receiving().await;
     });
 
     let mut chat = ChatAggregator::new(
@@ -43,7 +43,7 @@ async fn main() {
         config.gossipsub_topics.chat,
     );
     let chat_handle = tokio::spawn(async move {
-        chat.aggregate().await;
+        chat.start_receiving().await;
     });
 
     let server_addr = config.addresses.app_addr.clone();

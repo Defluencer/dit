@@ -90,12 +90,12 @@ impl ChatAggregator {
         }
     }
 
-    pub async fn aggregate(&mut self) {
+    pub async fn start_receiving(&mut self) {
         let topic = &self.gossipsub_topic;
 
         let mut stream = self.ipfs.pubsub_sub(topic, true);
 
-        println!("Chat Online...");
+        println!("Chat System Online");
 
         while let Some(result) = stream.next().await {
             match result {

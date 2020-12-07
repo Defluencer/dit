@@ -30,3 +30,11 @@ where
 
     Ok(cid)
 }
+
+impl Default for IPLDLink {
+    fn default() -> Self {
+        Self {
+            link: Cid::default(),
+        }
+    }
+}

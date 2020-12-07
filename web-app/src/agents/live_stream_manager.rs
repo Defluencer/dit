@@ -79,14 +79,14 @@ fn ipfs_sub(topic: &str, initialized: Arc<AtomicBool>, source_buffer: SourceBuff
         };
 
         if !initialized.compare_and_swap(false, true, Ordering::SeqCst) {
-            let path = &format!("{}/init/720p30", &cid);
+            let path = format!("{}/init/720p30", &cid);
 
             let future = cat_and_buffer(path, source_buffer.clone());
 
             spawn_local(future);
         }
 
-        let path = &format!("{}/quality/720p30", &cid);
+        let path = format!("{}/quality/720p30", &cid);
 
         let future = cat_and_buffer(path, source_buffer.clone());
 
@@ -97,8 +97,8 @@ fn ipfs_sub(topic: &str, initialized: Arc<AtomicBool>, source_buffer: SourceBuff
     bindings::ipfs_subscribe(topic.into(), callback.into_js_value().unchecked_ref());
 }
 
-async fn cat_and_buffer(path: &str, source_buffer: SourceBuffer) {
-    let segment = match bindings::ipfs_cat(path).await {
+async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
+    let segment = match bindings::ipfs_cat(&path).await {
         Ok(vs) => vs,
         Err(e) => {
             ConsoleService::warn(&format!("{:?}", e));

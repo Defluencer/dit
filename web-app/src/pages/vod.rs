@@ -23,7 +23,7 @@ impl Component for VideoOnDemand {
     fn view(&self) -> Html {
         html! {
             <div class="vod_page">
-                <Video video_cid="bafyreic6hsipoya2rpn3eankfplts6yvxevuztakn2uof4flnbt2ipwlue" />
+                <Video video_cid="bafyreiap2casxgxfifwe5wy7npt5qk3h3rokqh5izgf7ttizfjsevna6da" />
             </div>
         }
     }

@@ -101,7 +101,7 @@ impl Archivist {
     }
 
     pub async fn collect(&mut self) {
-        println!("Archive Online...");
+        println!("Archive System Online");
 
         while let Some(event) = self.archive_rx.recv().await {
             match event {

@@ -37,13 +37,13 @@ pub struct VideoNode {
 /// Codecs, qualities & initialization segments. Order matters!
 #[derive(Serialize, Debug)]
 pub struct SetupNode {
-    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/codec
-    #[serde(rename = "codec")]
-    codecs: Vec<String>,
-
     // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/quality
     #[serde(rename = "quality")]
     qualities: Vec<String>,
+
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/codec
+    #[serde(rename = "codec")]
+    codecs: Vec<String>,
 
     // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/initseg/0/..
     #[serde(rename = "initseg")]
@@ -66,6 +66,8 @@ pub struct VideoAggregator {
 
     setup_node: SetupNode,
     video_node: VideoNode,
+
+    tracks: HashMap<String, Track>,
 }
 
 impl VideoAggregator {
@@ -76,32 +78,6 @@ impl VideoAggregator {
         gossipsub_topic: String,
         tracks: HashMap<String, Track>,
     ) -> Self {
-        let count = tracks.len();
-
-        //split hashmap into 2 vec
-        let (qualities, tracks): (Vec<_>, Vec<_>) = tracks.into_iter().unzip();
-
-        //tracks vec into vec of codec
-        let codecs = tracks.into_iter().map(|track| track.codec).collect();
-
-        let setup_node = SetupNode {
-            codecs,
-
-            qualities,
-
-            initialization_segments: Vec::with_capacity(count),
-        };
-
-        let video_node = VideoNode {
-            qualities: HashMap::with_capacity(count),
-
-            setup: IPLDLink {
-                link: Cid::default(),
-            },
-
-            previous: None,
-        };
-
         Self {
             ipfs,
 
@@ -110,13 +86,24 @@ impl VideoAggregator {
 
             gossipsub_topic,
 
-            setup_node,
-            video_node,
+            setup_node: SetupNode {
+                codecs: Vec::with_capacity(tracks.len()),
+                qualities: Vec::with_capacity(tracks.len()),
+                initialization_segments: Vec::with_capacity(tracks.len()),
+            },
+
+            video_node: VideoNode {
+                qualities: HashMap::with_capacity(tracks.len()),
+                setup: IPLDLink::default(),
+                previous: None,
+            },
+
+            tracks,
         }
     }
 
-    pub async fn aggregate(&mut self) {
-        println!("Video Online...");
+    pub async fn start_receiving(&mut self) {
+        println!("Video System Online");
 
         while let Some(msg) = self.video_rx.recv().await {
             match msg {
@@ -126,32 +113,61 @@ impl VideoAggregator {
         }
     }
 
+    /// Process initialization segments.
     async fn init_seg(&mut self, quality: &str, data: Bytes) {
-        let segment_cid = match self.ipfs_add_async(data).await {
-            Ok(cid) => cid,
-            Err(e) => {
-                eprintln!("IPFS add failed {}", e);
-                return;
-            }
+        //Panic on error because stream can't go on without setup node.
+
+        let segment_cid = self
+            .ipfs_add_async(data)
+            .await
+            .expect("SetupNode IPFS add failed");
+
+        if !self.add_track(quality, segment_cid) {
+            return;
+        }
+
+        self.sort_by_level();
+
+        let setup_node_cid = ipfs_dag_put_node_async(&self.ipfs, &self.setup_node)
+            .await
+            .expect("SetupNode IPFS dag put failed");
+
+        self.video_node.setup = IPLDLink {
+            link: setup_node_cid,
         };
+    }
 
-        //find index of quality
-        if let Some((i, _)) = self
-            .setup_node
-            .qualities
-            .iter()
-            .enumerate()
-            .find(|(_, q)| *q == quality)
-        {
-            #[cfg(debug_assertions)]
-            println!("Initialization segments added for quality {}", quality);
+    /// Add track info to setup node. Return true if all init are present
+    fn add_track(&mut self, quality: &str, cid: Cid) -> bool {
+        self.setup_node.qualities.push(quality.into());
 
-            let link = IPLDLink { link: segment_cid };
+        let codec = self.tracks[quality].codec.clone();
+        self.setup_node.codecs.push(codec);
 
-            self.setup_node.initialization_segments[i] = link;
+        let link = IPLDLink { link: cid };
+        self.setup_node.initialization_segments.push(link);
+
+        self.setup_node.initialization_segments.len() >= self.tracks.len()
+    }
+
+    /// Sort setup node vectors by track level.
+    fn sort_by_level(&mut self) {
+        for i in 0..self.tracks.len() {
+            loop {
+                let level = self.tracks[&self.setup_node.qualities[i]].level;
+
+                if i == level {
+                    break;
+                }
+
+                self.setup_node.qualities.swap(i, level);
+                self.setup_node.codecs.swap(i, level);
+                self.setup_node.initialization_segments.swap(i, level);
+            }
         }
     }
 
+    /// Process media segments.
     async fn media_seg(&mut self, quality: &str, data: Bytes) {
         let video_segment_cid = match self.ipfs_add_async(data).await {
             Ok(cid) => cid,
@@ -165,20 +181,22 @@ impl VideoAggregator {
             return;
         }
 
-        let video_node_cid = match self.collect_variants().await {
+        let video_node_cid = match ipfs_dag_put_node_async(&self.ipfs, &self.video_node).await {
             Ok(res) => res,
             Err(e) => {
-                self.video_node.qualities.clear(); //reset the node
+                self.video_node.qualities.clear(); // re-set on error
 
                 eprintln!("IPFS dag put failed {}", e);
                 return;
             }
         };
 
+        self.video_node.qualities.clear();
+
         let msg = Archive::Video(video_node_cid);
 
         if let Err(error) = self.archive_tx.send(msg).await {
-            eprintln!("Archive receiver hung up {}", error);
+            eprintln!("Archive receiver hung up! Error: {}", error);
         }
 
         self.publish(video_node_cid).await;
@@ -215,25 +233,7 @@ impl VideoAggregator {
 
         self.video_node.qualities.insert(quality.to_string(), link);
 
-        self.video_node.qualities.len() >= self.setup_node.qualities.len()
-    }
-
-    /// Add stream variants dag node to IPFS. Return a CID.
-    async fn collect_variants(&mut self) -> Result<Cid, Error> {
-        let node = &self.video_node;
-
-        #[cfg(debug_assertions)]
-        println!("{}", serde_json::to_string_pretty(node).unwrap());
-
-        let json_string = serde_json::to_string(node).expect("Serialize video node failed");
-
-        let response = self.ipfs.dag_put(Cursor::new(json_string)).await?;
-
-        let cid = Cid::try_from(response.cid.cid_string).expect("Invalid Cid");
-
-        self.video_node.qualities.clear();
-
-        Ok(cid)
+        self.video_node.qualities.len() >= self.tracks.len()
     }
 
     /// Publish video node CID to configured topic using GossipSub.
@@ -249,4 +249,27 @@ impl VideoAggregator {
 
         self.video_node.previous = Some(link);
     }
+}
+
+/// Serialize then add dag node to IPFS. Return a CID.
+async fn ipfs_dag_put_node_async<T>(ipfs: &IpfsClient, node: &T) -> Result<Cid, Error>
+where
+    T: ?Sized + Serialize,
+{
+    #[cfg(debug_assertions)]
+    println!(
+        "Serialize => {}",
+        serde_json::to_string_pretty(node).unwrap()
+    );
+
+    let json_string = serde_json::to_string(node).expect("Serialize video node failed");
+
+    let response = ipfs.dag_put(Cursor::new(json_string)).await?;
+
+    let cid = Cid::try_from(response.cid.cid_string).expect("Invalid Cid");
+
+    #[cfg(debug_assertions)]
+    println!("Dag Put => {}", &cid);
+
+    Ok(cid)
 }

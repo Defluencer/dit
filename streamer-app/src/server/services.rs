@@ -74,7 +74,7 @@ pub async fn put_requests(
     };
 
     if let Err(error) = collector.send(msg).await {
-        eprintln!("Collector hung up {}", error);
+        eprintln!("Video receiver hung up! Error: {}", error);
 
         *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
 

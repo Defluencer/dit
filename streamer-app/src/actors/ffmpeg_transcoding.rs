@@ -85,7 +85,7 @@ pub async fn start_transcoding(ffmpeg_addr: String, stream_app_addr: String) {
 
     let handle = match command.spawn() {
         Ok(result) => {
-            println!("Transcoding Online...");
+            println!("Transcoding System Online");
 
             result
         }
