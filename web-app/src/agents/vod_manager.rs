@@ -14,12 +14,18 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url};
 
 use yew::services::ConsoleService;
 
+//const BUFFER_LENGTH: f64 = 30.0;
+//const MEDIA_LENGTH: f64 = 4.0;
+
+const CODEC_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/codec";
+const QUALITY_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/quality";
+
 type Tracks = Arc<RwLock<Vec<Track>>>;
 
 struct Track {
-    level: usize,
+    //level: usize,
     quality: String,
-    codec: String,
+    //codec: String,
     source_buffer: SourceBuffer,
 }
 
@@ -45,20 +51,28 @@ pub fn load_video(video_cid: String, duration: f64) {
 
     /* video_on_seeking(
         video_cid.clone(),
-        second.clone(),
-        minute.clone(),
-        hour.clone(),
-        video.clone(),
-        buffers.clone(),
-        level.clone(),
+        video_element.clone(),
+        media_source.clone(),
+        current_level.clone(),
+        tracks.clone(),
     ); */
 
-    on_media_source_open(video_cid, duration, media_source, tracks);
+    on_media_source_open(
+        video_cid,
+        duration,
+        current_level,
+        video_element,
+        media_source,
+        tracks,
+    );
 }
 
+/// Called once the MediaSource is ready to accept segments.
 fn on_media_source_open(
     video_cid: String,
     duration: f64,
+    current_level: Arc<AtomicUsize>,
+    video: HtmlMediaElement,
     media_source: MediaSource,
     tracks: Tracks,
 ) {
@@ -66,7 +80,7 @@ fn on_media_source_open(
 
     let closure = move || {
         #[cfg(debug_assertions)]
-        ConsoleService::info("sourceopen");
+        ConsoleService::info("on source open");
 
         media_source.set_onsourceopen(None);
 
@@ -74,7 +88,8 @@ fn on_media_source_open(
 
         let future = add_source_buffers(
             video_cid.clone(),
-            duration,
+            current_level.clone(),
+            video.clone(),
             media_source.clone(),
             tracks.clone(),
         );
@@ -88,109 +103,179 @@ fn on_media_source_open(
 
 async fn add_source_buffers(
     video_cid: String,
-    duration: f64,
+    current_level: Arc<AtomicUsize>,
+    video: HtmlMediaElement,
     media_source: MediaSource,
     tracks: Tracks,
 ) {
-    let codecs_path = "/time/hour/0/minute/0/second/0/video/setup/codec";
-    let qualities_path = "/time/hour/0/minute/0/second/0/video/setup/quality";
-
-    let codecs_result = match bindings::ipfs_dag_get(&video_cid, codecs_path).await {
+    let codecs = match bindings::ipfs_dag_get(&video_cid, CODEC_PATH).await {
         Ok(result) => result,
         Err(e) => {
-            ConsoleService::warn(&format!("{:?}", e));
+            ConsoleService::error(&format!("{:?}", e));
             return;
         }
     };
 
-    let qualities_result = match bindings::ipfs_dag_get(&video_cid, qualities_path).await {
+    let qualities = match bindings::ipfs_dag_get(&video_cid, QUALITY_PATH).await {
         Ok(result) => result,
         Err(e) => {
-            ConsoleService::warn(&format!("{:?}", e));
+            ConsoleService::error(&format!("{:?}", e));
             return;
         }
     };
 
-    let codecs: Vec<String> = from_value(codecs_result).expect("Can't deserialize codecs");
-    let qualities: Vec<String> = from_value(qualities_result).expect("Can't deserialize qualities");
+    let codecs: Vec<String> = from_value(codecs).expect("Can't deserialize codecs");
+    let qualities: Vec<String> = from_value(qualities).expect("Can't deserialize qualities");
 
-    let mut new_tracks = Vec::with_capacity(4);
+    #[cfg(debug_assertions)]
+    ConsoleService::info("Creating all source buffers");
 
-    for (level, (codec, quality)) in codecs.into_iter().zip(qualities.into_iter()).enumerate() {
-        if !MediaSource::is_type_supported(&codec) {
-            ConsoleService::warn(&format!("MIME Type {:?} unsupported", &codec));
-            continue;
+    match tracks.write() {
+        Ok(mut tracks) => {
+            for (codec, quality) in codecs.into_iter().zip(qualities.into_iter()) {
+                if !MediaSource::is_type_supported(&codec) {
+                    ConsoleService::error(&format!("MIME Type {:?} unsupported", &codec));
+                    continue;
+                }
+
+                let source_buffer = media_source
+                    .add_source_buffer(&codec)
+                    .expect("Can't add source buffer");
+
+                let track = Track {
+                    quality,
+                    source_buffer,
+                };
+
+                tracks.push(track);
+            }
         }
-
-        let source_buffer = media_source
-            .add_source_buffer(&codec)
-            .expect("Can't add source buffer");
-
-        if level == 0 {
-            // Only lowest quality start buffering.
-            on_source_buffer_update_end(
-                video_cid.clone(),
-                duration,
-                quality.clone(),
-                media_source.clone(),
-                source_buffer.clone(),
-            );
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return;
         }
-
-        let path = format!(
-            "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
-            &video_cid, level
-        );
-
-        cat_and_buffer(path, source_buffer.clone()).await;
-
-        new_tracks.push(Track {
-            level,
-            codec,
-            quality,
-            source_buffer,
-        });
     }
 
-    if let Ok(mut tracks) = tracks.write() {
-        *tracks = new_tracks;
+    let tracks_clone = tracks.clone();
+
+    #[cfg(debug_assertions)]
+    ConsoleService::info("Loading all initialization segments");
+
+    match tracks.read() {
+        Ok(tracks) => {
+            // Set callback for buffering.
+            on_source_buffer_update_end(
+                video_cid.clone(),
+                video.clone(),
+                media_source.clone(),
+                current_level.clone(),
+                tracks_clone,
+                tracks[0].source_buffer.clone(),
+            );
+
+            for (level, track) in tracks.iter().enumerate() {
+                let path = format!(
+                    "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
+                    &video_cid, level
+                );
+
+                cat_and_buffer(path, track.source_buffer.clone()).await;
+            }
+        }
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return;
+        }
     }
 }
 
+/// First called after initialization segment finish loading. Also called when append/flushing buffer.
 fn on_source_buffer_update_end(
     video_cid: String,
-    duration: f64,
-    quality: String,
+    video: HtmlMediaElement,
     media_source: MediaSource,
+    current_level: Arc<AtomicUsize>,
+    tracks: Tracks,
     source_buffer: SourceBuffer,
 ) {
-    let source_buffer_clone = source_buffer.clone();
-
     let closure = move || {
         #[cfg(debug_assertions)]
-        ConsoleService::info("updateend");
+        ConsoleService::info("on update end");
 
         //TODO update adaptative bit rate
 
-        append_next_segment(
-            &video_cid,
-            duration,
-            &quality,
-            media_source.clone(),
-            source_buffer.clone(),
-        );
+        let tracks = tracks.read().expect("Lock Poisoned");
+        let level = current_level.load(Ordering::Relaxed);
 
-        //TODO if has buffered enough then source_buffer.set_onupdateend(None);
-        // and set timer for periodic buffer health checks
+        let source_buffer = tracks[level].source_buffer.clone();
+        let quality = &tracks[level].quality;
+
+        let mut buff_start = 0.0;
+        let mut buff_end = 0.0;
+
+        if let Ok(time_ranges) = source_buffer.buffered() {
+            let count = time_ranges.length();
+
+            for i in 0..count {
+                if let Ok(start) = time_ranges.start(i) {
+                    buff_start = start;
+                }
+
+                if let Ok(end) = time_ranges.end(i) {
+                    buff_end = end;
+                }
+
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!(
+                    "Buffer time range {} = {}s to {}s",
+                    i, buff_start, buff_end
+                ));
+            }
+        }
+
+        let duration = media_source.duration();
+        let _current_time = video.current_time();
+
+        /* if buff_end > current_time + BUFFER_LENGTH {
+            #[cfg(debug_assertions)]
+            ConsoleService::info("stop buffering");
+
+            source_buffer.set_onupdateend(None);
+
+            //TODO set timer for periodic buffer health checks
+
+            return;
+        } */
+
+        if buff_end + 0.5 > duration {
+            #[cfg(debug_assertions)]
+            ConsoleService::info("video end");
+
+            source_buffer.set_onupdateend(None);
+
+            if let Err(e) = media_source.end_of_stream() {
+                ConsoleService::warn(&format!("{:?}", e));
+                return;
+            }
+
+            return;
+        }
+
+        /* if buff_end < current_time {
+            buff_end = current_time;
+        } */
+
+        let (hours, minutes, seconds) = seconds_to_timecode(buff_end);
+
+        append_media_segment(&video_cid, quality, hours, minutes, seconds, source_buffer);
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
-    source_buffer_clone.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
+    source_buffer.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
 }
 
-fn video_on_seeking(
+fn _video_on_seeking(
     video_cid: String,
-    duration: f64,
     video: HtmlMediaElement,
     media_source: MediaSource,
     current_level: Arc<AtomicUsize>,
@@ -200,71 +285,91 @@ fn video_on_seeking(
 
     let closure = move || {
         #[cfg(debug_assertions)]
-        ConsoleService::info("seeking");
+        ConsoleService::info("on seeking");
+
+        let current_time = video.current_time();
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Seek at {}s", current_time));
 
         let level = current_level.load(Ordering::SeqCst);
-        let tracks = tracks.read().expect("Lock Poisoned");
 
-        let source_buffer = tracks[level].source_buffer.clone();
-        let quality = &tracks[level].quality;
+        let source_buffer = if let Ok(tracks) = tracks.read() {
+            tracks[level].source_buffer.clone()
+        } else {
+            return;
+        };
 
-        if let Err(e) = source_buffer.abort() {
-            ConsoleService::warn(&format!("{:?}", e));
+        let mut buff_start = 0.0;
+        let mut buff_end = 0.0;
+
+        if let Ok(time_ranges) = source_buffer.buffered() {
+            let count = time_ranges.length();
+
+            for i in 0..count {
+                if let Ok(start) = time_ranges.start(i) {
+                    buff_start = start;
+                }
+
+                if let Ok(end) = time_ranges.end(i) {
+                    buff_end = end;
+                }
+
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!(
+                    "Buffer time range {} = {}s to {}s",
+                    i, buff_start, buff_end
+                ));
+            }
+        }
+
+        if buff_end > current_time {
             return;
         }
 
-        let (hours, minutes, seconds) = match source_buffer.buffered() {
-            Ok(time_ranges) => match time_ranges.end(0) {
-                Ok(end) => {
-                    let seek_end_buff = video.current_time() + 30.0;
+        if source_buffer.updating() {
+            if let Err(e) = source_buffer.abort() {
+                ConsoleService::warn(&format!("{:?}", e));
+                return;
+            }
+        }
 
-                    if end >= seek_end_buff {
-                        return;
-                    } else {
-                        seconds_to_timecode(end)
-                    }
-                }
-                Err(_) => seconds_to_timecode(video.current_time()),
-            },
-            Err(_) => seconds_to_timecode(video.current_time()),
-        };
+        on_source_buffer_update_end(
+            video_cid.clone(),
+            video.clone(),
+            media_source.clone(),
+            current_level.clone(),
+            tracks.clone(),
+            source_buffer.clone(),
+        );
 
-        //TODO buffer new segment
+        if let Err(e) = source_buffer.remove(buff_start, buff_end) {
+            ConsoleService::warn(&format!("{:?}", e));
+            return;
+        }
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
     video_clone.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
 }
 
-fn append_next_segment(
+fn append_media_segment(
     video_cid: &str,
-    duration: f64,
     quality: &str,
-    media_source: MediaSource,
+    hours: u8,
+    minutes: u8,
+    seconds: u8,
     source_buffer: SourceBuffer,
 ) {
-    let (hours, minutes, seconds) = match source_buffer.buffered() {
-        Ok(time_ranges) => match time_ranges.end(0) {
-            Ok(end) => {
-                if end >= duration {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::info("end of stream");
-
-                    media_source.end_of_stream().unwrap();
-                    return;
-                } else {
-                    //TODO change hard-coded media segment length
-                    seconds_to_timecode(end + 4.0)
-                }
-            }
-            Err(_) => (0, 0, 0),
-        },
-        Err(_) => (0, 0, 0),
-    };
+    #[cfg(debug_assertions)]
+    ConsoleService::info(&format!(
+        "Loading Media at timecode {}:{}:{}",
+        hours, minutes, seconds
+    ));
 
     let path = format!(
         "{}/time/hour/{}/minute/{}/second/{}/video/quality/{}",
-        &video_cid, hours, minutes, seconds, quality
+        video_cid, hours, minutes, seconds, quality
     );
 
     let future = cat_and_buffer(path, source_buffer);
@@ -299,8 +404,10 @@ async fn wait_for_buffer(source_buffer: SourceBuffer) {
 }
 
 fn seconds_to_timecode(seconds: f64) -> (u8, u8, u8) {
-    let hours = (seconds / 3600.0) as u8;
-    let rem_seconds = seconds.rem_euclid(3600.0);
+    let rem_seconds = seconds.round();
+
+    let hours = (rem_seconds / 3600.0) as u8;
+    let rem_seconds = rem_seconds.rem_euclid(3600.0);
 
     let minutes = (rem_seconds / 60.0) as u8;
     let rem_seconds = rem_seconds.rem_euclid(60.0);

@@ -1975,6 +1975,7 @@ checksum = "1d649a3145108d7d3fbcde896a468d1bd636791823c9921135218ad89be08307"
 name = "web-app"
 version = "0.1.0"
 dependencies = [
+ "cid",
  "js-sys",
  "serde-wasm-bindgen",
  "wasm-bindgen",

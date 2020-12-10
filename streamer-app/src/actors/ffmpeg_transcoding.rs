@@ -24,7 +24,7 @@ pub async fn start_transcoding(ffmpeg_addr: String, stream_app_addr: String) {
             "-tune:",
             "zerolatency",
             "-g:0",
-            "120",
+            "240",
             "-sc_threshold:",
             "0",
             "-b:v:0",
@@ -37,16 +37,16 @@ pub async fn start_transcoding(ffmpeg_addr: String, stream_app_addr: String) {
             "60",
         ])
         .args(&[
-            "-map", "v:0", "-c:v:1", "libx264", "-g:1", "120", "-b:v:1", "4500k", "-s:1",
+            "-map", "v:0", "-c:v:1", "libx264", "-g:1", "240", "-b:v:1", "4500k", "-s:1",
             "1280x720", "-r:1", "60",
         ])
         .args(&[
-            "-map", "v:0", "-c:v:2", "libx264", "-g:2", "60", "-b:v:2", "3000k", "-s:2",
+            "-map", "v:0", "-c:v:2", "libx264", "-g:2", "120", "-b:v:2", "3000k", "-s:2",
             "1280x720", "-r:2", "30",
         ])
         .args(&[
-            "-map", "v:0", "-c:v:3", "libx264", "-g:3", "60", "-b:v:3", "2000k", "-s:3", "852x480",
-            "-r:3", "30",
+            "-map", "v:0", "-c:v:3", "libx264", "-g:3", "120", "-b:v:3", "2000k", "-s:3",
+            "852x480", "-r:3", "30",
         ])
         .args(&[
             "-map", "a:0", "-map", "a:0", "-map", "a:0", "-map", "a:0", "-c:a:", "aac", "-b:a:",

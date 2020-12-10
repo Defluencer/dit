@@ -1,3 +1,5 @@
+#![allow(unused_must_use)]
+
 mod actors;
 mod config;
 mod dag_nodes;
