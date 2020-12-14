@@ -30,7 +30,7 @@ impl Component for Video {
 
     fn view(&self) -> Html {
         html! {
-            <video id="video" autoplay=true muted=true controls=true poster="../live_like_poster.png" />
+            <video id="video" controls=true poster="../live_like_poster.png" />
         }
     }
 

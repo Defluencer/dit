@@ -47,7 +47,7 @@ pub fn load_video(video_cid: String, duration: f64) {
 
     let tracks = Arc::new(RwLock::new(Vec::with_capacity(4)));
 
-    let current_level = Arc::new(AtomicUsize::new(3));
+    let current_level = Arc::new(AtomicUsize::new(0));
 
     /* video_on_seeking(
         video_cid.clone(),
@@ -168,23 +168,20 @@ async fn add_source_buffers(
         }
     }
 
-    let tracks_clone = tracks.clone();
+    // Set callback for buffering.
+    on_source_buffer_update_end(
+        video_cid.clone(),
+        video.clone(),
+        media_source.clone(),
+        current_level.clone(),
+        tracks.clone(),
+    );
 
     #[cfg(debug_assertions)]
     ConsoleService::info("Loading all initialization segments");
 
     match tracks.read() {
         Ok(tracks) => {
-            // Set callback for buffering.
-            on_source_buffer_update_end(
-                video_cid.clone(),
-                video.clone(),
-                media_source.clone(),
-                current_level.clone(),
-                tracks_clone,
-                tracks[0].source_buffer.clone(),
-            );
-
             for (level, track) in tracks.iter().enumerate() {
                 let path = format!(
                     "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
@@ -208,15 +205,24 @@ fn on_source_buffer_update_end(
     media_source: MediaSource,
     current_level: Arc<AtomicUsize>,
     tracks: Tracks,
-    source_buffer: SourceBuffer,
 ) {
+    let level = current_level.load(Ordering::SeqCst);
+
+    let source_buffer = match tracks.read() {
+        Ok(tracks) => tracks[level].source_buffer.clone(),
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return;
+        }
+    };
+
     let closure = move || {
         #[cfg(debug_assertions)]
         ConsoleService::info("on update end");
 
         //TODO update adaptative bit rate
 
-        let level = current_level.load(Ordering::Relaxed);
+        let level = current_level.load(Ordering::SeqCst);
 
         let (quality, source_buffer) = match tracks.read() {
             Ok(tracks) => (
@@ -300,7 +306,7 @@ fn on_source_buffer_update_end(
     source_buffer.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
 }
 
-fn _video_on_seeking(
+/* fn video_on_seeking(
     video_cid: String,
     video: HtmlMediaElement,
     media_source: MediaSource,
@@ -366,7 +372,6 @@ fn _video_on_seeking(
             media_source.clone(),
             current_level.clone(),
             tracks.clone(),
-            source_buffer.clone(),
         );
 
         if let Err(e) = source_buffer.remove(buff_start, buff_end) {
@@ -377,7 +382,7 @@ fn _video_on_seeking(
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
     video_clone.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
-}
+} */
 
 fn append_media_segment(
     video_cid: &str,
