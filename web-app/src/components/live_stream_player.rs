@@ -1,19 +1,26 @@
-use crate::agents::load_live_stream;
-use crate::bindings;
+use crate::agents::LiveStream;
+
+use wasm_bindgen::{JsCast, JsValue};
+use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url, Window};
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-#[derive(Clone, Debug, Eq, PartialEq, Properties)]
 pub struct LiveStreamPlayer {
-    pub topic: String,
+    pub stream: LiveStream,
 }
 
 impl Component for LiveStreamPlayer {
     type Message = ();
-    type Properties = Self;
+    type Properties = ();
 
     fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
-        props
+        let topic = "livelikevideo";
+
+        let streamer_peer_id = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
+
+        let stream = LiveStream::new(topic, streamer_peer_id);
+
+        Self { stream }
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
@@ -32,11 +39,9 @@ impl Component for LiveStreamPlayer {
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            load_live_stream(self.topic.clone());
+            self.stream.link_video();
         }
     }
 
-    fn destroy(&mut self) {
-        bindings::ipfs_unsubscribe(self.topic.clone().into());
-    }
+    //fn destroy(&mut self) {}
 }

@@ -23,7 +23,7 @@ impl Component for LiveStream {
     fn view(&self) -> Html {
         html! {
             <div class="live_stream_page">
-                <LiveStreamPlayer topic="livelikevideo" />
+                <LiveStreamPlayer  />
                 <ChatWindow />
             </div>
         }

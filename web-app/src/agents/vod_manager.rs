@@ -47,7 +47,7 @@ pub fn load_video(video_cid: String, duration: f64) {
 
     let tracks = Arc::new(RwLock::new(Vec::with_capacity(4)));
 
-    let current_level = Arc::new(AtomicUsize::new(0));
+    let current_level = Arc::new(AtomicUsize::new(3));
 
     /* video_on_seeking(
         video_cid.clone(),
@@ -138,9 +138,21 @@ async fn add_source_buffers(
                     continue;
                 }
 
-                let source_buffer = media_source
-                    .add_source_buffer(&codec)
-                    .expect("Can't add source buffer");
+                let source_buffer = match media_source.add_source_buffer(&codec) {
+                    Ok(sb) => sb,
+                    Err(e) => {
+                        ConsoleService::error(&format!("{:?}", e));
+                        return;
+                    }
+                };
+
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!(
+                    "{} {} Buffer Mode {:#?}",
+                    quality,
+                    codec,
+                    source_buffer.mode()
+                ));
 
                 let track = Track {
                     quality,
@@ -204,11 +216,18 @@ fn on_source_buffer_update_end(
 
         //TODO update adaptative bit rate
 
-        let tracks = tracks.read().expect("Lock Poisoned");
         let level = current_level.load(Ordering::Relaxed);
 
-        let source_buffer = tracks[level].source_buffer.clone();
-        let quality = &tracks[level].quality;
+        let (quality, source_buffer) = match tracks.read() {
+            Ok(tracks) => (
+                tracks[level].quality.clone(),
+                tracks[level].source_buffer.clone(),
+            ),
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
 
         let mut buff_start = 0.0;
         let mut buff_end = 0.0;
@@ -267,7 +286,14 @@ fn on_source_buffer_update_end(
 
         let (hours, minutes, seconds) = seconds_to_timecode(buff_end);
 
-        append_media_segment(&video_cid, quality, hours, minutes, seconds, source_buffer);
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!(
+            "Buffers {} Active {}",
+            media_source.source_buffers().length(),
+            media_source.active_source_buffers().length()
+        ));
+
+        append_media_segment(&video_cid, &quality, hours, minutes, seconds, source_buffer);
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
@@ -390,9 +416,10 @@ async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
 
     wait_for_buffer(source_buffer.clone()).await;
 
-    source_buffer
-        .append_buffer_with_array_buffer_view(segment)
-        .expect("Can't append buffer");
+    if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(segment) {
+        ConsoleService::error(&format!("{:?}", e));
+        return;
+    }
 }
 
 async fn wait_for_buffer(source_buffer: SourceBuffer) {

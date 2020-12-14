@@ -12,11 +12,13 @@ js-sys = "0.3"
 serde-wasm-bindgen = "0.1.3"
 yewtil = "0.3"
 cid = "0.6"
+
 web-sys = { version = "0.3", features = [
     "MediaSource",
     "MediaSourceReadyState",
     "SourceBuffer",
     "SourceBufferList",
+    "SourceBufferAppendMode",
     "Url",
     "HtmlMediaElement",
     "TimeRanges"

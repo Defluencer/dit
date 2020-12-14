@@ -18,7 +18,6 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
-const STREAMER_PEER_ID: &str = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
 const CODEC_PATH: &str = "/setup/codec";
 const QUALITY_PATH: &str = "/setup/quality";
 
@@ -33,50 +32,100 @@ struct Track {
     source_buffer: SourceBuffer,
 }
 
-pub fn load_live_stream(topic: String) {
-    let buffer = Arc::new(RwLock::new(VecDeque::with_capacity(5)));
+pub struct LiveStream {
+    buffer: Buffer,
 
-    ipfs_pubsub(&topic, buffer.clone());
+    tracks: Tracks,
 
-    let window = web_sys::window().unwrap();
-    let document = window.document().unwrap();
+    level: Arc<AtomicUsize>,
 
-    let media_source = MediaSource::new().unwrap();
+    window: Window,
 
-    let url = Url::create_object_url_with_source(&media_source).unwrap();
+    video: Option<HtmlMediaElement>,
 
-    let video: HtmlMediaElement = document
-        .get_element_by_id("video")
-        .unwrap()
-        .dyn_into()
-        .unwrap();
+    media_source: MediaSource,
 
-    video.set_src(&url);
+    interval_handle: i32,
+    callback: Closure<dyn Fn()>,
 
-    let tracks = Arc::new(RwLock::new(Vec::with_capacity(4)));
-    let current_level = Arc::new(AtomicUsize::new(0));
+    topic: String,
 
-    let _id = match on_timer(media_source, buffer, window, tracks, current_level) {
-        Ok(id) => id,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
+    url: String,
 }
 
-//TODO livecycle
+impl LiveStream {
+    pub fn new(topic: &str, streamer_peer_id: &str) -> Self {
+        let buffer = Arc::new(RwLock::new(VecDeque::with_capacity(5)));
 
-fn on_timer(
+        ipfs_pubsub(topic, buffer.clone(), streamer_peer_id.into());
+
+        let window = web_sys::window().expect("Can't get window");
+
+        let media_source = MediaSource::new().expect("Can't create media source");
+
+        let url = Url::create_object_url_with_source(&media_source)
+            .expect("Can't create url from source");
+
+        let tracks = Arc::new(RwLock::new(Vec::with_capacity(4)));
+        let level = Arc::new(AtomicUsize::new(0));
+
+        let (interval_handle, callback) = on_interval(
+            media_source.clone(),
+            buffer.clone(),
+            window.clone(),
+            tracks.clone(),
+            level.clone(),
+        )
+        .expect("Can't start interval");
+
+        Self {
+            buffer,
+            tracks,
+            level,
+            window,
+            video: None,
+            media_source,
+            interval_handle,
+            callback,
+            topic: topic.into(),
+            url,
+        }
+    }
+
+    pub fn link_video(&mut self) {
+        let document = self.window.document().expect("Can't get document");
+
+        let video: HtmlMediaElement = document
+            .get_element_by_id("video")
+            .expect("No element with this Id")
+            .unchecked_into();
+
+        video.set_src(&self.url);
+
+        self.video = Some(video);
+    }
+}
+
+impl Drop for LiveStream {
+    fn drop(&mut self) {
+        bindings::ipfs_unsubscribe(self.topic.clone().into());
+
+        self.window.clear_interval_with_handle(self.interval_handle);
+    }
+}
+
+type IntervalResult = Result<(i32, Closure<dyn Fn()>), JsValue>;
+
+fn on_interval(
     media_source: MediaSource,
     buffer: Buffer,
     window: Window,
     tracks: Tracks,
     current_level: Arc<AtomicUsize>,
-) -> Result<i32, JsValue> {
+) -> IntervalResult {
     let closure = move || {
         #[cfg(debug_assertions)]
-        ConsoleService::info("on timer");
+        ConsoleService::info("on interval");
 
         if media_source.ready_state() != MediaSourceReadyState::Open {
             #[cfg(debug_assertions)]
@@ -85,12 +134,13 @@ fn on_timer(
             return;
         }
 
-        //Init
         if media_source.source_buffers().length() == 0 {
+            //Initialize stream
+
             let cid = match buffer.read() {
                 Ok(buffer) => match buffer.front() {
                     Some(f) => f.to_string(),
-                    None => return,
+                    None => return, //nothing to update
                 },
                 Err(e) => {
                     ConsoleService::error(&format!("{:?}", e));
@@ -105,10 +155,12 @@ fn on_timer(
             return;
         }
 
+        //Update stream
+
         let cid = match buffer.write() {
             Ok(mut buffer) => match buffer.pop_front() {
                 Some(cid) => cid,
-                None => return,
+                None => return, //nothing to update
             },
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -116,13 +168,20 @@ fn on_timer(
             }
         };
 
-        let tracks = tracks.read().expect("Lock Poisoned");
         let level = current_level.load(Ordering::Relaxed);
 
-        let source_buffer = tracks[level].source_buffer.clone();
-        let quality = &tracks[level].quality;
+        let (quality, source_buffer) = match tracks.read() {
+            Ok(tracks) => (
+                tracks[level].quality.clone(),
+                tracks[level].source_buffer.clone(),
+            ),
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
 
-        let path = format!("{}/quality/{}", &cid.to_string(), quality);
+        let path = format!("{}/quality/{}", &cid.to_string(), &quality);
 
         let future = cat_and_buffer(path, source_buffer);
 
@@ -131,11 +190,44 @@ fn on_timer(
         //TODO update adaptative bit rate
     };
 
+    //Could use a loop with setTimeout()
+    //that way the previous loop is garanteed to have finished before next call.
+
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
-    window.set_interval_with_callback_and_timeout_and_arguments_0(
-        callback.into_js_value().unchecked_ref(),
+
+    let handle = window.set_interval_with_callback_and_timeout_and_arguments_0(
+        callback.as_ref().unchecked_ref(),
         1000,
-    )
+    )?;
+
+    Ok((handle, callback))
+}
+
+fn ipfs_pubsub(topic: &str, buffer: Buffer, streamer_peer_id: String) {
+    let closure = move |from: String, data: Vec<u8>| {
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Sender => {}", from));
+
+        if from != streamer_peer_id {
+            #[cfg(debug_assertions)]
+            ConsoleService::warn("Unauthorized Sender");
+            return;
+        }
+
+        let cid = match decode_cid(data) {
+            Some(cid) => cid,
+            None => return,
+        };
+
+        //TODO get missing cid by checking previous value
+
+        if let Ok(mut buffer) = buffer.write() {
+            buffer.push_back(cid);
+        }
+    };
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn(String, Vec<u8>)>);
+    bindings::ipfs_subscribe(topic.into(), callback.into_js_value().unchecked_ref());
 }
 
 async fn add_source_buffers(cid_string: String, media_source: MediaSource, tracks: Tracks) {
@@ -164,14 +256,29 @@ async fn add_source_buffers(cid_string: String, media_source: MediaSource, track
     match tracks.write() {
         Ok(mut tracks) => {
             for (codec, quality) in codecs.into_iter().zip(qualities.into_iter()) {
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!("Quality {} Codec {}", quality, codec));
+
                 if !MediaSource::is_type_supported(&codec) {
                     ConsoleService::error(&format!("MIME Type {:?} unsupported", &codec));
                     continue;
                 }
 
-                let source_buffer = media_source
-                    .add_source_buffer(&codec)
-                    .expect("Can't add source buffer");
+                let source_buffer = match media_source.add_source_buffer(&codec) {
+                    Ok(sb) => sb,
+                    Err(e) => {
+                        ConsoleService::error(&format!("{:?}", e));
+                        return;
+                    }
+                };
+
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!(
+                    "{} {} Buffer Mode {:#?}",
+                    quality,
+                    codec,
+                    source_buffer.mode()
+                ));
 
                 let track = Track {
                     quality,
@@ -205,24 +312,6 @@ async fn add_source_buffers(cid_string: String, media_source: MediaSource, track
     }
 }
 
-fn ipfs_pubsub(topic: &str, buffer: Buffer) {
-    let closure = move |from, data| {
-        let cid = match decode_cid(from, data) {
-            Some(cid) => cid,
-            None => return,
-        };
-
-        //TODO get missing cid by checking previous value
-
-        if let Ok(mut buffer) = buffer.write() {
-            buffer.push_back(cid);
-        }
-    };
-
-    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn(String, Vec<u8>)>);
-    bindings::ipfs_subscribe(topic.into(), callback.into_js_value().unchecked_ref());
-}
-
 async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
     let segment = match bindings::ipfs_cat(&path).await {
         Ok(vs) => vs,
@@ -250,17 +339,7 @@ async fn wait_for_buffer(source_buffer: SourceBuffer) {
     bindings::wait_until(callback.into_js_value().unchecked_ref()).await
 }
 
-fn decode_cid(from: String, data: Vec<u8>) -> Option<Cid> {
-    #[cfg(debug_assertions)]
-    ConsoleService::info(&format!("Sender => {}", from));
-
-    if from != STREAMER_PEER_ID {
-        #[cfg(debug_assertions)]
-        ConsoleService::warn("Unauthorized Sender");
-
-        return None;
-    }
-
+fn decode_cid(data: Vec<u8>) -> Option<Cid> {
     let data_utf8 = match String::from_utf8(data) {
         Ok(string) => string,
         Err(_) => {
