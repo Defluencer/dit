@@ -14,9 +14,10 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url};
 
 use yew::services::ConsoleService;
 
-//const BUFFER_LENGTH: f64 = 30.0;
+const BUFFER_LENGTH: f64 = 30.0;
 //const MEDIA_LENGTH: f64 = 4.0;
 
+const INIT_LEVEL: usize = 0;
 const CODEC_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/codec";
 const QUALITY_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/quality";
 
@@ -36,8 +37,7 @@ pub fn load_video(video_cid: String, duration: f64) {
     let video_element: HtmlMediaElement = document
         .get_element_by_id("video")
         .unwrap()
-        .dyn_into()
-        .unwrap();
+        .unchecked_into();
 
     let media_source = MediaSource::new().unwrap();
 
@@ -47,7 +47,7 @@ pub fn load_video(video_cid: String, duration: f64) {
 
     let tracks = Arc::new(RwLock::new(Vec::with_capacity(4)));
 
-    let current_level = Arc::new(AtomicUsize::new(0));
+    let current_level = Arc::new(AtomicUsize::new(INIT_LEVEL));
 
     /* video_on_seeking(
         video_cid.clone(),
@@ -132,7 +132,13 @@ async fn add_source_buffers(
 
     match tracks.write() {
         Ok(mut tracks) => {
-            for (codec, quality) in codecs.into_iter().zip(qualities.into_iter()) {
+            for (level, (codec, quality)) in
+                codecs.into_iter().zip(qualities.into_iter()).enumerate()
+            {
+                if level > 0 {
+                    continue;
+                }
+
                 if !MediaSource::is_type_supported(&codec) {
                     ConsoleService::error(&format!("MIME Type {:?} unsupported", &codec));
                     continue;
@@ -148,13 +154,15 @@ async fn add_source_buffers(
 
                 #[cfg(debug_assertions)]
                 ConsoleService::info(&format!(
-                    "{} {} Buffer Mode {:#?}",
+                    "Level {} Quality {} Codec {} Buffer Mode {:#?}",
+                    level,
                     quality,
                     codec,
                     source_buffer.mode()
                 ));
 
                 let track = Track {
+                    //codec,
                     quality,
                     source_buffer,
                 };
@@ -182,7 +190,19 @@ async fn add_source_buffers(
 
     match tracks.read() {
         Ok(tracks) => {
+            /* let path = format!(
+                "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
+                &video_cid, INIT_LEVEL
+            );
+
+            cat_and_buffer(path, tracks[INIT_LEVEL].source_buffer.clone()).await; */
+
+            //The init segment loaded first determine the track that can be played right away.
             for (level, track) in tracks.iter().enumerate() {
+                if level > 0 {
+                    continue;
+                }
+
                 let path = format!(
                     "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
                     &video_cid, level
@@ -209,7 +229,7 @@ fn on_source_buffer_update_end(
     let level = current_level.load(Ordering::SeqCst);
 
     let source_buffer = match tracks.read() {
-        Ok(tracks) => tracks[level].source_buffer.clone(),
+        Ok(tracks) => tracks[INIT_LEVEL].source_buffer.clone(),
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
             return;
@@ -221,19 +241,37 @@ fn on_source_buffer_update_end(
         ConsoleService::info("on update end");
 
         //TODO update adaptative bit rate
+        //To switch level flush everything then append init+media????
 
         let level = current_level.load(Ordering::SeqCst);
 
         let (quality, source_buffer) = match tracks.read() {
             Ok(tracks) => (
                 tracks[level].quality.clone(),
-                tracks[level].source_buffer.clone(),
+                tracks[INIT_LEVEL].source_buffer.clone(),
             ),
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
                 return;
             }
         };
+
+        let current_time = video.current_time();
+
+        #[cfg(debug_assertions)]
+        {
+            ConsoleService::info(&format!(
+                "Video:\nLevel {}\nQuality {}\nCurrent Time {}\nReady State {}\nNetwork State {}\nError {:#?}\nTotal Buffers {}\nActive Buffers {}",
+                level,
+                quality,
+                current_time,
+                video.ready_state(),
+                video.network_state(),
+                video.error(),
+                media_source.source_buffers().length(),
+                media_source.active_source_buffers().length(),
+            ));
+        }
 
         let mut buff_start = 0.0;
         let mut buff_end = 0.0;
@@ -252,14 +290,13 @@ fn on_source_buffer_update_end(
 
                 #[cfg(debug_assertions)]
                 ConsoleService::info(&format!(
-                    "Buffer time range {} = {}s to {}s",
+                    "Time Range {} buffers {}s to {}s",
                     i, buff_start, buff_end
                 ));
             }
         }
 
         let duration = media_source.duration();
-        let _current_time = video.current_time();
 
         /* if buff_end > current_time + BUFFER_LENGTH {
             #[cfg(debug_assertions)]
@@ -278,10 +315,50 @@ fn on_source_buffer_update_end(
 
             source_buffer.set_onupdateend(None);
 
-            if let Err(e) = media_source.end_of_stream() {
+            /* if let Err(e) = media_source.end_of_stream() {
                 ConsoleService::warn(&format!("{:?}", e));
                 return;
+            } */
+
+            //current_level.store(3, Ordering::SeqCst);
+
+            let new_quality = "1080p60";
+
+            match tracks.write() {
+                Ok(mut tracks) => {
+                    tracks[0].quality = new_quality.into();
+                }
+                Err(e) => {
+                    ConsoleService::error(&format!("{:?}", e));
+                    return;
+                }
             }
+
+            if let Err(e) = source_buffer.remove(0.0, f64::INFINITY) {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+
+            video.set_current_time(0.0);
+
+            let path = format!(
+                "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
+                &video_cid, 3
+            );
+
+            let future = cat_and_buffer(path, source_buffer.clone());
+
+            spawn_local(future);
+
+            on_source_buffer_update_end(
+                video_cid.clone(),
+                video.clone(),
+                media_source.clone(),
+                current_level.clone(),
+                tracks.clone(),
+            );
+
+            append_media_segment(&video_cid, new_quality, 0, 0, 0, source_buffer);
 
             return;
         }
@@ -292,18 +369,56 @@ fn on_source_buffer_update_end(
 
         let (hours, minutes, seconds) = seconds_to_timecode(buff_end);
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!(
-            "Buffers {} Active {}",
-            media_source.source_buffers().length(),
-            media_source.active_source_buffers().length()
-        ));
-
         append_media_segment(&video_cid, &quality, hours, minutes, seconds, source_buffer);
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
     source_buffer.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
+}
+
+fn switch_level(
+    video_cid: String,
+    video: HtmlMediaElement,
+    media_source: MediaSource,
+    current_level: Arc<AtomicUsize>,
+    tracks: Tracks,
+) {
+    current_level.store(3, Ordering::SeqCst);
+
+    let source_buffer = match tracks.read() {
+        Ok(tracks) => tracks[0].source_buffer.clone(),
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return;
+        }
+    };
+
+    //clean up previous level buffer
+    if let Err(e) = source_buffer.remove(0.0, f64::INFINITY) {
+        ConsoleService::error(&format!("{:?}", e));
+        return;
+    }
+
+    video.set_current_time(0.0);
+
+    let path = format!(
+        "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
+        &video_cid, 3
+    );
+
+    let future = cat_and_buffer(path, source_buffer.clone());
+
+    spawn_local(future);
+
+    on_source_buffer_update_end(
+        video_cid.clone(),
+        video,
+        media_source,
+        current_level,
+        tracks,
+    );
+
+    append_media_segment(&video_cid, "1080p60", 0, 0, 0, source_buffer);
 }
 
 /* fn video_on_seeking(

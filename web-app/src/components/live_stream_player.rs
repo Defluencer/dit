@@ -1,24 +1,24 @@
-use crate::agents::LiveStream;
+use crate::agents::LiveStreamManager;
 
-use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url, Window};
+//use wasm_bindgen::{JsCast, JsValue};
+//use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url, Window};
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 
 pub struct LiveStreamPlayer {
-    pub stream: LiveStream,
+    pub stream: LiveStreamManager,
 }
 
 impl Component for LiveStreamPlayer {
     type Message = ();
     type Properties = ();
 
-    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+    fn create(_props: Self::Properties, _link: ComponentLink<Self>) -> Self {
         let topic = "livelikevideo";
 
         let streamer_peer_id = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
 
-        let stream = LiveStream::new(topic, streamer_peer_id);
+        let stream = LiveStreamManager::new(topic, streamer_peer_id);
 
         Self { stream }
     }

@@ -895,6 +895,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "m3u8-rs"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3705662c95db3de02183efd7a18b25ca5c61b903bd1fcd2d7fd54301cc6fc17d"
+dependencies = [
+ "nom",
+]
+
+[[package]]
 name = "matches"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1640,6 +1649,7 @@ dependencies = [
  "cid",
  "hyper",
  "ipfs-api",
+ "m3u8-rs",
  "multibase 0.9.1",
  "serde",
  "serde_json",

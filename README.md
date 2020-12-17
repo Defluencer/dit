@@ -3,7 +3,7 @@ The project aim to decentralize content creation by providing video live streami
 
 ## Project Status
 - Live Streaming: Mostly working.
-- VOD: Can save stream as timecode adressable video. Can't view yet.
+- VOD: Can save stream as timecode adressable video.
 - Live Chat: Can send and receive messages. No identity yet.
 - Moderation: In Design.
 - Community: Some thoughts.
@@ -23,7 +23,3 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
-
-## Financial Support
-- https://gitcoin.co/grants/1084/live-like
-- Bitcoin & Ether -> sionois.eth

@@ -39,6 +39,21 @@ pub async fn put_requests(
     }
 
     if path.extension().unwrap() == M3U8 {
+        #[cfg(debug_assertions)]
+        {
+            let data = hyper::body::to_bytes(body).await?;
+
+            match m3u8_rs::parse_playlist_res(&data) {
+                Ok(m3u8_rs::playlist::Playlist::MasterPlaylist(pl)) => {
+                    println!("Master playlist:\n{:#?}", pl)
+                }
+                Ok(m3u8_rs::playlist::Playlist::MediaPlaylist(pl)) => {
+                    println!("Media playlist:\n{:#?}", pl)
+                }
+                Err(e) => println!("Error: {:?}", e),
+            }
+        }
+
         *res.status_mut() = StatusCode::NO_CONTENT;
 
         let header_value = HeaderValue::from_str(path.to_str().unwrap()).unwrap();
