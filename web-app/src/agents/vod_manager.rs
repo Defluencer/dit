@@ -14,7 +14,7 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url};
 
 use yew::services::ConsoleService;
 
-const BUFFER_LENGTH: f64 = 30.0;
+//const BUFFER_LENGTH: f64 = 30.0;
 //const MEDIA_LENGTH: f64 = 4.0;
 
 const INIT_LEVEL: usize = 0;
@@ -226,7 +226,7 @@ fn on_source_buffer_update_end(
     current_level: Arc<AtomicUsize>,
     tracks: Tracks,
 ) {
-    let level = current_level.load(Ordering::SeqCst);
+    //let level = current_level.load(Ordering::SeqCst);
 
     let source_buffer = match tracks.read() {
         Ok(tracks) => tracks[INIT_LEVEL].source_buffer.clone(),
@@ -261,15 +261,13 @@ fn on_source_buffer_update_end(
         #[cfg(debug_assertions)]
         {
             ConsoleService::info(&format!(
-                "Video:\nLevel {}\nQuality {}\nCurrent Time {}\nReady State {}\nNetwork State {}\nError {:#?}\nTotal Buffers {}\nActive Buffers {}",
+                "Video:\nLevel {}\nQuality {}\nCurrent Time {}\nReady State {}\nNetwork State {}\nError {:#?}",
                 level,
                 quality,
                 current_time,
                 video.ready_state(),
                 video.network_state(),
                 video.error(),
-                media_source.source_buffers().length(),
-                media_source.active_source_buffers().length(),
             ));
         }
 
@@ -376,7 +374,7 @@ fn on_source_buffer_update_end(
     source_buffer.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
 }
 
-fn switch_level(
+fn _switch_level(
     video_cid: String,
     video: HtmlMediaElement,
     media_source: MediaSource,

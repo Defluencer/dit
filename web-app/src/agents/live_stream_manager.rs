@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::convert::TryFrom;
-use std::sync::atomic::{AtomicI32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
 use crate::bindings;
@@ -12,7 +12,9 @@ use wasm_bindgen_futures::spawn_local;
 use serde_wasm_bindgen::from_value;
 
 use js_sys::Uint8Array;
-use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url, Window};
+use web_sys::{
+    HtmlMediaElement, MediaSource, MediaSourceReadyState, Performance, SourceBuffer, Url, Window,
+};
 
 use yew::services::ConsoleService;
 
@@ -24,8 +26,7 @@ const QUALITY_PATH: &str = "/setup/quality";
 const BUFFER_LENGTH: f64 = 30.0;
 const MEDIA_LENGTH: f64 = 4.0;
 
-//TODO flush when buffer is too big
-//TODO update adaptative bit rate
+const MOVING_AVERAGE_P: f64 = 0.20;
 
 type Buffer = Arc<RwLock<VecDeque<Cid>>>;
 
@@ -35,12 +36,17 @@ struct Track {
     level: usize,
     quality: String,
     codec: String,
-    source_buffer: SourceBuffer,
 }
 
 #[derive(Clone)]
 struct LiveStream {
     window: Window,
+
+    performance: Performance,
+
+    download_time: Arc<AtomicUsize>,
+
+    moving_average: Arc<AtomicUsize>,
 
     video: Option<HtmlMediaElement>,
 
@@ -48,13 +54,15 @@ struct LiveStream {
 
     tracks: Tracks,
 
-    state: Arc<AtomicU8>,
+    source_buffer: Option<SourceBuffer>,
+
+    state: Arc<AtomicUsize>,
 
     level: Arc<AtomicUsize>,
 
     buffer: Buffer,
 
-    handle: Arc<AtomicI32>,
+    handle: Arc<AtomicIsize>,
 }
 
 pub struct LiveStreamManager {
@@ -73,25 +81,31 @@ impl LiveStreamManager {
 
         let window = web_sys::window().expect("Can't get window");
 
+        let performance = window.performance().expect("Can't get perf");
+
         let media_source = MediaSource::new().expect("Can't create media source");
 
         let url = Url::create_object_url_with_source(&media_source)
             .expect("Can't create url from source");
 
-        let tracks = Arc::new(RwLock::new(Vec::with_capacity(4)));
-        let state = Arc::new(AtomicU8::new(0));
-        let level = Arc::new(AtomicUsize::new(0));
-        let handle = Arc::new(AtomicI32::new(0));
-
         let stream = LiveStream {
             buffer,
-            tracks,
-            state,
-            level,
             window,
-            video: None,
+            performance,
             media_source,
-            handle,
+
+            video: None,
+            source_buffer: None,
+
+            tracks: Arc::new(RwLock::new(Vec::with_capacity(4))),
+
+            state: Arc::new(AtomicUsize::new(0)),
+            level: Arc::new(AtomicUsize::new(0)),
+
+            handle: Arc::new(AtomicIsize::new(0)),
+
+            download_time: Arc::new(AtomicUsize::new(0)),
+            moving_average: Arc::new(AtomicUsize::new(0)),
         };
 
         Self {
@@ -113,36 +127,7 @@ impl LiveStreamManager {
 
         self.stream.video = Some(video);
 
-        self.test_level_switch();
-
         tick(self.stream.clone());
-    }
-
-    fn test_level_switch(&mut self) {
-        let state = self.stream.state.clone();
-        let level = self.stream.level.clone();
-
-        let closure = move || {
-            #[cfg(debug_assertions)]
-            ConsoleService::info("TEST Level Switch");
-
-            level.store(3, Ordering::SeqCst);
-            state.store(2, Ordering::SeqCst);
-        };
-
-        let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
-
-        if let Err(e) = self
-            .stream
-            .window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                callback.into_js_value().unchecked_ref(),
-                15000,
-            )
-        {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
     }
 }
 
@@ -153,18 +138,123 @@ impl Drop for LiveStreamManager {
 
         bindings::ipfs_unsubscribe(self.topic.clone().into());
 
-        let handle = self.stream.handle.load(Ordering::SeqCst);
+        let handle = self.stream.handle.load(Ordering::Relaxed);
 
         if handle != 0 {
-            self.stream.window.clear_interval_with_handle(handle);
+            self.stream.window.clear_interval_with_handle(handle as i32);
         }
     }
 }
 
-fn on_source_buffer_update_end(stream: LiveStream, source_buffer: SourceBuffer) {
+fn on_source_buffer_update_end(stream: LiveStream) {
+    let source_buffer = stream.source_buffer.as_ref().unwrap().clone();
+
     let closure = move || {
         #[cfg(debug_assertions)]
         ConsoleService::info("On Update End");
+
+        let source_buffer = stream.source_buffer.as_ref().unwrap();
+
+        let mut buff_start = 0.0;
+        let mut buff_end = 0.0;
+
+        if let Ok(time_ranges) = source_buffer.buffered() {
+            let count = time_ranges.length();
+
+            for i in 0..count {
+                if let Ok(start) = time_ranges.start(i) {
+                    buff_start = start;
+                }
+
+                if let Ok(end) = time_ranges.end(i) {
+                    buff_end = end;
+                }
+
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!(
+                    "Time Range {} buffers {}s to {}s",
+                    i, buff_start, buff_end
+                ));
+            }
+
+            if (buff_end - buff_start) > BUFFER_LENGTH {
+                //state flush buffer
+                stream.state.store(3, Ordering::Relaxed);
+            }
+
+            let current_time = stream.video.as_ref().unwrap().current_time();
+
+            if current_time < buff_start {
+                let new_time = buff_start + ((buff_end - buff_start) / 2.0);
+
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!("Forward To {}s", new_time));
+
+                stream.video.as_ref().unwrap().set_current_time(new_time);
+            }
+        }
+
+        let old_time_stamp = stream.download_time.swap(0, Ordering::Relaxed);
+
+        if old_time_stamp > 0 {
+            let new_time_stamp = stream.performance.now() as usize;
+
+            let time = (new_time_stamp - old_time_stamp) as f64;
+
+            #[cfg(debug_assertions)]
+            ConsoleService::info(&format!("Last Download {}ms", time));
+
+            let mut moving_average = stream.moving_average.load(Ordering::Relaxed) as f64;
+
+            if moving_average > 0.0 {
+                moving_average += (time - moving_average) * MOVING_AVERAGE_P;
+            } else {
+                moving_average = time;
+            }
+
+            #[cfg(debug_assertions)]
+            ConsoleService::info(&format!("Moving Average {}ms", moving_average));
+
+            stream
+                .moving_average
+                .store(moving_average as usize, Ordering::Relaxed);
+
+            let level = stream.level.load(Ordering::Relaxed);
+
+            match level {
+                0 => {
+                    if (moving_average + 500.0) < (MEDIA_LENGTH * 1000.0) {
+                        stream.state.store(2, Ordering::Relaxed);
+                        stream.level.store(level + 1, Ordering::Relaxed);
+                    }
+                }
+                1 => {
+                    if moving_average > (MEDIA_LENGTH * 1000.0) {
+                        stream.state.store(2, Ordering::Relaxed);
+                        stream.level.store(level - 1, Ordering::Relaxed);
+                    } else if (moving_average + 500.0) < (MEDIA_LENGTH * 1000.0) {
+                        stream.state.store(2, Ordering::Relaxed);
+                        stream.level.store(level + 1, Ordering::Relaxed);
+                    }
+                }
+                2 => {
+                    if moving_average > (MEDIA_LENGTH * 1000.0) {
+                        stream.state.store(2, Ordering::Relaxed);
+                        stream.level.store(level - 1, Ordering::Relaxed);
+                    } else if (moving_average + 500.0) < (MEDIA_LENGTH * 1000.0) {
+                        stream.state.store(2, Ordering::Relaxed);
+                        stream.level.store(level + 1, Ordering::Relaxed);
+                    }
+                }
+                3 => {
+                    if moving_average > (MEDIA_LENGTH * 1000.0) {
+                        stream.state.store(2, Ordering::Relaxed);
+                        stream.level.store(level - 1, Ordering::Relaxed);
+                    }
+                }
+                _ => {}
+            }
+        }
 
         tick(stream.clone());
     };
@@ -174,8 +264,8 @@ fn on_source_buffer_update_end(stream: LiveStream, source_buffer: SourceBuffer) 
 }
 
 fn on_timeout(stream: LiveStream) {
-    let window_clone = stream.window.clone();
-    let hanlde_clone = stream.handle.clone();
+    let window = stream.window.clone();
+    let hanlde = stream.handle.clone();
 
     let closure = move || {
         #[cfg(debug_assertions)]
@@ -186,11 +276,11 @@ fn on_timeout(stream: LiveStream) {
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
 
-    match window_clone.set_timeout_with_callback_and_timeout_and_arguments_0(
+    match window.set_timeout_with_callback_and_timeout_and_arguments_0(
         callback.into_js_value().unchecked_ref(),
         1000,
     ) {
-        Ok(handle) => hanlde_clone.store(handle, Ordering::SeqCst),
+        Ok(handle) => hanlde.store(handle as isize, Ordering::Relaxed),
         Err(e) => ConsoleService::error(&format!("{:?}", e)),
     }
 }
@@ -205,22 +295,18 @@ fn tick(stream: LiveStream) {
         return;
     }
 
-    let current_state = stream.state.load(Ordering::SeqCst);
+    let current_state = stream.state.load(Ordering::Relaxed);
 
     match current_state {
-        //0 => create source buffer and load init seg
         0 => spawn_local(add_source_buffer(stream)),
-        //1 = load media segment
-        1 => load_segment(stream),
-        //2 = switch quality
+        1 => load_media_segment(stream),
         2 => spawn_local(switch_quality(stream)),
-        //3 = flush buffer
         3 => flush_back_buffer(stream),
         _ => {}
     }
 }
 
-async fn add_source_buffer(stream: LiveStream) {
+async fn add_source_buffer(mut stream: LiveStream) {
     let cid = match stream.buffer.read() {
         Ok(buf) => match buf.front() {
             Some(cid) => cid.to_string(),
@@ -258,23 +344,6 @@ async fn add_source_buffer(stream: LiveStream) {
     let codecs: Vec<String> = from_value(codecs).expect("Can't deserialize codecs");
     let qualities: Vec<String> = from_value(qualities).expect("Can't deserialize qualities");
 
-    let init_codec = codecs.first().expect("No Codecs");
-
-    if !MediaSource::is_type_supported(init_codec) {
-        ConsoleService::error(&format!("MIME Type {:?} unsupported", init_codec));
-        return;
-    }
-
-    let source_buffer = match stream.media_source.add_source_buffer(init_codec) {
-        Ok(sb) => sb,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    on_source_buffer_update_end(stream.clone(), source_buffer.clone());
-
     let mut vec = Vec::with_capacity(4);
 
     #[cfg(debug_assertions)]
@@ -288,18 +357,14 @@ async fn add_source_buffer(stream: LiveStream) {
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
-            "Level {} Quality {} Codec {} Buffer Mode {:#?}",
-            level,
-            quality,
-            codec,
-            source_buffer.mode()
+            "Level {} Quality {} Codec {}",
+            level, quality, codec
         ));
 
         let track = Track {
             level,
             quality,
             codec,
-            source_buffer: source_buffer.clone(),
         };
 
         vec.push(track);
@@ -307,7 +372,19 @@ async fn add_source_buffer(stream: LiveStream) {
 
     let track = &vec[0];
 
-    let path = format!("{}/setup/initseg/{}", &cid, track.level);
+    let source_buffer = match stream.media_source.add_source_buffer(&track.codec) {
+        Ok(sb) => sb,
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return;
+        }
+    };
+
+    stream.source_buffer = Some(source_buffer.clone());
+
+    on_source_buffer_update_end(stream.clone());
+
+    let path = format!("{}/setup/initseg/{}", cid, track.level);
 
     cat_and_buffer(path, source_buffer.clone()).await;
 
@@ -320,10 +397,10 @@ async fn add_source_buffer(stream: LiveStream) {
     }
 
     //state load segment
-    stream.state.store(1, Ordering::SeqCst);
+    stream.state.store(1, Ordering::Relaxed);
 }
 
-fn load_segment(stream: LiveStream) {
+fn load_media_segment(stream: LiveStream) {
     let cid = match stream.buffer.write() {
         Ok(mut buf) => match buf.pop_front() {
             Some(cid) => cid.to_string(),
@@ -342,60 +419,21 @@ fn load_segment(stream: LiveStream) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Loading Media Segment");
 
-    let level = stream.level.load(Ordering::SeqCst);
+    let level = stream.level.load(Ordering::Relaxed);
 
-    let (quality, source_buffer) = match stream.tracks.read() {
-        Ok(tracks) => (
-            tracks[level].quality.clone(),
-            tracks[level].source_buffer.clone(),
-        ),
+    let quality = match stream.tracks.read() {
+        Ok(tracks) => tracks[level].quality.clone(),
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
             return;
         }
     };
 
-    let mut buff_start = 0.0;
-    let mut buff_end = 0.0;
+    let source_buffer = stream.source_buffer.unwrap();
 
-    if let Ok(time_ranges) = source_buffer.buffered() {
-        let count = time_ranges.length();
+    let time_stamp = stream.performance.now() as usize;
 
-        for i in 0..count {
-            if let Ok(start) = time_ranges.start(i) {
-                buff_start = start;
-            }
-
-            if let Ok(end) = time_ranges.end(i) {
-                buff_end = end;
-            }
-
-            #[cfg(debug_assertions)]
-            ConsoleService::info(&format!(
-                "Time Range {} buffers {}s to {}s",
-                i, buff_start, buff_end
-            ));
-        }
-
-        if (buff_end + MEDIA_LENGTH - buff_start) > BUFFER_LENGTH {
-            //state flush buffer
-            stream.state.store(3, Ordering::SeqCst);
-        }
-
-        let current_time = stream.video.as_ref().unwrap().current_time();
-
-        if current_time < buff_start {
-            //middle of buffer
-            let new_time = buff_start + ((buff_end - buff_start) / 2.0);
-
-            //TODO try new_time = buff-end - medai length
-
-            #[cfg(debug_assertions)]
-            ConsoleService::info(&format!("Forward To {}s", new_time));
-
-            stream.video.unwrap().set_current_time(new_time);
-        }
-    }
+    stream.download_time.store(time_stamp, Ordering::Relaxed);
 
     let path = format!("{}/quality/{}", cid, quality);
 
@@ -423,19 +461,17 @@ async fn switch_quality(stream: LiveStream) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Switching Quality");
 
-    let level = stream.level.load(Ordering::SeqCst);
+    let level = stream.level.load(Ordering::Relaxed);
 
-    let (quality, source_buffer, codec) = match stream.tracks.read() {
-        Ok(tracks) => (
-            tracks[level].quality.clone(),
-            tracks[level].source_buffer.clone(),
-            tracks[level].codec.clone(),
-        ),
+    let (quality, codec) = match stream.tracks.read() {
+        Ok(tracks) => (tracks[level].quality.clone(), tracks[level].codec.clone()),
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
             return;
         }
     };
+
+    let source_buffer = stream.source_buffer.unwrap();
 
     if let Err(e) = source_buffer.change_type(&codec) {
         ConsoleService::error(&format!("{:?}", e));
@@ -456,22 +492,14 @@ async fn switch_quality(stream: LiveStream) {
     cat_and_buffer(path, source_buffer.clone()).await;
 
     //state load segment
-    stream.state.store(1, Ordering::SeqCst);
+    stream.state.store(1, Ordering::Relaxed);
 }
 
 fn flush_back_buffer(stream: LiveStream) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Flushing Back Buffer");
 
-    let level = stream.level.load(Ordering::SeqCst);
-
-    let source_buffer = match stream.tracks.read() {
-        Ok(tracks) => tracks[level].source_buffer.clone(),
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
+    let source_buffer = stream.source_buffer.unwrap();
 
     let buff_start = source_buffer
         .buffered()
@@ -479,19 +507,13 @@ fn flush_back_buffer(stream: LiveStream) {
         .start(0)
         .expect("No TimeRange");
 
-    let current_time = stream.video.unwrap().current_time();
-
-    let flush_start = buff_start;
-
-    let flush_end = current_time - MEDIA_LENGTH;
-
-    if let Err(e) = source_buffer.remove(flush_start, flush_end) {
+    if let Err(e) = source_buffer.remove(buff_start, buff_start + MEDIA_LENGTH) {
         ConsoleService::error(&format!("{:?}", e));
         return;
     }
 
     //state load segment
-    stream.state.store(1, Ordering::SeqCst);
+    stream.state.store(1, Ordering::Relaxed);
 }
 
 fn ipfs_pubsub(topic: &str, buffer: Buffer, streamer_peer_id: String) {

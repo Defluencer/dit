@@ -17,11 +17,11 @@ web-sys = { version = "0.3", features = [
     "MediaSource",
     "MediaSourceReadyState",
     "SourceBuffer",
-    "SourceBufferList",
     "SourceBufferAppendMode",
     "Url",
     "HtmlMediaElement",
     "MediaError",
-    "TimeRanges"
+    "TimeRanges",
+    "Performance",
 ]}
 
