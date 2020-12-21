@@ -1,23 +1,29 @@
-use crate::agents::load_video;
+use crate::agents::VideoOnDemandManager;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-#[derive(Clone, Debug, Eq, PartialEq, Properties)]
-pub struct Video {
-    //title
+#[derive(Clone, Debug, Properties)]
+pub struct VideoData {
+    pub title: String,
 
-    //duration
+    pub duration: f64,
 
-    //thumbnail cid
     pub video_cid: String,
+    //TODO thumbnail img cid
 }
 
-impl Component for Video {
+pub struct VideoPlayer {
+    manager: VideoOnDemandManager,
+}
+
+impl Component for VideoPlayer {
     type Message = ();
-    type Properties = Self;
+    type Properties = VideoData;
 
     fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
-        props
+        Self {
+            manager: VideoOnDemandManager::new(props.video_cid, props.duration),
+        }
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
@@ -36,7 +42,7 @@ impl Component for Video {
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            load_video(self.video_cid.clone(), 90.0);
+            self.manager.link_video();
         }
     }
 }

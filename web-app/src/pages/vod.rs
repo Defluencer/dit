@@ -1,6 +1,6 @@
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 
-use crate::components::Video;
+use crate::components::VideoPlayer;
 
 pub struct VideoOnDemand {}
 
@@ -23,7 +23,7 @@ impl Component for VideoOnDemand {
     fn view(&self) -> Html {
         html! {
             <div class="vod_page">
-                <Video video_cid="bafyreibndv7uudvdpimdxgtm6dacrla7r2z6qd34c76x5bl74fv6fhu4sy" />
+                <VideoPlayer title="TEST VIDEO" duration=90.0 video_cid="bafyreibndv7uudvdpimdxgtm6dacrla7r2z6qd34c76x5bl74fv6fhu4sy" />
             </div>
         }
     }

@@ -2,9 +2,9 @@
 
 mod agents;
 mod app;
-mod bindings;
 mod components;
 mod pages;
+mod utils;
 
 fn main() {
     yew::start_app::<app::App>();
