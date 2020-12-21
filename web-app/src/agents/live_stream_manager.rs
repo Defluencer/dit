@@ -95,11 +95,12 @@ impl LiveStreamManager {
         let video: HtmlMediaElement = document
             .get_element_by_id("video")
             .expect("No element with this Id")
-            .unchecked_into();
+            .dyn_into()
+            .expect("Not Media Element");
+
+        self.stream.video = Some(video.clone());
 
         video.set_src(&self.url);
-
-        self.stream.video = Some(video);
 
         tick(self.stream.clone());
     }
