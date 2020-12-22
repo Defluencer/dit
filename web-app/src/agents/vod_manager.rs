@@ -13,8 +13,8 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url, Window};
 
 use yew::services::ConsoleService;
 
-const FORWARD_BUFFER_LENGTH: f64 = 20.0;
-const BACK_BUFFER_LENGTH: f64 = 20.0;
+const FORWARD_BUFFER_LENGTH: f64 = 16.0;
+const BACK_BUFFER_LENGTH: f64 = 8.0;
 
 const MEDIA_LENGTH: f64 = 4.0;
 const MEDIA_LENGTH_MS: f64 = 4000.0;
@@ -126,7 +126,9 @@ fn on_media_source_open(video_record: Video, media_source: &MediaSource) {
             .media_source
             .set_duration(video_record.duration);
 
-        tick(video_record.clone());
+        let future = add_source_buffer(video_record.clone());
+
+        spawn_local(future);
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
@@ -137,70 +139,83 @@ fn tick(video_record: Video) {
     let current_state = video_record.state.load(Ordering::Relaxed);
 
     match current_state {
-        0 => spawn_local(add_source_buffer(video_record)),
         1 => load_media_segment(video_record),
         2 => spawn_local(switch_quality(video_record)),
-        3 => flush_back_buffer(video_record),
+        3 => flush_buffer(video_record),
         4 => on_timeout(video_record),
+        5 => check_status(video_record),
+        6 => check_abr(video_record),
         _ => {}
     }
 }
 
-fn check_status(video_record: &Video, level: &mut usize, state: &mut usize) {
+fn check_abr(video_record: Video) {
+    let mut level = video_record.level.load(Ordering::Relaxed);
+    let mut switch_level = false;
+
     if let Some(moving_average) = video_record.ema.recalculate_average() {
         match level {
             0 => {
                 if (moving_average + 500.0) < MEDIA_LENGTH_MS {
-                    *level += 1;
-                    *state = 2;
-                    return;
+                    level += 1;
+                    switch_level = true;
                 }
             }
             1 => {
                 if moving_average > MEDIA_LENGTH_MS {
-                    *level -= 1;
-                    *state = 2;
-                    return;
+                    level -= 1;
+                    switch_level = true;
                 } else if (moving_average + 500.0) < MEDIA_LENGTH_MS {
-                    *level += 1;
-                    *state = 2;
-                    return;
+                    level += 1;
+                    switch_level = true;
                 }
             }
             2 => {
                 if moving_average > MEDIA_LENGTH_MS {
-                    *level -= 1;
-                    *state = 2;
-                    return;
+                    level -= 1;
+                    switch_level = true;
                 } else if (moving_average + 500.0) < MEDIA_LENGTH_MS {
-                    *level += 1;
-                    *state = 2;
-                    return;
+                    level += 1;
+                    switch_level = true;
                 }
             }
             3 => {
                 if moving_average > MEDIA_LENGTH_MS {
-                    *level -= 1;
-                    *state = 2;
-                    return;
+                    level -= 1;
+                    switch_level = true;
                 }
             }
-            _ => {}
+            _ => {
+                panic!("Quality level is too high");
+            }
         }
     }
 
+    if switch_level {
+        video_record.level.store(level, Ordering::Relaxed);
+        spawn_local(switch_quality(video_record));
+    } else {
+        check_status(video_record);
+    }
+}
+
+fn check_status(video_record: Video) {
+    let level = video_record.level.load(Ordering::Relaxed);
+
     let source_buffer = match video_record.tracks.read() {
         Ok(tracks) => {
-            if tracks.len() <= 0 {
+            if tracks.len() == 0 {
                 #[cfg(debug_assertions)]
                 ConsoleService::info("No Tracks");
+                on_timeout(video_record.clone());
                 return;
             }
 
-            tracks[*level].source_buffer.clone()
+            tracks[level].source_buffer.clone()
         }
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
+            on_timeout(video_record.clone());
             return;
         }
     };
@@ -210,6 +225,7 @@ fn check_status(video_record: &Video, level: &mut usize, state: &mut usize) {
         Err(_) => {
             #[cfg(debug_assertions)]
             ConsoleService::info("Not Buffered");
+            on_timeout(video_record);
             return;
         }
     };
@@ -235,11 +251,19 @@ fn check_status(video_record: &Video, level: &mut usize, state: &mut usize) {
         ));
     }
 
+    /* if buff_end - buff_start < BACK_BUFFER_LENGTH + FORWARD_BUFFER_LENGTH {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Healthy Buffer");
+        load_media_segment(video_record);
+        return;
+    } */
+
     let current_time = match video_record.media_element.as_ref() {
         Some(media_element) => media_element.current_time(),
         None => {
             #[cfg(debug_assertions)]
             ConsoleService::info("No Media Element");
+            on_timeout(video_record);
             return;
         }
     };
@@ -247,28 +271,25 @@ fn check_status(video_record: &Video, level: &mut usize, state: &mut usize) {
     if current_time > buff_start + BACK_BUFFER_LENGTH {
         #[cfg(debug_assertions)]
         ConsoleService::info("Back Buffer Full");
-        *state = 3;
-        return;
-    }
-
-    if buff_end > current_time + FORWARD_BUFFER_LENGTH {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Forward Buffer Full");
-        *state = 4;
+        flush_buffer(video_record);
         return;
     }
 
     if buff_end >= video_record.duration {
         #[cfg(debug_assertions)]
-        ConsoleService::info("End Of Stream");
-        video_record.media_source.end_of_stream().unwrap();
-        *state = 5;
+        ConsoleService::info("End Of Video");
+        on_timeout(video_record);
         return;
     }
 
-    if *state == 4 {
-        *state = 1;
+    if current_time + FORWARD_BUFFER_LENGTH < buff_end {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Forward Buffer Full");
+        on_timeout(video_record);
+        return;
     }
+
+    load_media_segment(video_record);
 }
 
 fn on_timeout(video_record: Video) {
@@ -278,14 +299,6 @@ fn on_timeout(video_record: Video) {
     let closure = move || {
         #[cfg(debug_assertions)]
         ConsoleService::info("On Timeout");
-
-        let mut current_state = video_record.state.load(Ordering::Relaxed);
-        let mut current_level = video_record.level.load(Ordering::Relaxed);
-
-        check_status(&video_record, &mut current_level, &mut current_state);
-
-        video_record.state.store(current_state, Ordering::Relaxed);
-        video_record.level.store(current_level, Ordering::Relaxed);
 
         tick(video_record.clone());
     };
@@ -304,8 +317,6 @@ fn on_timeout(video_record: Video) {
 async fn add_source_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Adding Source Buffer");
-
-    //TODO dag get to whole node the deserialize it
 
     let codecs = match ipfs_dag_get(&video_record.cid, CODEC_PATH).await {
         Ok(result) => result,
@@ -363,15 +374,6 @@ async fn add_source_buffer(video_record: Video) {
         vec.push(track);
     }
 
-    on_source_buffer_update_end(video_record.clone(), &source_buffer);
-
-    let path = format!(
-        "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
-        video_record.cid, 0
-    );
-
-    cat_and_buffer(path, source_buffer.clone()).await;
-
     match video_record.tracks.write() {
         Ok(mut tracks) => *tracks = vec,
         Err(e) => {
@@ -380,8 +382,16 @@ async fn add_source_buffer(video_record: Video) {
         }
     }
 
-    //state load segment
     video_record.state.store(1, Ordering::Relaxed);
+
+    let path = format!(
+        "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
+        video_record.cid, 0
+    );
+
+    on_source_buffer_update_end(video_record, &source_buffer);
+
+    cat_and_buffer(path, source_buffer.clone()).await;
 }
 
 fn load_media_segment(video_record: Video) {
@@ -406,6 +416,22 @@ fn load_media_segment(video_record: Video) {
         }
     }
 
+    //if buffer is empty load at current time
+    if buff_end <= 0.0 {
+        let current_time = match video_record.media_element.as_ref() {
+            Some(media_element) => media_element.current_time(),
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::info("No Media Element");
+                return;
+            }
+        };
+
+        if current_time > MEDIA_LENGTH {
+            buff_end = current_time - MEDIA_LENGTH;
+        }
+    }
+
     let (hours, minutes, seconds) = seconds_to_timecode(buff_end);
 
     #[cfg(debug_assertions)]
@@ -422,6 +448,7 @@ fn load_media_segment(video_record: Video) {
     let future = cat_and_buffer(path, source_buffer);
 
     video_record.ema.start_timer();
+    video_record.state.store(6, Ordering::Relaxed);
 
     spawn_local(future);
 }
@@ -469,9 +496,9 @@ async fn switch_quality(video_record: Video) {
     video_record.state.store(1, Ordering::Relaxed);
 }
 
-fn flush_back_buffer(video_record: Video) {
+fn flush_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
-    ConsoleService::info("Flushing Back Buffer");
+    ConsoleService::info("Flushing Buffer");
 
     let level = video_record.level.load(Ordering::Relaxed);
 
@@ -483,15 +510,47 @@ fn flush_back_buffer(video_record: Video) {
         }
     };
 
-    let mut buff_start = 0.0;
+    let time_ranges = match source_buffer.buffered() {
+        Ok(tm) => tm,
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            ConsoleService::info("Not Buffered");
+            return;
+        }
+    };
 
-    if let Ok(time_ranges) = source_buffer.buffered() {
-        if let Ok(start) = time_ranges.start(0) {
+    let count = time_ranges.length();
+
+    let mut buff_start = 0.0;
+    let mut buff_end = 0.0;
+
+    for i in 0..count {
+        if let Ok(start) = time_ranges.start(i) {
             buff_start = start;
+        }
+
+        if let Ok(end) = time_ranges.end(i) {
+            buff_end = end;
         }
     }
 
-    if let Err(e) = source_buffer.remove(buff_start, buff_start + MEDIA_LENGTH) {
+    let current_time = match video_record.media_element.as_ref() {
+        Some(media_element) => media_element.current_time(),
+        None => {
+            #[cfg(debug_assertions)]
+            ConsoleService::info("No Media Element");
+            return;
+        }
+    };
+
+    let back_buffer_start = current_time - BACK_BUFFER_LENGTH;
+
+    //full flush except if back buffer flush is possible
+    if buff_start < back_buffer_start {
+        buff_end = back_buffer_start
+    }
+
+    if let Err(e) = source_buffer.remove(buff_start, buff_end) {
         ConsoleService::error(&format!("{:?}", e));
         return;
     }
@@ -505,14 +564,6 @@ fn on_source_buffer_update_end(video_record: Video, source_buffer: &SourceBuffer
         #[cfg(debug_assertions)]
         ConsoleService::info("On Update End");
 
-        let mut current_state = video_record.state.load(Ordering::Relaxed);
-        let mut current_level = video_record.level.load(Ordering::Relaxed);
-
-        check_status(&video_record, &mut current_level, &mut current_state);
-
-        video_record.state.store(current_state, Ordering::Relaxed);
-        video_record.level.store(current_level, Ordering::Relaxed);
-
         tick(video_record.clone());
     };
 
@@ -525,12 +576,7 @@ fn on_video_seeking(video_record: Video, media_element: &HtmlMediaElement) {
         #[cfg(debug_assertions)]
         ConsoleService::info("On Seeking");
 
-        //TODO if seek time is not in buffer
-        //then flush everything then load segment
-
-        //if current_time < buff_start || current_time > buff_end {}
-
-        //set state to check_status don't tick and always timeout
+        video_record.state.store(3, Ordering::Relaxed);
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
