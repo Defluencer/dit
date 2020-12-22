@@ -9,22 +9,15 @@
     },
     "tracks": {
         "1080p60": {
+            "level": 3,
             "codec": "insert codec",
             "bandwidth": 12345
         },
         "720p60": {
+            "level": 2,
             "codec": "insert codec",
             "bandwidth": 12345
         }
     },
-    "segment_duration": 4,
-    "blacklist": {
-        "/": "addCIDhere"
-    },
-    "whitelist": {
-        "/": "addCIDhere"
-    },
-    "mods": {
-        "/": "addCIDhere"
-    }
+    "segment_duration": 4
 }
