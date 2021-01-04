@@ -29,6 +29,8 @@ const MEDIA_LENGTH: f64 = 4.0;
 
 type Buffer = Arc<RwLock<VecDeque<Cid>>>;
 
+//TODO add types common to live and vod then deduplicate fonctions.
+
 #[derive(Clone)]
 struct LiveStream {
     window: Window,
@@ -55,6 +57,7 @@ pub struct LiveStreamManager {
 }
 
 impl LiveStreamManager {
+    /// Ready Live Stream to link with video element.
     pub fn new(topic: String, streamer_peer_id: String) -> Self {
         let buffer = Arc::new(RwLock::new(VecDeque::with_capacity(5)));
 
@@ -89,6 +92,7 @@ impl LiveStreamManager {
         Self { stream, topic, url }
     }
 
+    /// Get video element and set source.
     pub fn link_video(&mut self) {
         let document = self.stream.window.document().expect("Can't get document");
 
@@ -121,6 +125,7 @@ impl Drop for LiveStreamManager {
     }
 }
 
+/// Update state machine.
 fn tick(stream: LiveStream) {
     if stream.media_source.ready_state() != MediaSourceReadyState::Open {
         #[cfg(debug_assertions)]
@@ -142,6 +147,7 @@ fn tick(stream: LiveStream) {
     }
 }
 
+/// Wait 1 second then check status again.
 fn on_timeout(stream: LiveStream) {
     let window = stream.window.clone();
     let hanlde = stream.handle.clone();
@@ -164,6 +170,7 @@ fn on_timeout(stream: LiveStream) {
     }
 }
 
+/// Get setup infos, create source buffer then load initialization segment.
 async fn add_source_buffer(stream: LiveStream) {
     let cid = match stream.buffer.read() {
         Ok(buf) => match buf.front() {
@@ -257,6 +264,7 @@ async fn add_source_buffer(stream: LiveStream) {
     stream.state.store(1, Ordering::Relaxed);
 }
 
+/// Get CID from buffer then fetch data from ipfs
 fn load_media_segment(stream: LiveStream) {
     let cid = match stream.buffer.write() {
         Ok(mut buf) => match buf.pop_front() {
@@ -298,6 +306,7 @@ fn load_media_segment(stream: LiveStream) {
     spawn_local(future);
 }
 
+/// Switch source buffer codec then load initialization segment.
 async fn switch_quality(stream: LiveStream) {
     let cid = match stream.buffer.read() {
         Ok(buf) => match buf.front() {
@@ -353,6 +362,7 @@ async fn switch_quality(stream: LiveStream) {
     stream.state.store(1, Ordering::Relaxed);
 }
 
+/// Flush last media segment.
 fn flush_back_buffer(stream: LiveStream) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Flushing Back Buffer");
@@ -479,6 +489,7 @@ fn on_source_buffer_update_end(stream: LiveStream, source_buffer: &SourceBuffer)
     source_buffer.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
 }
 
+/// Process Pubsub message.
 fn ipfs_pubsub(topic: &str, buffer: Buffer, streamer_peer_id: String) {
     let closure = move |from: String, data: Vec<u8>| {
         #[cfg(debug_assertions)]
@@ -509,6 +520,7 @@ fn ipfs_pubsub(topic: &str, buffer: Buffer, streamer_peer_id: String) {
     ipfs_subscribe(topic.into(), callback.into_js_value().unchecked_ref());
 }
 
+/// Decode vector of byte into CID
 fn decode_cid(data: Vec<u8>) -> Option<Cid> {
     let data_utf8 = match String::from_utf8(data) {
         Ok(string) => string,

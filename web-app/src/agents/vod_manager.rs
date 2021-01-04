@@ -22,6 +22,8 @@ const MEDIA_LENGTH_MS: f64 = 4000.0;
 const CODEC_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/codec";
 const QUALITY_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/quality";
 
+//TODO add types common to live and vod then deduplicate fonctions.
+
 #[derive(Clone)]
 struct Video {
     cid: String,
@@ -47,6 +49,7 @@ pub struct VideoOnDemandManager {
 }
 
 impl VideoOnDemandManager {
+    /// Ready VOD to link with video element.
     pub fn new(cid: String, duration: f64) -> Self {
         let window = web_sys::window().expect("Can't get window");
 
@@ -77,6 +80,7 @@ impl VideoOnDemandManager {
         Self { video_record, url }
     }
 
+    /// Get video element, register callbacks and set source.
     pub fn link_video(&mut self) {
         let document = self
             .video_record
@@ -115,6 +119,7 @@ impl Drop for VideoOnDemandManager {
     }
 }
 
+/// Callback when MediaSource is linked to video element.
 fn on_media_source_open(video_record: Video, media_source: &MediaSource) {
     let closure = move || {
         #[cfg(debug_assertions)]
@@ -135,6 +140,7 @@ fn on_media_source_open(video_record: Video, media_source: &MediaSource) {
     media_source.set_onsourceopen(Some(callback.into_js_value().unchecked_ref()));
 }
 
+/// Update state machine.
 fn tick(video_record: Video) {
     let current_state = video_record.state.load(Ordering::Relaxed);
 
@@ -149,6 +155,7 @@ fn tick(video_record: Video) {
     }
 }
 
+/// Recalculate download speed EMA then set quality level.
 fn check_abr(video_record: Video) {
     let mut level = video_record.level.load(Ordering::Relaxed);
     let mut switch_level = false;
@@ -199,6 +206,7 @@ fn check_abr(video_record: Video) {
     }
 }
 
+/// Check buffers and current time then trigger new action.
 fn check_status(video_record: Video) {
     let level = video_record.level.load(Ordering::Relaxed);
 
@@ -251,13 +259,6 @@ fn check_status(video_record: Video) {
         ));
     }
 
-    /* if buff_end - buff_start < BACK_BUFFER_LENGTH + FORWARD_BUFFER_LENGTH {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Healthy Buffer");
-        load_media_segment(video_record);
-        return;
-    } */
-
     let current_time = match video_record.media_element.as_ref() {
         Some(media_element) => media_element.current_time(),
         None => {
@@ -292,6 +293,7 @@ fn check_status(video_record: Video) {
     load_media_segment(video_record);
 }
 
+/// Wait 1 second then update state machine.
 fn on_timeout(video_record: Video) {
     let window = video_record.window.clone();
     let hanlde = video_record.handle.clone();
@@ -314,6 +316,7 @@ fn on_timeout(video_record: Video) {
     }
 }
 
+/// Get setup infos, create source buffer then load initialization segment.
 async fn add_source_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Adding Source Buffer");
@@ -394,6 +397,7 @@ async fn add_source_buffer(video_record: Video) {
     cat_and_buffer(path, source_buffer.clone()).await;
 }
 
+/// Get CID from timecode then fetch video data from ipfs
 fn load_media_segment(video_record: Video) {
     let level = video_record.level.load(Ordering::Relaxed);
 
@@ -453,6 +457,7 @@ fn load_media_segment(video_record: Video) {
     spawn_local(future);
 }
 
+/// Switch source buffer codec then load initialization segment.
 async fn switch_quality(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Switching Quality");
@@ -496,6 +501,7 @@ async fn switch_quality(video_record: Video) {
     video_record.state.store(1, Ordering::Relaxed);
 }
 
+/// Flush everything or just back buffer.
 fn flush_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Flushing Buffer");
@@ -559,6 +565,7 @@ fn flush_buffer(video_record: Video) {
     video_record.state.store(1, Ordering::Relaxed);
 }
 
+/// Callback when source buffer is done updating.
 fn on_source_buffer_update_end(video_record: Video, source_buffer: &SourceBuffer) {
     let closure = move || {
         #[cfg(debug_assertions)]
@@ -571,6 +578,7 @@ fn on_source_buffer_update_end(video_record: Video, source_buffer: &SourceBuffer
     source_buffer.set_onupdateend(Some(callback.into_js_value().unchecked_ref()));
 }
 
+/// Callback when video element has seeked.
 fn on_video_seeking(video_record: Video, media_element: &HtmlMediaElement) {
     let closure = move || {
         #[cfg(debug_assertions)]
@@ -583,6 +591,7 @@ fn on_video_seeking(video_record: Video, media_element: &HtmlMediaElement) {
     media_element.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
 }
 
+/// Translate total number of seconds to timecode.
 fn seconds_to_timecode(seconds: f64) -> (u8, u8, u8) {
     let rem_seconds = seconds.round();
 

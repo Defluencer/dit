@@ -13,4 +13,3 @@
 - Stop your broadcast software.
 - Wait 15 seconds for streamer-app to catch up.
 - Press Ctrl-c in streamer-app to save the stream locally (video & chat).
-- Upload to Filecoin using final stream CID.

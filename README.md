@@ -1,5 +1,5 @@
 # Live-Like
-The project aim to decentralize content creation by providing video live streaming, live chat, video on demand, forum, etc... Anyone can now build a home or a business on the decentralized web. True ownership means that you have responsibilities but also freedom.
+The project aim to decentralize content creation by providing video live streaming, live chat, video on demand, forum, etc... Build a home or a business on the decentralized web! True ownership means that you have responsabilities but also freedom.
 
 ## Project Status
 - Live Streaming: Mostly working.
