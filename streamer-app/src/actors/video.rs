@@ -34,7 +34,7 @@ pub struct VideoNode {
     pub previous: Option<IPLDLink>,
 }
 
-/// Codecs, qualities & initialization segments. Order matters!
+/// Codecs, qualities & initialization segments from lowest to highest quality.
 #[derive(Serialize, Debug)]
 pub struct SetupNode {
     // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/quality

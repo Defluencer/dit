@@ -9,10 +9,12 @@ impl Component for VideoOnDemand {
     type Properties = ();
 
     fn create(_props: Self::Properties, _: ComponentLink<Self>) -> Self {
+        //TODO ask for latest cid of video list via gossipsub
         Self {}
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
+        //TODO ipfs dag get the video list then get the first couple videos
         false
     }
 
