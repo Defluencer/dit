@@ -1,12 +1,13 @@
+#![allow(unused_must_use)]
+
 mod actors;
 mod config;
 mod dag_nodes;
 mod server;
 
 use crate::actors::{start_transcoding, Archivist, ChatAggregator, VideoAggregator};
+use crate::config::Config;
 use crate::server::start_server;
-
-use std::net::SocketAddr;
 
 use tokio::sync::mpsc::channel;
 
@@ -18,63 +19,58 @@ async fn main() {
 
     let ipfs = IpfsClient::default();
 
-    let config = config::get_config(&ipfs).await;
+    let config = Config::default();
 
     let (archive_tx, archive_rx) = channel(25);
-    let mut archivist = Archivist::new(ipfs.clone(), archive_rx, config.video_segment_duration);
+    let mut archivist = Archivist::new(ipfs.clone(), archive_rx, config.segment_duration);
+    let archive_handle = tokio::spawn(async move {
+        archivist.collect().await;
+    });
 
-    let (video_tx, video_rx) = channel(config.variants);
+    let (video_tx, video_rx) = channel(config.tracks.len());
     let mut video = VideoAggregator::new(
         ipfs.clone(),
         video_rx,
         archive_tx.clone(),
         config.gossipsub_topics.video,
-        config.variants,
+        config.tracks,
     );
+    let video_handle = tokio::spawn(async move {
+        video.start_receiving().await;
+    });
 
     let mut chat = ChatAggregator::new(
         ipfs.clone(),
         archive_tx.clone(),
         config.gossipsub_topics.chat,
     );
+    let chat_handle = tokio::spawn(async move {
+        chat.start_receiving().await;
+    });
 
-    let server_addr = config
-        .streamer_app
-        .socket_addr
-        .parse::<SocketAddr>()
-        .expect("Parsing socket address failed");
+    let server_addr = config.addresses.app_addr.clone();
+    let server_addr_clone = config.addresses.app_addr.clone();
 
-    match config.streamer_app.ffmpeg {
-        Some(ffmpeg) => {
+    let server_handle = tokio::spawn(async move {
+        start_server(server_addr, video_tx, archive_tx).await;
+    });
+
+    match config.addresses.ffmpeg_addr {
+        Some(ffmpeg_addr) => {
+            let ffmpeg_handle = tokio::spawn(async move {
+                start_transcoding(ffmpeg_addr, server_addr_clone).await;
+            });
+
             tokio::join!(
-                archivist.collect(),
-                chat.aggregate(),
-                video.aggregate(),
-                start_server(server_addr, video_tx, archive_tx),
-                start_transcoding(ffmpeg.socket_addr, config.streamer_app.socket_addr),
+                archive_handle,
+                chat_handle,
+                video_handle,
+                ffmpeg_handle,
+                server_handle
             );
         }
         None => {
-            tokio::join!(
-                archivist.collect(),
-                chat.aggregate(),
-                video.aggregate(),
-                start_server(server_addr, video_tx, archive_tx),
-            );
+            tokio::join!(archive_handle, chat_handle, video_handle, server_handle);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn get_config_test() {
-        let ipfs = IpfsClient::default();
-
-        let config = crate::config::get_config(&ipfs).await;
-
-        assert_eq!(config.variants, 4);
     }
 }

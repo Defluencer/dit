@@ -1,11 +1,11 @@
-# Live-Like
-The project aim to decentralize content creation by providing video live streaming, live chat, video on demand, forum, etc... Anyone can now build a home or a business on the decentralized web. True ownership means that you have responsibilities but also freedom.
+# Decentralized Influencer Toolkit
+The project aim is to provide decentralized live and on demand video streaming with chat. Build a home or a business on the decentralized web! With true ownership comes responsabilities but also freedom.
 
 ## Project Status
 - Live Streaming: Mostly working.
-- VOD: Can save stream as timecode adressable video. Can't view yet.
-- Live Chat: Can send and receive messages. No identity yet.
-- Moderation: In Design.
+- VOD: Saved stream only.
+- Live Chat: In progress.
+- Moderation: In design.
 - Community: Some thoughts.
 - Ecosystem: Wild dreams!
 
@@ -23,7 +23,3 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
-
-## Financial Support
-- https://gitcoin.co/grants/1084/live-like
-- Bitcoin & Ether -> sionois.eth

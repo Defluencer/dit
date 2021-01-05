@@ -1,4 +1,4 @@
-use crate::actors::Archive;
+use crate::actors::{Archive, VideoData};
 use crate::server::services::put_requests;
 
 use std::future::Future;
@@ -9,14 +9,13 @@ use std::task::{Context, Poll};
 use tokio::signal::ctrl_c;
 use tokio::sync::mpsc::Sender;
 
-use hyper::body::Bytes;
 use hyper::service::Service;
 use hyper::{Body, Error, Request, Response, Server};
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
 struct LiveLikeService {
-    collector: Sender<(String, Bytes)>,
+    collector: Sender<VideoData>,
 }
 
 impl Service<Request<Body>> for LiveLikeService {
@@ -34,11 +33,11 @@ impl Service<Request<Body>> for LiveLikeService {
 }
 
 struct MakeLiveLikeService {
-    collector: Sender<(String, Bytes)>,
+    collector: Sender<VideoData>,
 }
 
 impl MakeLiveLikeService {
-    fn new(collector: Sender<(String, Bytes)>) -> Self {
+    fn new(collector: Sender<VideoData>) -> Self {
         Self { collector }
     }
 }
@@ -74,10 +73,14 @@ async fn shutdown_signal(mut archive_tx: Sender<Archive>) {
 }
 
 pub async fn start_server(
-    server_addr: SocketAddr,
-    collector: Sender<(String, Bytes)>,
+    server_addr: String,
+    collector: Sender<VideoData>,
     archive_tx: Sender<Archive>,
 ) {
+    let server_addr = server_addr
+        .parse::<SocketAddr>()
+        .expect("Parsing socket address failed");
+
     let service = MakeLiveLikeService::new(collector.clone());
 
     let server = Server::bind(&server_addr).serve(service);

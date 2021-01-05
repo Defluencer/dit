@@ -5,13 +5,15 @@
             Set to something unique to you.
         - chat
             Set to something unique to you.
-    - streamer_app
-        - socket_addr
+    - addresses
+        - app_addr
             Streamer app video ingest address.
-        - ffmpeg
-            - socket_addr
-                Transcoding ingest address.
-    - variants
-        Number of video quality variants.
-    - video_segment_duration
+        - ffmpeg_addr
+            Transcoding ingest address.
+    - tracks
+        Quality name.
+        Level.
+        Codec.
+        Bandwidth.
+    - segment_duration
         Number of seconds for each video segment.

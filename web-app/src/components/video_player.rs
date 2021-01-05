@@ -1,25 +1,28 @@
-use crate::agents::LiveStreamManager;
+use crate::agents::VideoOnDemandManager;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 #[derive(Clone, Debug, Properties)]
-pub struct LiveStreamData {
-    pub topic: String,
+pub struct VideoData {
+    pub title: String,
 
-    pub streamer_peer_id: String,
+    pub duration: f64,
+
+    pub video_cid: String,
+    //TODO thumbnail img cid
 }
 
-pub struct LiveStreamPlayer {
-    pub stream: LiveStreamManager,
+pub struct VideoPlayer {
+    manager: VideoOnDemandManager,
 }
 
-impl Component for LiveStreamPlayer {
+impl Component for VideoPlayer {
     type Message = ();
-    type Properties = LiveStreamData;
+    type Properties = VideoData;
 
     fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
         Self {
-            stream: LiveStreamManager::new(props.topic, props.streamer_peer_id),
+            manager: VideoOnDemandManager::new(props.video_cid, props.duration),
         }
     }
 
@@ -33,13 +36,13 @@ impl Component for LiveStreamPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video id="video" autoplay=true controls=true muted=true poster="../live_like_poster.png" />
+            <video id="video" controls=true poster="../live_like_poster.png" />
         }
     }
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            self.stream.link_video();
+            self.manager.link_video();
         }
     }
 }

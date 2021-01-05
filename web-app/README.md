@@ -1,10 +1,11 @@
 ## Web Setup
 - Customize Web-app.
 - Compile with trunk build --release.
-- IPFS add & pin the www folder.
+- Add and Pin the www folder to IPFS using web UI or this command: ipfs add --recursive --cid-version=1 www
 - Upload CID to ENS or other DNS.
+- Upload to Pinata Cloud, Temporal and/or host it yourself.
 
 ## Viewers
-- Start IPFS with PUBSUB enabled.
-- Set IPFS CORS to allow website.
-- Open website.
+- Use IPFS enabled browser. (Only Brave Nighly for now)
+- Navigate to domain.
+- Enjoy!

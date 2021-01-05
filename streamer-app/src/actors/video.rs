@@ -1,5 +1,6 @@
 use crate::actors::archivist::Archive;
-use crate::dag_nodes::IPLDLink;
+use crate::config::Track;
+use crate::dag_nodes::{ipfs_dag_put_node_async, IPLDLink};
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -20,10 +21,38 @@ use cid::Cid;
 /// Links all variants, allowing selection of video quality. Also link to the previous video node.
 #[derive(Serialize, Debug)]
 pub struct VideoNode {
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
     #[serde(rename = "quality")]
-    pub qualities: HashMap<String, IPLDLink>, // <StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
+    pub qualities: HashMap<String, IPLDLink>,
 
-    pub previous: Option<IPLDLink>, // <StreamHash>/time/hour/0/minute/36/second/12/video/previous/..
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/..
+    #[serde(rename = "setup")]
+    pub setup: IPLDLink,
+
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/previous/..
+    #[serde(rename = "previous")]
+    pub previous: Option<IPLDLink>,
+}
+
+/// Codecs, qualities & initialization segments from lowest to highest quality.
+#[derive(Serialize, Debug)]
+pub struct SetupNode {
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/quality
+    #[serde(rename = "quality")]
+    qualities: Vec<String>,
+
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/codec
+    #[serde(rename = "codec")]
+    codecs: Vec<String>,
+
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/initseg/0/..
+    #[serde(rename = "initseg")]
+    initialization_segments: Vec<IPLDLink>,
+}
+
+pub enum VideoData {
+    Initialization(String, Bytes),
+    Media(String, Bytes),
 }
 
 pub struct VideoAggregator {
@@ -31,22 +60,23 @@ pub struct VideoAggregator {
 
     archive_tx: Sender<Archive>,
 
-    video_rx: Receiver<(String, Bytes)>,
+    video_rx: Receiver<VideoData>,
 
     gossipsub_topic: String,
 
+    setup_node: SetupNode,
     video_node: VideoNode,
 
-    qualities: usize,
+    tracks: HashMap<String, Track>,
 }
 
 impl VideoAggregator {
     pub fn new(
         ipfs: IpfsClient,
-        video_rx: Receiver<(String, Bytes)>,
+        video_rx: Receiver<VideoData>,
         archive_tx: Sender<Archive>,
         gossipsub_topic: String,
-        variants: usize,
+        tracks: HashMap<String, Track>,
     ) -> Self {
         Self {
             ipfs,
@@ -56,55 +86,124 @@ impl VideoAggregator {
 
             gossipsub_topic,
 
-            video_node: VideoNode {
-                qualities: HashMap::with_capacity(variants),
+            setup_node: SetupNode {
+                codecs: Vec::with_capacity(tracks.len()),
+                qualities: Vec::with_capacity(tracks.len()),
+                initialization_segments: Vec::with_capacity(tracks.len()),
+            },
 
+            video_node: VideoNode {
+                qualities: HashMap::with_capacity(tracks.len()),
+                setup: IPLDLink::default(),
                 previous: None,
             },
 
-            qualities: variants,
+            tracks,
         }
     }
 
-    pub async fn aggregate(&mut self) {
-        println!("Video Online...");
+    pub async fn start_receiving(&mut self) {
+        println!("Video System Online");
 
-        while let Some((variant, data)) = self.video_rx.recv().await {
-            let video_segment_cid = match self.add_video(data).await {
-                Ok(cid) => cid,
-                Err(e) => {
-                    eprintln!("add_video failed {}", e);
-                    continue;
-                }
-            };
-
-            if !self.add_variant(variant, video_segment_cid) {
-                continue;
+        while let Some(msg) = self.video_rx.recv().await {
+            match msg {
+                VideoData::Initialization(quality, bytes) => self.init_seg(&quality, bytes).await,
+                VideoData::Media(quality, bytes) => self.media_seg(&quality, bytes).await,
             }
-
-            let video_node_cid = match self.collect_variants().await {
-                Ok(res) => res,
-                Err(e) => {
-                    self.video_node.qualities.clear(); //reset the node
-
-                    eprintln!("collect_variants failed {}", e);
-
-                    continue;
-                }
-            };
-
-            let msg = Archive::Video(video_node_cid.clone());
-
-            if let Err(error) = self.archive_tx.send(msg).await {
-                eprintln!("Archive receiver hung up {}", error);
-            }
-
-            self.publish(video_node_cid).await;
         }
+    }
+
+    /// Process initialization segments.
+    async fn init_seg(&mut self, quality: &str, data: Bytes) {
+        //Panic on error because stream can't go on without setup node.
+
+        let segment_cid = self
+            .ipfs_add_async(data)
+            .await
+            .expect("SetupNode IPFS add failed");
+
+        if !self.add_track(quality, segment_cid) {
+            return;
+        }
+
+        self.sort_by_level();
+
+        let setup_node_cid = ipfs_dag_put_node_async(&self.ipfs, &self.setup_node)
+            .await
+            .expect("SetupNode IPFS dag put failed");
+
+        self.video_node.setup = IPLDLink {
+            link: setup_node_cid,
+        };
+    }
+
+    /// Add track info to setup node. Return true if all init are present
+    fn add_track(&mut self, quality: &str, cid: Cid) -> bool {
+        self.setup_node.qualities.push(quality.into());
+
+        let codec = self.tracks[quality].codec.clone();
+        self.setup_node.codecs.push(codec);
+
+        let link = IPLDLink { link: cid };
+        self.setup_node.initialization_segments.push(link);
+
+        self.setup_node.initialization_segments.len() >= self.tracks.len()
+    }
+
+    /// Sort setup node vectors by track level.
+    fn sort_by_level(&mut self) {
+        for i in 0..self.tracks.len() {
+            loop {
+                let level = self.tracks[&self.setup_node.qualities[i]].level;
+
+                if i == level {
+                    break;
+                }
+
+                self.setup_node.qualities.swap(i, level);
+                self.setup_node.codecs.swap(i, level);
+                self.setup_node.initialization_segments.swap(i, level);
+            }
+        }
+    }
+
+    /// Process media segments.
+    async fn media_seg(&mut self, quality: &str, data: Bytes) {
+        let video_segment_cid = match self.ipfs_add_async(data).await {
+            Ok(cid) => cid,
+            Err(e) => {
+                eprintln!("IPFS add failed {}", e);
+                return;
+            }
+        };
+
+        if !self.add_variant(quality, video_segment_cid) {
+            return;
+        }
+
+        let video_node_cid = match ipfs_dag_put_node_async(&self.ipfs, &self.video_node).await {
+            Ok(res) => res,
+            Err(e) => {
+                self.video_node.qualities.clear(); // re-set on error
+
+                eprintln!("IPFS dag put failed {}", e);
+                return;
+            }
+        };
+
+        self.video_node.qualities.clear();
+
+        let msg = Archive::Video(video_node_cid);
+
+        if let Err(error) = self.archive_tx.send(msg).await {
+            eprintln!("Archive receiver hung up! Error: {}", error);
+        }
+
+        self.publish(video_node_cid).await;
     }
 
     /// Add video data to IPFS. Return a CID.
-    async fn add_video(&mut self, data: Bytes) -> Result<Cid, Error> {
+    async fn ipfs_add_async(&mut self, data: Bytes) -> Result<Cid, Error> {
         let add = ipfs_api::request::Add {
             trickle: None,
             only_hash: None,
@@ -120,7 +219,7 @@ impl VideoAggregator {
 
         let response = self.ipfs.add_with_options(Cursor::new(data), add).await?;
 
-        let cid = Cid::try_from(response.hash).expect("add_video failed");
+        let cid = Cid::try_from(response.hash).expect("Invalid Cid");
 
         #[cfg(debug_assertions)]
         println!("IPFS added => {}", &cid);
@@ -128,31 +227,13 @@ impl VideoAggregator {
         Ok(cid)
     }
 
-    /// Add CID to stream variants dag node. Return true if all stream variants were added.
-    fn add_variant(&mut self, variant: String, cid: Cid) -> bool {
+    /// Add CID to video dag node. Return true if all variants were added.
+    fn add_variant(&mut self, quality: &str, cid: Cid) -> bool {
         let link = IPLDLink { link: cid };
 
-        self.video_node.qualities.insert(variant, link);
+        self.video_node.qualities.insert(quality.to_string(), link);
 
-        self.video_node.qualities.len() >= self.qualities
-    }
-
-    /// Add stream variants dag node to IPFS. Return a CID.
-    async fn collect_variants(&mut self) -> Result<Cid, Error> {
-        let node = &self.video_node;
-
-        #[cfg(debug_assertions)]
-        println!("{}", serde_json::to_string_pretty(node).unwrap());
-
-        let json_string = serde_json::to_string(node).expect("collect_variants failed");
-
-        let response = self.ipfs.dag_put(Cursor::new(json_string)).await?;
-
-        let cid = Cid::try_from(response.cid.cid_string).expect("collect_variants failed");
-
-        self.video_node.qualities.clear();
-
-        Ok(cid)
+        self.video_node.qualities.len() >= self.tracks.len()
     }
 
     /// Publish video node CID to configured topic using GossipSub.

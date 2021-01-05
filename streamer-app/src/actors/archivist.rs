@@ -1,5 +1,5 @@
 use crate::actors::chat::ChatMessage;
-use crate::dag_nodes::IPLDLink;
+use crate::dag_nodes::{ipfs_dag_put_node_async, IPLDLink};
 
 use std::collections::VecDeque;
 use std::convert::TryFrom;
@@ -69,16 +69,12 @@ pub struct Archivist {
     hour_node: HourNode,
     day_node: DayNode,
 
-    video_segment_duration: usize,
+    segment_duration: usize,
 }
 
 impl Archivist {
-    pub fn new(
-        ipfs: IpfsClient,
-        archive_rx: Receiver<Archive>,
-        video_segment_duration: usize,
-    ) -> Self {
-        let buffer_cap = 120 / video_segment_duration;
+    pub fn new(ipfs: IpfsClient, archive_rx: Receiver<Archive>, segment_duration: usize) -> Self {
+        let buffer_cap = 60 / segment_duration; // 1 minutes
 
         Self {
             ipfs,
@@ -86,7 +82,7 @@ impl Archivist {
             archive_rx,
 
             buffer_cap,
-            video_chat_buffer: VecDeque::with_capacity(buffer_cap), //120 == 2 minutes
+            video_chat_buffer: VecDeque::with_capacity(buffer_cap),
 
             minute_node: MinuteNode {
                 links_to_seconds: Vec::with_capacity(60),
@@ -100,12 +96,12 @@ impl Archivist {
                 links_to_hours: Vec::with_capacity(24),
             },
 
-            video_segment_duration,
+            segment_duration,
         }
     }
 
     pub async fn collect(&mut self) {
-        println!("Archive Online...");
+        println!("Archive System Online");
 
         while let Some(event) = self.archive_rx.recv().await {
             match event {
@@ -175,17 +171,10 @@ impl Archivist {
     /// Create DAG node containing a link to video segment and all chat messages.
     /// MinuteNode is then appended with the CID.
     async fn collect_second(&mut self) {
-        let second_node = self.video_chat_buffer.pop_front().unwrap();
+        let node = self.video_chat_buffer.pop_front().unwrap();
 
-        #[cfg(debug_assertions)]
-        println!("{}", serde_json::to_string_pretty(&second_node).unwrap());
-
-        let json_string = serde_json::to_string(&second_node).expect("Can't serialize second node");
-
-        let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-            Ok(response) => {
-                Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed")
-            }
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, &node).await {
+            Ok(cid) => cid,
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
                 return;
@@ -195,24 +184,17 @@ impl Archivist {
         let link = IPLDLink { link: cid };
 
         //since duration > 1 sec
-        for _ in 0..self.video_segment_duration {
+        for _ in 0..self.segment_duration {
             self.minute_node.links_to_seconds.push(link.clone());
         }
+
+        //self.minute_node.links_to_seconds.push(link);
     }
 
     /// Create DAG node containing 60 SecondNode links. HourNode is then appended with the CID.
     async fn collect_minute(&mut self) {
-        let node = &self.minute_node;
-
-        #[cfg(debug_assertions)]
-        println!("{}", serde_json::to_string_pretty(node).unwrap());
-
-        let json_string = serde_json::to_string(node).expect("Can't serialize seconds node");
-
-        let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-            Ok(response) => {
-                Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed")
-            }
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.minute_node).await {
+            Ok(cid) => cid,
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
                 return;
@@ -228,17 +210,8 @@ impl Archivist {
 
     /// Create DAG node containing 60 MinuteNode links. DayNode is then appended with the CID.
     async fn collect_hour(&mut self) {
-        let node = &self.hour_node;
-
-        #[cfg(debug_assertions)]
-        println!("{}", serde_json::to_string_pretty(node).unwrap());
-
-        let json_string = serde_json::to_string(node).expect("Can't serialize minutes node");
-
-        let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-            Ok(response) => {
-                Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed")
-            }
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.hour_node).await {
+            Ok(cid) => cid,
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
                 return;
@@ -258,6 +231,14 @@ impl Archivist {
 
         while !self.video_chat_buffer.is_empty() {
             self.collect_second().await;
+
+            if self.minute_node.links_to_seconds.len() >= 60 {
+                self.collect_minute().await;
+            }
+
+            if self.hour_node.links_to_minutes.len() >= 60 {
+                self.collect_hour().await;
+            }
         }
 
         if !self.minute_node.links_to_seconds.is_empty() {
@@ -268,17 +249,8 @@ impl Archivist {
             self.collect_hour().await;
         }
 
-        let node = &self.day_node;
-
-        #[cfg(debug_assertions)]
-        println!("{}", serde_json::to_string_pretty(node).unwrap());
-
-        let json_string = serde_json::to_string(node).expect("Can't serialize day node");
-
-        let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-            Ok(response) => {
-                Cid::try_from(response.cid.cid_string).expect("CID from dag put response failed")
-            }
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.day_node).await {
+            Ok(cid) => cid,
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
                 return;
@@ -289,21 +261,16 @@ impl Archivist {
             timecode: IPLDLink { link: cid },
         };
 
-        #[cfg(debug_assertions)]
-        println!("{}", serde_json::to_string_pretty(&stream).unwrap());
-
-        let json_string = serde_json::to_string(&stream).expect("Can't serialize stream node");
-
-        let stream_cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-            Ok(response) => response.cid.cid_string,
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, &stream).await {
+            Ok(cid) => cid,
             Err(e) => {
                 eprintln!("IPFS dag put failed {}", e);
                 return;
             }
         };
 
-        match self.ipfs.pin_add(&stream_cid, true).await {
-            Ok(_) => println!("Stream CID => {}", &stream_cid),
+        match self.ipfs.pin_add(&cid.to_string(), true).await {
+            Ok(_) => println!("Stream CID => {}", &cid.to_string()),
             Err(e) => eprintln!("IPFS pin add failed {}", e),
         }
     }
