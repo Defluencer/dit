@@ -6,12 +6,13 @@ mod dag_nodes;
 mod server;
 
 use crate::actors::{start_transcoding, Archivist, ChatAggregator, VideoAggregator};
-use crate::config::Config;
 use crate::server::start_server;
 
 use tokio::sync::mpsc::channel;
 
 use ipfs_api::IpfsClient;
+
+use linked_data::config::Config;
 
 #[tokio::main]
 async fn main() {

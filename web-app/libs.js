@@ -12,8 +12,8 @@ export async function unsubscribe(topic) {
     await ipfs.pubsub.unsubscribe(topic)
 }
 
-export async function dagGet(cid, path) {
-    const result = await ipfs.dag.get(cid, { path })
+export async function dagGet(cid) {
+    const result = await ipfs.dag.get(cid)
 
     return result.value
 }

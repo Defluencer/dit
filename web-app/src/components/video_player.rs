@@ -2,27 +2,24 @@ use crate::agents::VideoOnDemandManager;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-#[derive(Clone, Debug, Properties)]
-pub struct VideoData {
-    pub title: String,
-
-    pub duration: f64,
-
-    pub video_cid: String,
-    //TODO thumbnail img cid
-}
+use linked_data::beacon::VideoMetaData;
 
 pub struct VideoPlayer {
     manager: VideoOnDemandManager,
 }
 
+#[derive(Clone, Properties)]
+pub struct Props {
+    pub metadata: VideoMetaData,
+}
+
 impl Component for VideoPlayer {
     type Message = ();
-    type Properties = VideoData;
+    type Properties = Props;
 
     fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
         Self {
-            manager: VideoOnDemandManager::new(props.video_cid, props.duration),
+            manager: VideoOnDemandManager::new(props.metadata),
         }
     }
 
@@ -36,7 +33,7 @@ impl Component for VideoPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video id="video" controls=true poster="../live_like_poster.png" />
+            <video id="video" controls=true />
         }
     }
 

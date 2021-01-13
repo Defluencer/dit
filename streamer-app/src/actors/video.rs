@@ -1,6 +1,5 @@
 use crate::actors::archivist::Archive;
-use crate::config::Track;
-use crate::dag_nodes::{ipfs_dag_put_node_async, IPLDLink};
+use crate::dag_nodes::ipfs_dag_put_node_async;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -14,41 +13,11 @@ use hyper::body::Bytes;
 use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
 
-use serde::Serialize;
+use linked_data::config::Track;
+use linked_data::video::{SetupNode, VideoNode};
+use linked_data::IPLDLink;
 
 use cid::Cid;
-
-/// Links all variants, allowing selection of video quality. Also link to the previous video node.
-#[derive(Serialize, Debug)]
-pub struct VideoNode {
-    // <StreamHash>/time/hour/0/minute/36/second/12/video/quality/1080p60/..
-    #[serde(rename = "quality")]
-    pub qualities: HashMap<String, IPLDLink>,
-
-    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/..
-    #[serde(rename = "setup")]
-    pub setup: IPLDLink,
-
-    // <StreamHash>/time/hour/0/minute/36/second/12/video/previous/..
-    #[serde(rename = "previous")]
-    pub previous: Option<IPLDLink>,
-}
-
-/// Codecs, qualities & initialization segments from lowest to highest quality.
-#[derive(Serialize, Debug)]
-pub struct SetupNode {
-    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/quality
-    #[serde(rename = "quality")]
-    qualities: Vec<String>,
-
-    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/codec
-    #[serde(rename = "codec")]
-    codecs: Vec<String>,
-
-    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/initseg/0/..
-    #[serde(rename = "initseg")]
-    initialization_segments: Vec<IPLDLink>,
-}
 
 pub enum VideoData {
     Initialization(String, Bytes),
