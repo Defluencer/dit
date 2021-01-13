@@ -20,22 +20,22 @@ pub struct DayNode {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HourNode {
     #[serde(rename = "minute")]
-    pub links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/..
+    pub links_to_minutes: Vec<IPLDLink>, // ../<StreamHash>/time/hour/0/minute/15/..
 }
 
 /// Links all variants nodes for 1 minute of video.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MinuteNode {
     #[serde(rename = "second")]
-    pub links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/..
+    pub links_to_seconds: Vec<IPLDLink>, // ../<StreamHash>/time/hour/2/minute/36/second/30/..
 }
 
 /// Links video and chat nodes.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SecondNode {
     #[serde(rename = "video")]
-    pub link_to_video: IPLDLink, // ../<StreamHash>/time/hour/1/minute/15/second/30/video/..
+    pub link_to_video: IPLDLink, // ../<StreamHash>/time/hour/3/minute/59/second/48/video/..
 
     #[serde(rename = "chat")]
-    pub links_to_chat: Vec<IPLDLink>, // ../<StreamHash>/time/hour/1/minute/15/second/30/chat/0/..
+    pub links_to_chat: Vec<IPLDLink>, // ../<StreamHash>/time/hour/4/minute/27/second/14/chat/0/..
 }
