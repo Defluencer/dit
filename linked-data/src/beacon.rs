@@ -10,17 +10,17 @@ pub struct Beep {
 }
 
 /// List of video metadata plus update count
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct VideoList {
-    pub counter: usize,               // used to determine most recent
-    pub metadata: Vec<VideoMetaData>, // newest to oldest
+    pub counter: usize, // total number of video posted. Can ONLY go up. used to determine most recent update
+    pub metadata: Vec<IPLDLink>, // oldest to newest
 }
 
 /// Video metadata
-#[derive(Deserialize, Serialize, Clone)]
-pub struct VideoMetaData {
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct VideoMetadata {
     pub title: String,
     pub duration: f64,
-    //thumbnail image cid, timestamp, geo-loc, etc...
+    pub image: IPLDLink,
     pub video: IPLDLink,
 }

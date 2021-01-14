@@ -11,7 +11,7 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url, Window};
 
 use yew::services::ConsoleService;
 
-use linked_data::beacon::VideoMetaData;
+use linked_data::beacon::VideoMetadata;
 use linked_data::video::SetupNode;
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
@@ -27,7 +27,7 @@ const MEDIA_LENGTH_MS: f64 = 4000.0;
 
 #[derive(Clone)]
 struct Video {
-    metadata: VideoMetaData,
+    metadata: VideoMetadata,
 
     window: Window,
     media_element: Option<HtmlMediaElement>,
@@ -50,7 +50,7 @@ pub struct VideoOnDemandManager {
 
 impl VideoOnDemandManager {
     /// Ready VOD to link with video element.
-    pub fn new(metadata: VideoMetaData) -> Self {
+    pub fn new(metadata: VideoMetadata) -> Self {
         let window = web_sys::window().expect("Can't get window");
 
         let ema = ExponentialMovingAverage::new(&window);

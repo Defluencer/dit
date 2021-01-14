@@ -2,15 +2,16 @@ use crate::agents::VideoOnDemandManager;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use linked_data::beacon::VideoMetaData;
+use linked_data::beacon::VideoMetadata;
 
 pub struct VideoPlayer {
     manager: VideoOnDemandManager,
+    poster_link: String,
 }
 
 #[derive(Clone, Properties)]
 pub struct Props {
-    pub metadata: VideoMetaData,
+    pub metadata: VideoMetadata,
 }
 
 impl Component for VideoPlayer {
@@ -18,8 +19,14 @@ impl Component for VideoPlayer {
     type Properties = Props;
 
     fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        let mut poster_link = String::from("ipfs:/");
+        poster_link.push_str(&props.metadata.image.link.to_string());
+
+        let manager = VideoOnDemandManager::new(props.metadata);
+
         Self {
-            manager: VideoOnDemandManager::new(props.metadata),
+            manager,
+            poster_link,
         }
     }
 
@@ -33,7 +40,7 @@ impl Component for VideoPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video id="video" controls=true />
+            <video id="video" controls=true poster=self.poster_link />
         }
     }
 

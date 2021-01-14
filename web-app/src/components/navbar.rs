@@ -34,8 +34,8 @@ impl Component for Navbar {
                     <Anchor route=Route::Live classes="navbar_tab">
                         <div>{"Live Stream"}</div>
                     </Anchor>
-                    <Anchor route=Route::Video classes="navbar_tab">
-                        <div>{"Video"}</div>
+                    <Anchor route=Route::Videos classes="navbar_tab">
+                        <div>{"Videos"}</div>
                     </Anchor>
                 </nav>
             </div>
