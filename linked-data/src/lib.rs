@@ -43,3 +43,24 @@ where
 
     Ok(cid)
 }
+
+//TODO fix this mess...
+
+//Hack to get around js api
+//Have to deserialize into rust cid from js object representing cid
+
+pub const RAW: u64 = 0x55;
+
+#[derive(Deserialize)]
+pub struct FakeCid {
+    pub codec: String,
+    pub version: u8,
+    pub hash: Hash,
+}
+
+#[derive(Deserialize)]
+pub struct Hash {
+    #[serde(rename = "type")]
+    pub hash_type: String,
+    pub data: Vec<u8>,
+}

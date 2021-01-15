@@ -1,5 +1,5 @@
 use crate::components::VideoThumbnail;
-use crate::utils::{ipfs_dag_get_node_async, ipfs_subscribe, ipfs_unsubscribe};
+use crate::utils::{ipfs_dag_get_list, ipfs_dag_get_metadata, ipfs_subscribe, ipfs_unsubscribe};
 
 use std::convert::TryFrom;
 
@@ -130,7 +130,7 @@ impl VideoOnDemand {
         for cid in list.metadata.iter() {
             match self.get_local_video_metadata(&cid.link) {
                 Some(video_md) => self.metadata.push((cid.link, video_md)),
-                None => spawn_local(ipfs_dag_get_node_async(
+                None => spawn_local(ipfs_dag_get_metadata(
                     cid.link,
                     self.link.callback(Msg::Metadata),
                 )),
@@ -164,8 +164,9 @@ impl VideoOnDemand {
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
-            "Storage Get => {} \n {:#?}",
-            VIDEO_LIST_LOCAL_KEY, &list
+            "Storage Get => {} \n {}",
+            VIDEO_LIST_LOCAL_KEY,
+            &serde_json::to_string_pretty(&list).expect("Can't print")
         ));
 
         Some(list)
@@ -187,7 +188,7 @@ impl VideoOnDemand {
 
         let item = item?;
 
-        let list = match serde_json::from_str(&item) {
+        let metadata = match serde_json::from_str(&item) {
             Ok(list) => list,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -197,12 +198,12 @@ impl VideoOnDemand {
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
-            "Storage Get => {} \n {:#?}",
+            "Storage Get => {} \n {}",
             &cid.to_string(),
-            &list
+            &serde_json::to_string_pretty(&metadata).expect("Can't print")
         ));
 
-        Some(list)
+        Some(metadata)
     }
 
     /// Called when a beacon msg is received then ipfs dag get the video list if needed
@@ -216,7 +217,7 @@ impl VideoOnDemand {
 
         let cb = self.link.callback(Msg::List);
 
-        spawn_local(ipfs_dag_get_node_async(cid, cb));
+        spawn_local(ipfs_dag_get_list(cid, cb));
 
         false
     }
@@ -252,7 +253,7 @@ impl VideoOnDemand {
                 continue;
             }
 
-            spawn_local(ipfs_dag_get_node_async(
+            spawn_local(ipfs_dag_get_metadata(
                 cid,
                 self.link.callback(Msg::Metadata),
             ))
@@ -270,6 +271,13 @@ impl VideoOnDemand {
             None => return,
         };
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!(
+            "Storage Set => {} \n {}",
+            VIDEO_LIST_LOCAL_KEY,
+            &serde_json::to_string_pretty(&list).expect("Can't print")
+        ));
+
         let item = match serde_json::to_string(list) {
             Ok(s) => s,
             Err(e) => {
@@ -281,12 +289,6 @@ impl VideoOnDemand {
         if let Err(e) = storage.set_item(VIDEO_LIST_LOCAL_KEY, &item) {
             ConsoleService::error(&format!("{:?}", e));
         }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!(
-            "Storage Set => {} \n {}",
-            VIDEO_LIST_LOCAL_KEY, &item
-        ));
     }
 
     /// Called when ipfs dag get returns video metadata then update local storage and thumbnails
@@ -325,6 +327,13 @@ impl VideoOnDemand {
             None => return,
         };
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!(
+            "Storage Set => {} \n {}",
+            VIDEO_LIST_LOCAL_KEY,
+            &serde_json::to_string_pretty(&metadata).expect("Can't print")
+        ));
+
         let item = match serde_json::to_string(metadata) {
             Ok(s) => s,
             Err(e) => {
@@ -336,9 +345,6 @@ impl VideoOnDemand {
         if let Err(e) = storage.set_item(&cid.to_string(), &item) {
             ConsoleService::error(&format!("{:?}", e));
         }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Storage Set => {} \n {}", &cid.to_string(), &item));
     }
 }
 

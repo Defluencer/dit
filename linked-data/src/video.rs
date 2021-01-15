@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
-use crate::IPLDLink;
+use crate::{FakeCid, IPLDLink, RAW};
 
 use serde::{Deserialize, Serialize};
+
+use cid::Cid;
+use multihash::Multihash;
 
 /// Links all variants, allowing selection of video quality. Also link to the previous video node.
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,4 +37,39 @@ pub struct SetupNode {
     // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/initseg/0/..
     #[serde(rename = "initseg")]
     pub initialization_segments: Vec<IPLDLink>,
+}
+
+//Hack
+
+#[derive(Deserialize)]
+pub struct TempSetupNode {
+    #[serde(rename = "codec")]
+    pub codecs: Vec<String>,
+
+    #[serde(rename = "initseg")]
+    pub initialization_segments: Vec<FakeCid>,
+
+    #[serde(rename = "quality")]
+    pub qualities: Vec<String>,
+}
+
+impl TempSetupNode {
+    pub fn into_setup_node(self) -> SetupNode {
+        let mut initialization_segments = Vec::with_capacity(self.initialization_segments.len());
+
+        for fake_cid in self.initialization_segments.into_iter() {
+            let multihash =
+                Multihash::from_bytes(&fake_cid.hash.data).expect("Can't get multihash");
+
+            let cid = Cid::new_v1(RAW, multihash);
+
+            initialization_segments.push(IPLDLink { link: cid });
+        }
+
+        SetupNode {
+            codecs: self.codecs,
+            qualities: self.qualities,
+            initialization_segments,
+        }
+    }
 }

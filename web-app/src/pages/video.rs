@@ -1,6 +1,6 @@
 use crate::components::VideoPlayer;
 
-use crate::utils::ipfs_dag_get_node_async;
+use crate::utils::ipfs_dag_get_metadata;
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -38,7 +38,7 @@ impl Component for Video {
         let metadata = get_local_video_metadata(&props.metadata_cid, storage.as_ref());
 
         if metadata.is_none() {
-            spawn_local(ipfs_dag_get_node_async(
+            spawn_local(ipfs_dag_get_metadata(
                 props.metadata_cid,
                 link.callback(Msg::Metadata),
             ))
@@ -130,9 +130,9 @@ fn get_local_video_metadata(cid: &Cid, storage: Option<&Storage>) -> Option<Vide
 
     #[cfg(debug_assertions)]
     ConsoleService::info(&format!(
-        "Storage Get => {} \n {:#?}",
+        "Storage Get => {} \n {}",
         &cid.to_string(),
-        &metadata
+        &serde_json::to_string_pretty(&metadata).expect("Can't print")
     ));
 
     Some(metadata)
@@ -143,6 +143,13 @@ fn set_local_video_metadata(cid: &Cid, metadata: &VideoMetadata, storage: Option
         Some(st) => st,
         None => return,
     };
+
+    #[cfg(debug_assertions)]
+    ConsoleService::info(&format!(
+        "Storage Set => {} \n {}",
+        &cid.to_string(),
+        &serde_json::to_string_pretty(&metadata).expect("Can't print")
+    ));
 
     let item = match serde_json::to_string(metadata) {
         Ok(s) => s,
@@ -155,7 +162,4 @@ fn set_local_video_metadata(cid: &Cid, metadata: &VideoMetadata, storage: Option
     if let Err(e) = storage.set_item(&cid.to_string(), &item) {
         ConsoleService::error(&format!("{:?}", e));
     }
-
-    #[cfg(debug_assertions)]
-    ConsoleService::info(&format!("Storage Set => {} \n {}", &cid.to_string(), &item));
 }

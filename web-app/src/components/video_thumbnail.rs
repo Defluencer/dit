@@ -37,7 +37,7 @@ impl Component for VideoThumbnail {
                 <Anchor route=Route::Video(self.metadata_cid) classes="thumbnail_link">
                     <div class="thumbnail_title"> {&self.metadata.title} </div>
                     <div class="thumbnail_image">
-                        <img src=format!("ipfs:/{:#?}", self.metadata.image.link) alt=&self.metadata.title />
+                        <img src=format!("ipfs://{}", &self.metadata.image.link.to_string()) alt=&self.metadata.title />
                     </div>
                     <div class="thumbnail_duration"> {&self.metadata.duration} </div>
                 </Anchor>

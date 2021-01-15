@@ -19,7 +19,7 @@ impl Component for VideoPlayer {
     type Properties = Props;
 
     fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
-        let mut poster_link = String::from("ipfs:/");
+        let mut poster_link = String::from("ipfs://");
         poster_link.push_str(&props.metadata.image.link.to_string());
 
         let manager = VideoOnDemandManager::new(props.metadata);

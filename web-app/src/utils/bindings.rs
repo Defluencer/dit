@@ -16,6 +16,9 @@ extern "C" {
     #[wasm_bindgen(js_name = "dagGet", catch)]
     pub async fn ipfs_dag_get(cid: &str) -> Result<JsValue, JsValue>;
 
+    #[wasm_bindgen(js_name = "dagGet", catch)]
+    pub async fn ipfs_dag_get_path(cid: &str, path: &str) -> Result<JsValue, JsValue>;
+
     #[wasm_bindgen(js_name = "cat", catch)]
     pub async fn ipfs_cat(path: &str) -> Result<JsValue, JsValue>;
 

@@ -879,6 +879,7 @@ name = "linked-data"
 version = "1.0.0"
 dependencies = [
  "cid",
+ "multihash 0.13.1",
  "serde",
  "serde_json",
 ]

@@ -4,8 +4,9 @@ mod ipfs;
 mod tracks;
 
 pub use bindings::{
-    ipfs_cat, ipfs_dag_get, ipfs_publish, ipfs_subscribe, ipfs_unsubscribe, wait_until,
+    ipfs_cat, ipfs_dag_get, ipfs_dag_get_path, ipfs_publish, ipfs_subscribe, ipfs_unsubscribe,
+    wait_until,
 };
 pub use ema::ExponentialMovingAverage;
-pub use ipfs::{cat_and_buffer, ipfs_dag_get_node_async};
+pub use ipfs::{cat_and_buffer, ipfs_dag_get_list, ipfs_dag_get_metadata};
 pub use tracks::{Track, Tracks};
