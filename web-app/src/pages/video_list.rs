@@ -20,7 +20,7 @@ use cid::Cid;
 
 //Hard-coded for now
 const TOPIC: &str = "videoupdate";
-const INFLUENCER_PEER_ID: &str = "12D3KooWAPZ3QZnZUJw3BgEX9F7XL383xFNiKQ5YKANiRC3NWvpo";
+const INFLUENCER_PEER_ID: &str = "12D3KooWATLaZPouZ8DDXjsxuLsMv61CHFCN8y4Ho4iG182uMa4E";
 
 const VIDEO_LIST_LOCAL_KEY: &str = "video_list";
 
@@ -86,7 +86,7 @@ impl Component for VideoOnDemand {
             html! {
                 <div class="vod_page">
                 {
-                    for self.metadata.iter().map(|(cid, mt)| html! {
+                    for self.metadata.iter().rev().map(|(cid, mt)| html! {
                         <VideoThumbnail metadata_cid=cid metadata=mt />
                     })
                 }
@@ -215,6 +215,8 @@ impl VideoOnDemand {
         #[cfg(debug_assertions)]
         ConsoleService::info("Update Cid");
 
+        //TODO deserialize to beacon msg instead of list
+
         let cb = self.link.callback(Msg::List);
 
         spawn_local(ipfs_dag_get_list(cid, cb));
@@ -229,7 +231,7 @@ impl VideoOnDemand {
 
         let mut new_vids = new_list.counter;
 
-        if let Some(old_list) = &self.video_list {
+        if let Some(old_list) = self.video_list.as_ref() {
             if new_list.counter > old_list.counter {
                 new_vids = new_list.counter - old_list.counter;
             } else {
@@ -241,11 +243,21 @@ impl VideoOnDemand {
 
         let mut update = false;
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("{} New Videos", &new_vids));
+
         //iter from newest take only new video then iter from oldest new video
         for metadata in new_list.metadata.iter().rev().take(new_vids).rev() {
             let cid = metadata.link;
 
             if let Some(metadata) = self.get_local_video_metadata(&cid) {
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!(
+                    "Add Display => {} \n {}",
+                    &cid.to_string(),
+                    &serde_json::to_string_pretty(&metadata).expect("Can't print")
+                ));
+
                 self.metadata.push((cid, metadata));
 
                 update = true;
@@ -296,21 +308,30 @@ impl VideoOnDemand {
         #[cfg(debug_assertions)]
         ConsoleService::info("Update Metadata");
 
-        let video_list = match &self.video_list {
+        let video_list = match self.video_list.as_ref() {
             Some(vl) => vl,
             None => return false,
         };
 
-        for (i, video_list_cid) in video_list.metadata.iter().rev().enumerate() {
+        for video_list_cid in video_list.metadata.iter().rev() {
             let video_list_cid = video_list_cid.link;
 
             if cid == video_list_cid {
                 self.set_local_video_metadata(&cid, &metadata);
 
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!(
+                    "Add Display => {} \n {}",
+                    &cid.to_string(),
+                    &serde_json::to_string_pretty(&metadata).expect("Can't print")
+                ));
+
                 self.metadata.push((cid, metadata));
 
-                //if according to video list it's the last metadata
-                if i == 0 {
+                if self.metadata.len() == video_list.metadata.len() {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::info("Refresh");
+
                     return true;
                 }
 
@@ -330,7 +351,7 @@ impl VideoOnDemand {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
             "Storage Set => {} \n {}",
-            VIDEO_LIST_LOCAL_KEY,
+            &cid.to_string(),
             &serde_json::to_string_pretty(&metadata).expect("Can't print")
         ));
 

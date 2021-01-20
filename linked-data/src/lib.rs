@@ -50,6 +50,7 @@ where
 //Have to deserialize into rust cid from js object representing cid
 
 pub const RAW: u64 = 0x55;
+pub const DAG_CBOR: u64 = 0x71;
 
 #[derive(Deserialize)]
 pub struct FakeCid {

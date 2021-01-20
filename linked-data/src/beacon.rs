@@ -1,4 +1,4 @@
-use crate::{FakeCid, IPLDLink, RAW};
+use crate::{FakeCid, IPLDLink, RAW, DAG_CBOR};
 
 use serde::{Deserialize, Serialize};
 
@@ -44,7 +44,7 @@ impl TempVideoList {
             let multihash =
                 Multihash::from_bytes(&fake_cid.hash.data).expect("Can't get multihash");
 
-            let cid = Cid::new_v1(RAW, multihash);
+            let cid = Cid::new_v1(DAG_CBOR, multihash);
 
             metadata.push(IPLDLink { link: cid });
         }
@@ -74,7 +74,7 @@ impl TempVideoMetadata {
 
         let multihash = Multihash::from_bytes(&self.video.hash.data).expect("Can't get multihash");
 
-        let cid = Cid::new_v1(RAW, multihash);
+        let cid = Cid::new_v1(DAG_CBOR, multihash);
 
         let video = IPLDLink { link: cid };
 
