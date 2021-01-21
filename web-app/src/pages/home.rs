@@ -20,7 +20,7 @@ impl Component for Home {
 
     fn view(&self) -> Html {
         html! {
-            <div> {"Home Page -> W.I.P."} </div>
+            <div class="center_text"> {"Home Page -> W.I.P."} </div>
         }
     }
 }

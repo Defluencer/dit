@@ -97,7 +97,7 @@ impl LiveStreamManager {
         let document = self.stream.window.document().expect("Can't get document");
 
         let video: HtmlMediaElement = document
-            .get_element_by_id("video")
+            .get_element_by_id("video_player")
             .expect("No element with this Id")
             .dyn_into()
             .expect("Not Media Element");

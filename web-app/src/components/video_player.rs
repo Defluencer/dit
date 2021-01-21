@@ -40,7 +40,7 @@ impl Component for VideoPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video id="video" controls=true poster=self.poster_link />
+            <video class="video_player" id="video_player" controls=true poster=self.poster_link />
         }
     }
 

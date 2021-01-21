@@ -89,7 +89,7 @@ impl VideoOnDemandManager {
             .expect("Can't get document");
 
         let media_element: HtmlMediaElement = document
-            .get_element_by_id("video")
+            .get_element_by_id("video_player")
             .expect("No element with this Id")
             .dyn_into()
             .expect("Not Media Element");

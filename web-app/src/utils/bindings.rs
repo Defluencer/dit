@@ -21,8 +21,4 @@ extern "C" {
 
     #[wasm_bindgen(js_name = "cat", catch)]
     pub async fn ipfs_cat(path: &str) -> Result<JsValue, JsValue>;
-
-    #[wasm_bindgen(js_name = "waitUntil")]
-    pub async fn wait_until(fn_bool: &Function);
-
 }

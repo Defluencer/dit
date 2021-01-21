@@ -1,4 +1,4 @@
-use crate::{FakeCid, IPLDLink, RAW, DAG_CBOR};
+use crate::{FakeCid, IPLDLink, DAG_CBOR, RAW};
 
 use serde::{Deserialize, Serialize};
 
@@ -6,11 +6,11 @@ use cid::Cid;
 use multihash::Multihash;
 
 /// Beacon pediodically send up to date video list cid crypto-signed
-#[derive(Deserialize, Serialize)]
+/* #[derive(Deserialize, Serialize)]
 pub struct Beep {
     pub list: IPLDLink,
     pub signature: String,
-}
+} */
 
 /// List of video metadata plus update count
 #[derive(Deserialize, Serialize)]
@@ -20,7 +20,7 @@ pub struct VideoList {
 }
 
 /// Video metadata
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct VideoMetadata {
     pub title: String,
     pub duration: f64,

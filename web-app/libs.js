@@ -33,20 +33,3 @@ export async function cat(path) {
 
     return value
 }
-
-export async function waitUntil(func) {
-    await until(func);
-}
-
-function until(condition) {
-    return new Promise((resolve) => {
-        let interval = setInterval(() => {
-            if (!condition()) {
-                return
-            }
-
-            clearInterval(interval)
-            resolve()
-        }, 100)
-    })
-}
