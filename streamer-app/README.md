@@ -1,5 +1,8 @@
+## Requirements
+- Rust + Cargo https://www.rust-lang.org/tools/install
+
 ## Streaming Setup
-- Compile streamer-app. (Do not use --release on Windows)
+- Compile with this command: cargo build
 - Broadcast software set to FFMPEG using rtmp. (Default -> rtmp://127.0.0.1:2525)
 - Make sure FFMPEG is installed and on PATH.
 
