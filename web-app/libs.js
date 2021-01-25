@@ -12,6 +12,12 @@ export async function unsubscribe(topic) {
     await ipfs.pubsub.unsubscribe(topic)
 }
 
+export async function nameResolve(cid) {
+    for await (const path of ipfs.name.resolve(cid)) {
+        return path
+    }
+}
+
 export async function dagGet(cid, path) {
     const result = await ipfs.dag.get(cid, { path })
 

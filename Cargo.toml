@@ -3,7 +3,7 @@
 members = [
     "streamer-app",
     "web-app",
-    "linked-data",
+    "linked-data"
 ]
 
 [profile.dev]

@@ -1,5 +1,6 @@
 ## Requirements
 - Rust + Cargo https://www.rust-lang.org/tools/install
+- IPFS https://docs.ipfs.io/install/command-line/#package-managers
 
 ## Streaming Setup
 - Compile with this command: cargo build

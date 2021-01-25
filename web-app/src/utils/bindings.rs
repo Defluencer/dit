@@ -13,6 +13,9 @@ extern "C" {
     #[wasm_bindgen(js_name = "unsubscribe")]
     pub fn ipfs_unsubscribe(topic: JsValue);
 
+    #[wasm_bindgen(js_name = "nameResolve", catch)]
+    pub async fn ipfs_name_resolve(cid: &str) -> Result<JsValue, JsValue>;
+
     #[wasm_bindgen(js_name = "dagGet", catch)]
     pub async fn ipfs_dag_get(cid: &str) -> Result<JsValue, JsValue>;
 

@@ -1,14 +1,14 @@
 use crate::components::VideoThumbnail;
 use crate::utils::{
     get_local_list, get_local_storage, get_local_video_metadata, ipfs_dag_get_list,
-    ipfs_dag_get_metadata, ipfs_subscribe, ipfs_unsubscribe, set_local_list,
-    set_local_video_metadata,
+    ipfs_dag_get_metadata, ipfs_name_resolve_list, /* ipfs_subscribe, ipfs_unsubscribe, */
+    set_local_list, set_local_video_metadata,
 };
 
-use std::convert::TryFrom;
+//use std::convert::TryFrom;
 
-use wasm_bindgen::prelude::Closure;
-use wasm_bindgen::JsCast;
+//use wasm_bindgen::prelude::Closure;
+//use wasm_bindgen::JsCast;
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -16,15 +16,16 @@ use web_sys::Storage;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew::services::ConsoleService;
-use yew::Callback;
+//use yew::Callback;
 
 use linked_data::beacon::{VideoList, VideoMetadata};
 
 use cid::Cid;
 
 //Hard-coded for now
-const TOPIC: &str = "videoupdate";
-const INFLUENCER_PEER_ID: &str = "12D3KooWATLaZPouZ8DDXjsxuLsMv61CHFCN8y4Ho4iG182uMa4E";
+//const TOPIC: &str = "videoupdate";
+//const INFLUENCER_PEER_ID: &str = "12D3KooWATLaZPouZ8DDXjsxuLsMv61CHFCN8y4Ho4iG182uMa4E";
+const IPNS_NAME: &str = "bafzaajaiaejcaj2a2tbkjpiawwtidblygz62rbnq5r6ftnxkm7qp7atailrehdco";
 
 pub struct VideoOnDemand {
     link: ComponentLink<Self>,
@@ -52,7 +53,17 @@ impl Component for VideoOnDemand {
 
         let storage = get_local_storage(&window);
 
-        let metadata = match get_local_list(storage.as_ref()) {
+        let data = get_local_list(storage.as_ref());
+
+        let (list_cid, video_list) = {
+            if let Some((list_cid, video_list)) = data {
+                (Some(list_cid), Some(video_list))
+            } else {
+                (None, None)
+            }
+        };
+
+        let metadata = match &video_list.as_ref() {
             Some(list) => {
                 #[cfg(debug_assertions)]
                 ConsoleService::info("Get All Video Metadata");
@@ -74,12 +85,17 @@ impl Component for VideoOnDemand {
             None => Vec::with_capacity(10),
         };
 
-        listen_to_beacon(link.callback(Msg::Beacon));
+        //listen_to_beacon(link.callback(Msg::Beacon));
+
+        spawn_local(ipfs_name_resolve_list(
+            IPNS_NAME,
+            link.callback(Msg::Beacon),
+        ));
 
         Self {
             link,
-            list_cid: None,
-            video_list: None,
+            list_cid,
+            video_list,
             storage,
             metadata,
         }
@@ -117,9 +133,9 @@ impl Component for VideoOnDemand {
         }
     }
 
-    fn destroy(&mut self) {
+    /* fn destroy(&mut self) {
         stop_list_update();
-    }
+    } */
 }
 
 impl VideoOnDemand {
@@ -155,7 +171,7 @@ impl VideoOnDemand {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("{} New Videos", &new_vids_count));
 
-        set_local_list(&new_list, self.storage.as_ref());
+        set_local_list(&new_list_cid, &new_list, self.storage.as_ref());
 
         let mut update = false;
 
@@ -231,7 +247,7 @@ impl VideoOnDemand {
     }
 }
 
-fn listen_to_beacon(cb: Callback<Cid>) {
+/* fn listen_to_beacon(cb: Callback<Cid>) {
     let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Message");
@@ -270,8 +286,8 @@ fn listen_to_beacon(cb: Callback<Cid>) {
     }) as Box<dyn Fn(String, Vec<u8>)>);
 
     ipfs_subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
-}
+} */
 
-fn stop_list_update() {
+/* fn stop_list_update() {
     ipfs_unsubscribe(TOPIC.into());
-}
+} */

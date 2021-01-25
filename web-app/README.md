@@ -12,6 +12,7 @@
 
 ## Viewers
 Only Brave browser include IPFS but it can't be configured with pubsub enabled so we are stuck with this annoying setup for now.
+- Install IPFS CLI https://docs.ipfs.io/install/command-line/#package-managers
 - Allow CORS with these commands:
     - ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["GET", "POST", "PUT"]'
     - ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["INSERT_YOUR_DOMAIN_HERE"]'

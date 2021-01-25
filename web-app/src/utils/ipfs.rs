@@ -1,4 +1,7 @@
-use crate::utils::bindings::{ipfs_cat, ipfs_dag_get};
+use crate::utils::bindings::{ipfs_cat, ipfs_dag_get, ipfs_name_resolve};
+
+use std::convert::TryFrom;
+use std::path::PathBuf;
 
 use wasm_bindgen::JsCast;
 
@@ -27,6 +30,24 @@ pub async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
         ConsoleService::warn(&format!("{:?}", e));
         return;
     }
+}
+
+pub async fn ipfs_name_resolve_list(cid: &str, cb: Callback<Cid>) {
+    let js_value = match ipfs_name_resolve(cid).await {
+        Ok(result) => result,
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return;
+        }
+    };
+
+    let path = js_value.as_string().expect("Invalid Js String");
+    let path = PathBuf::try_from(path).expect("Invalid Path");
+    let file_name = path.file_name().expect("Invalid File Name");
+    let string = file_name.to_str().expect("Invalid Unicode");
+    let cid = Cid::try_from(string).expect("Invalid Cid");
+
+    cb.emit(cid);
 }
 
 /* pub async fn ipfs_dag_get_node_async<T>(cid: Cid, cb: Callback<(Cid, T)>)

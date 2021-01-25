@@ -45,10 +45,10 @@ pub async fn put_requests(
 
             match m3u8_rs::parse_playlist_res(&data) {
                 Ok(m3u8_rs::playlist::Playlist::MasterPlaylist(pl)) => {
-                    println!("Master playlist:\n{:#?}", pl)
+                    println!("{:#?}", pl)
                 }
                 Ok(m3u8_rs::playlist::Playlist::MediaPlaylist(pl)) => {
-                    println!("Media playlist:\n{:#?}", pl)
+                    println!("{:#?}", pl)
                 }
                 Err(e) => println!("Error: {:?}", e),
             }
