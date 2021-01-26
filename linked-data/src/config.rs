@@ -81,8 +81,8 @@ impl Default for Config {
             },
 
             addresses: Addrs {
-                app_addr: "127.0.0.1:2526".into(),
-                ffmpeg_addr: Some("127.0.0.1:2525".into()),
+                app_addr: "192.168.1.152:2526".into(), /* "127.0.0.1:2526".into() */
+                ffmpeg_addr: None,                     /* Some("127.0.0.1:2525".into()) */
             },
 
             tracks,
