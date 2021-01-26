@@ -10,7 +10,7 @@ use yew::services::ConsoleService;
 //use yew::worker::{Agent, AgentLink, HandlerId, Public};
 use yew::Callback;
 
-const TOPIC: &str = "livelikechat";
+use linked_data::LIVE_CHAT_TOPIC;
 
 pub fn load_live_chat(cb: Callback<String>) {
     let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
@@ -22,15 +22,18 @@ pub fn load_live_chat(cb: Callback<String>) {
         cb.emit(msg);
     }) as Box<dyn Fn(String, Vec<u8>)>);
 
-    ipfs_subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
+    ipfs_subscribe(
+        LIVE_CHAT_TOPIC.into(),
+        pubsub_closure.into_js_value().unchecked_ref(),
+    );
 }
 
 pub fn unload_live_chat() {
-    ipfs_unsubscribe(TOPIC.into());
+    ipfs_unsubscribe(LIVE_CHAT_TOPIC.into());
 }
 
 pub fn send_chat(msg: String) {
-    ipfs_publish(TOPIC.into(), msg.into());
+    ipfs_publish(LIVE_CHAT_TOPIC.into(), msg.into());
 }
 
 fn pubsub_message(from: String, data: Vec<u8>) -> Option<String> {

@@ -876,7 +876,7 @@ checksum = "a9f8082297d534141b30c8d39e9b1773713ab50fdbe4ff30f750d063b3bfd701"
 
 [[package]]
 name = "linked-data"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "cid",
  "multihash 0.13.1",

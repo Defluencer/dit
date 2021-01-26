@@ -1,3 +1,5 @@
+use crate::{LIVE_CHAT_TOPIC, LIVE_VIDEO_TOPIC};
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -74,8 +76,8 @@ impl Default for Config {
 
         Self {
             gossipsub_topics: Topics {
-                video: "livelikevideo".into(),
-                chat: "livelikechat".into(),
+                video: LIVE_VIDEO_TOPIC.into(),
+                chat: LIVE_CHAT_TOPIC.into(),
             },
 
             addresses: Addrs {

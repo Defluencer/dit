@@ -19,13 +19,9 @@ use yew::services::ConsoleService;
 //use yew::Callback;
 
 use linked_data::beacon::{VideoList, VideoMetadata};
+use linked_data::BEACON_IPNS_CID;
 
 use cid::Cid;
-
-//Hard-coded for now
-//const TOPIC: &str = "videoupdate";
-//const INFLUENCER_PEER_ID: &str = "12D3KooWATLaZPouZ8DDXjsxuLsMv61CHFCN8y4Ho4iG182uMa4E";
-const IPNS_NAME: &str = "bafzaajaiaejcaj2a2tbkjpiawwtidblygz62rbnq5r6ftnxkm7qp7atailrehdco";
 
 pub struct VideoOnDemand {
     link: ComponentLink<Self>,
@@ -88,7 +84,7 @@ impl Component for VideoOnDemand {
         //listen_to_beacon(link.callback(Msg::Beacon));
 
         spawn_local(ipfs_name_resolve_list(
-            IPNS_NAME,
+            BEACON_IPNS_CID,
             link.callback(Msg::Beacon),
         ));
 

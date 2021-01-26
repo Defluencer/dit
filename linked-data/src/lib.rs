@@ -10,6 +10,14 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use cid::Cid;
 
+pub const STREAMER_PEER_ID: &str = "12D3KooWPLy5RjRxZau5gW7CW8bLFa5C6mTVaxqaZesa2UzbQ6HE";
+
+pub const LIVE_VIDEO_TOPIC: &str = "livevideo";
+pub const LIVE_CHAT_TOPIC: &str = "livechat";
+
+pub const BEACON_IPNS_CID: &str =
+    "bafzaajaiaejcbp6cuxgua4hrhhbu4pxk4kbbwqn4jcevkjqqnz5pwjsmoxl64n3v";
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct IPLDLink {
     #[serde(rename = "/")]

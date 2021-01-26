@@ -1,7 +1,8 @@
 ## Requirements
-- Rust + Cargo https://www.rust-lang.org/tools/install
-- Yew https://yew.rs/docs/en/next/getting-started/project-setup
-- Trunk https://yew.rs/docs/en/next/getting-started/project-setup/using-trunk
+- [Rust + Cargo](https://www.rust-lang.org/tools/install)
+- [IPFS](https://docs.ipfs.io/install/command-line/#package-managers)
+- [Yew](https://yew.rs/docs/en/next/getting-started/project-setup)
+- [Trunk](https://yew.rs/docs/en/next/getting-started/project-setup/using-trunk)
 
 ## Web-App
 - Customize as needed.
@@ -10,13 +11,45 @@
 - Upload CID to ENS or other DNS.
 - Upload CID to Pinata Cloud, Temporal and/or host it yourself.
 
-## Viewers
-Only Brave browser include IPFS but it can't be configured with pubsub enabled so we are stuck with this annoying setup for now.
-- Install IPFS CLI https://docs.ipfs.io/install/command-line/#package-managers
-- Allow CORS with these commands:
+## Testing
+### Setup 1
+IPFS natively in Brave. (live streams don't work)
+- Install [Brave](https://brave.com/)
+- Go to brave://settings
+- Enable IPFS companion then when asked enable IPFS
+- Click companion extension icon then click My Node
+- Go to settings and replace
+```
+"API": {
+  "HTTPHeaders": {}
+},
+```
+with this
+```
+"API": {
+  "HTTPHeaders": {
+    "Access-Control-Allow-Methods": [
+      "PUT",
+      "POST",
+      "GET"
+    ],
+    "Access-Control-Allow-Origin": [
+      "http://localhost:45005",
+      "http://127.0.0.1:45005",
+      "https://webui.ipfs.io",
+      "http://ADD_YOUR_CID_HERE.ipfs.localhost:48084"
+    ]
+  }
+},
+```
+- Restart browser
+
+### Setup 2
+IPFS + any browser
+- Install [IPFS](https://docs.ipfs.io/install/command-line/) CLI
+- Initialize IPFS. https://docs.ipfs.io/reference/cli/#ipfs-init
+- Allow CORS with these commands
     - ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["GET", "POST", "PUT"]'
-    - ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["INSERT_YOUR_DOMAIN_HERE"]'
-- Start IPFS with this command: ipfs daemon --enable-pubsub-experiment
-- Launch any Browser.
-- Navigate to domain.
-- Enjoy!
+    - ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["http://localhost:5001", "http://127.0.0.1:5001", "http://ADD_YOUR_CID_HERE.ipfs.localhost:8080"]'
+- Start Daemon with PubSub enabled. https://docs.ipfs.io/reference/cli/#ipfs-daemon
+- Navigate to http://ADD_YOUR_CID_HERE.ipfs.localhost:8080
