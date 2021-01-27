@@ -1,5 +1,5 @@
 #!/bin/bash
-# Testing hardware transcoding -> too slow
+# Testing hardware transcoding -> too slow on my pc
 ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi \
 -listen 1 -i rtmp://127.0.0.1:2525 -rtmp_live live -rtmp_buffer 8000 \
 -filter_complex \

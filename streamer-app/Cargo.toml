@@ -6,8 +6,8 @@ edition = "2018"
 licence = "MIT OR Apache-2.0"
 
 [dependencies]
-tokio = { version = "0.2", features = ["signal", "macros", "process", "rt-threaded", "sync", "stream"] }
-ipfs-api = "0.9"
+tokio = { version = "0.2", features = ["fs", "signal", "macros", "process", "rt-threaded", "sync", "stream"] }
+ipfs-api = "0.9.0"
 cid = "0.6"
 multibase = "0.9"
 hyper = "0.13"

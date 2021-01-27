@@ -49,8 +49,7 @@ pub async fn start_transcoding(ffmpeg_addr: String, stream_app_addr: String) {
             "852x480", "-r:3", "30",
         ])
         .args(&[
-            "-map", "a:0", "-map", "a:0", "-map", "a:0", "-map", "a:0", "-c:a:", "aac", "-b:a:",
-            "192k", "-ar:", "48000", "-ac:", "2",
+            "-map", "a:0", "-map", "a:0", "-map", "a:0", "-map", "a:0", "-c:a:", "copy",
         ])
         .args(&[
             "-f",

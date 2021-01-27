@@ -14,11 +14,11 @@ use hyper::{Body, Error, Request, Response, Server};
 
 type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
 
-struct LiveLikeService {
+struct IngessService {
     collector: Sender<VideoData>,
 }
 
-impl Service<Request<Body>> for LiveLikeService {
+impl Service<Request<Body>> for IngessService {
     type Response = Response<Body>;
     type Error = Error;
     type Future = FutureWrapper<Self::Response, Self::Error>;
@@ -32,18 +32,18 @@ impl Service<Request<Body>> for LiveLikeService {
     }
 }
 
-struct MakeLiveLikeService {
+struct MakeService {
     collector: Sender<VideoData>,
 }
 
-impl MakeLiveLikeService {
+impl MakeService {
     fn new(collector: Sender<VideoData>) -> Self {
         Self { collector }
     }
 }
 
-impl<T> Service<T> for MakeLiveLikeService {
-    type Response = LiveLikeService;
+impl<T> Service<T> for MakeService {
+    type Response = IngessService;
     type Error = Error;
     type Future = FutureWrapper<Self::Response, Self::Error>;
 
@@ -54,7 +54,7 @@ impl<T> Service<T> for MakeLiveLikeService {
     fn call(&mut self, _: T) -> Self::Future {
         let collector = self.collector.clone();
 
-        let fut = async move { Ok(LiveLikeService { collector }) };
+        let fut = async move { Ok(IngessService { collector }) };
 
         Box::pin(fut)
     }
@@ -81,7 +81,7 @@ pub async fn start_server(
         .parse::<SocketAddr>()
         .expect("Parsing socket address failed");
 
-    let service = MakeLiveLikeService::new(collector.clone());
+    let service = MakeService::new(collector.clone());
 
     let server = Server::bind(&server_addr).serve(service);
 

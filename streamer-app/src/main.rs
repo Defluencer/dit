@@ -6,13 +6,12 @@ mod dag_nodes;
 mod server;
 
 use crate::actors::{start_transcoding, Archivist, ChatAggregator, VideoAggregator};
+use crate::config::get_config;
 use crate::server::start_server;
 
 use tokio::sync::mpsc::channel;
 
 use ipfs_api::IpfsClient;
-
-use linked_data::config::Config;
 
 #[tokio::main]
 async fn main() {
@@ -20,7 +19,7 @@ async fn main() {
 
     let ipfs = IpfsClient::default();
 
-    let config = Config::default();
+    let config = get_config().await;
 
     let (archive_tx, archive_rx) = channel(25);
     let mut archivist = Archivist::new(ipfs.clone(), archive_rx, config.segment_duration);
