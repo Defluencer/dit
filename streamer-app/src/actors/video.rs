@@ -1,5 +1,5 @@
 use crate::actors::archivist::Archive;
-use crate::dag_nodes::ipfs_dag_put_node_async;
+use crate::utils::ipfs_dag_put_node_async;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;

@@ -1,13 +1,12 @@
 #![allow(unused_must_use)]
 
 mod actors;
-mod config;
-mod dag_nodes;
 mod server;
+mod utils;
 
 use crate::actors::{start_transcoding, Archivist, ChatAggregator, VideoAggregator};
-use crate::config::get_config;
 use crate::server::start_server;
+use crate::utils::get_config;
 
 use tokio::sync::mpsc::channel;
 
