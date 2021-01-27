@@ -46,7 +46,7 @@ with this
 
 ### Setup 2
 IPFS + any browser
-- [Install IPFS CLI](https://docs.ipfs.io/install/command-line/#official-distributions)
+- [Install IPFS CLI](https://dist.ipfs.io/#go-ipfs)
 - [Initialize IPFS](https://docs.ipfs.io/how-to/command-line-quick-start/#initialize-the-repository) with this command: ipfs init
 - Allow CORS with these commands;
     - ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["GET", "POST", "PUT"]'
