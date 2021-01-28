@@ -33,7 +33,7 @@ impl Component for LiveStreamPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video id="video" autoplay=true controls=true muted=true poster="../live_like_poster.png" />
+            <video class="video_player" id="video_player" autoplay=true controls=true muted=true />
         }
     }
 

@@ -13,16 +13,16 @@ use wasm_bindgen::JsCast;
 
 use wasm_bindgen_futures::spawn_local;
 
-use serde_wasm_bindgen::from_value;
-
 use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url, Window};
 
 use yew::services::ConsoleService;
 
+use linked_data::video::SetupNode;
+
 use cid::Cid;
 
-const CODEC_PATH: &str = "/setup/codec";
-const QUALITY_PATH: &str = "/setup/quality";
+//const CODEC_PATH: &str = "/setup/codec";
+//const QUALITY_PATH: &str = "/setup/quality";
 
 const BUFFER_LENGTH: f64 = 30.0;
 const MEDIA_LENGTH: f64 = 4.0;
@@ -97,7 +97,7 @@ impl LiveStreamManager {
         let document = self.stream.window.document().expect("Can't get document");
 
         let video: HtmlMediaElement = document
-            .get_element_by_id("video")
+            .get_element_by_id("video_player")
             .expect("No element with this Id")
             .dyn_into()
             .expect("Not Media Element");
@@ -190,7 +190,7 @@ async fn add_source_buffer(stream: LiveStream) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Adding Source Buffer");
 
-    let codecs = match ipfs_dag_get(&cid, CODEC_PATH).await {
+    /* let codecs = match ipfs_dag_get(&cid, CODEC_PATH).await {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
@@ -207,11 +207,27 @@ async fn add_source_buffer(stream: LiveStream) {
     };
 
     let codecs: Vec<String> = from_value(codecs).expect("Can't deserialize codecs");
-    let qualities: Vec<String> = from_value(qualities).expect("Can't deserialize qualities");
+    let qualities: Vec<String> = from_value(qualities).expect("Can't deserialize qualities"); */
+
+    let setup_node = match ipfs_dag_get(&cid).await {
+        Ok(result) => result,
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return;
+        }
+    };
+
+    let setup_node: SetupNode = match setup_node.into_serde() {
+        Ok(result) => result,
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return;
+        }
+    };
 
     let mut vec = Vec::with_capacity(4);
 
-    let first_codec = codecs.first().expect("Can't get first codec");
+    let first_codec = setup_node.codecs.first().expect("Can't get first codec");
 
     let source_buffer = match stream.media_source.add_source_buffer(first_codec) {
         Ok(sb) => sb,
@@ -224,7 +240,12 @@ async fn add_source_buffer(stream: LiveStream) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Listing Tracks");
 
-    for (level, (codec, quality)) in codecs.into_iter().zip(qualities.into_iter()).enumerate() {
+    for (level, (codec, quality)) in setup_node
+        .codecs
+        .into_iter()
+        .zip(setup_node.qualities.into_iter())
+        .enumerate()
+    {
         if !MediaSource::is_type_supported(&codec) {
             ConsoleService::error(&format!("MIME Type {:?} unsupported", &codec));
             return;

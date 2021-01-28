@@ -1,4 +1,4 @@
-const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
+const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 45005, protocol: 'http' })
 
 export async function subscribe(topic, pubsubMessage) {
     await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))
@@ -10,6 +10,12 @@ export async function publish(topic, message) {
 
 export async function unsubscribe(topic) {
     await ipfs.pubsub.unsubscribe(topic)
+}
+
+export async function nameResolve(cid) {
+    for await (const path of ipfs.name.resolve(cid)) {
+        return path
+    }
 }
 
 export async function dagGet(cid, path) {
@@ -32,21 +38,4 @@ export async function cat(path) {
     }
 
     return value
-}
-
-export async function waitUntil(func) {
-    await until(func);
-}
-
-function until(condition) {
-    return new Promise((resolve) => {
-        let interval = setInterval(() => {
-            if (!condition()) {
-                return
-            }
-
-            clearInterval(interval)
-            resolve()
-        }, 100)
-    })
 }

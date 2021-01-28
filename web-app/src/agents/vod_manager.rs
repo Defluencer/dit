@@ -1,17 +1,18 @@
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::utils::{cat_and_buffer, ipfs_dag_get, ExponentialMovingAverage, Track, Tracks};
+use crate::utils::{cat_and_buffer, ipfs_dag_get_path, ExponentialMovingAverage, Track, Tracks};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
-use serde_wasm_bindgen::from_value;
-
 use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url, Window};
 
 use yew::services::ConsoleService;
+
+use linked_data::beacon::VideoMetadata;
+use linked_data::video::TempSetupNode;
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -19,15 +20,15 @@ const BACK_BUFFER_LENGTH: f64 = 8.0;
 const MEDIA_LENGTH: f64 = 4.0;
 const MEDIA_LENGTH_MS: f64 = 4000.0;
 
-const CODEC_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/codec";
-const QUALITY_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/quality";
+const SETUP_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/";
 
 //TODO add types common to live and vod then deduplicate fonctions.
 
+//TODO save setup node instead of Tracks
+
 #[derive(Clone)]
 struct Video {
-    cid: String,
-    duration: f64,
+    metadata: VideoMetadata,
 
     window: Window,
     media_element: Option<HtmlMediaElement>,
@@ -50,7 +51,7 @@ pub struct VideoOnDemandManager {
 
 impl VideoOnDemandManager {
     /// Ready VOD to link with video element.
-    pub fn new(cid: String, duration: f64) -> Self {
+    pub fn new(metadata: VideoMetadata) -> Self {
         let window = web_sys::window().expect("Can't get window");
 
         let ema = ExponentialMovingAverage::new(&window);
@@ -61,8 +62,7 @@ impl VideoOnDemandManager {
             .expect("Can't create url from source");
 
         let video_record = Video {
-            cid,
-            duration,
+            metadata,
 
             window,
             media_element: None,
@@ -89,7 +89,7 @@ impl VideoOnDemandManager {
             .expect("Can't get document");
 
         let media_element: HtmlMediaElement = document
-            .get_element_by_id("video")
+            .get_element_by_id("video_player")
             .expect("No element with this Id")
             .dyn_into()
             .expect("Not Media Element");
@@ -129,7 +129,7 @@ fn on_media_source_open(video_record: Video, media_source: &MediaSource) {
 
         video_record
             .media_source
-            .set_duration(video_record.duration);
+            .set_duration(video_record.metadata.duration);
 
         let future = add_source_buffer(video_record.clone());
 
@@ -276,7 +276,7 @@ fn check_status(video_record: Video) {
         return;
     }
 
-    if buff_end >= video_record.duration {
+    if buff_end >= video_record.metadata.duration {
         #[cfg(debug_assertions)]
         ConsoleService::info("End Of Video");
         on_timeout(video_record);
@@ -321,7 +321,9 @@ async fn add_source_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Adding Source Buffer");
 
-    let codecs = match ipfs_dag_get(&video_record.cid, CODEC_PATH).await {
+    let cid = &video_record.metadata.video.link.to_string();
+
+    let setup_node = match ipfs_dag_get_path(cid, SETUP_PATH).await {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
@@ -329,7 +331,7 @@ async fn add_source_buffer(video_record: Video) {
         }
     };
 
-    let qualities = match ipfs_dag_get(&video_record.cid, QUALITY_PATH).await {
+    let temp_node: TempSetupNode = match setup_node.into_serde() {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
@@ -337,12 +339,17 @@ async fn add_source_buffer(video_record: Video) {
         }
     };
 
-    let codecs: Vec<String> = from_value(codecs).expect("Can't deserialize codecs");
-    let qualities: Vec<String> = from_value(qualities).expect("Can't deserialize qualities");
+    let setup_node = temp_node.into_setup_node();
+
+    #[cfg(debug_assertions)]
+    ConsoleService::info(&format!(
+        "Setup Node \n {}",
+        &serde_json::to_string_pretty(&setup_node).expect("Can't print")
+    ));
 
     let mut vec = Vec::with_capacity(4);
 
-    let first_codec = codecs.first().expect("Can't get first codec");
+    let first_codec = setup_node.codecs.first().expect("Can't get first codec");
 
     let source_buffer = match video_record.media_source.add_source_buffer(first_codec) {
         Ok(sb) => sb,
@@ -355,7 +362,12 @@ async fn add_source_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Listing Tracks");
 
-    for (level, (codec, quality)) in codecs.into_iter().zip(qualities.into_iter()).enumerate() {
+    for (level, (codec, quality)) in setup_node
+        .codecs
+        .into_iter()
+        .zip(setup_node.qualities.into_iter())
+        .enumerate()
+    {
         if !MediaSource::is_type_supported(&codec) {
             ConsoleService::error(&format!("MIME Type {:?} unsupported", &codec));
             return;
@@ -387,10 +399,7 @@ async fn add_source_buffer(video_record: Video) {
 
     video_record.state.store(1, Ordering::Relaxed);
 
-    let path = format!(
-        "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
-        video_record.cid, 0
-    );
+    let path = setup_node.initialization_segments[0].link.to_string();
 
     on_source_buffer_update_end(video_record, &source_buffer);
 
@@ -446,7 +455,11 @@ fn load_media_segment(video_record: Video) {
 
     let path = format!(
         "{}/time/hour/{}/minute/{}/second/{}/video/quality/{}",
-        video_record.cid, hours, minutes, seconds, quality
+        video_record.metadata.video.link.to_string(),
+        hours,
+        minutes,
+        seconds,
+        quality
     );
 
     let future = cat_and_buffer(path, source_buffer);
@@ -492,7 +505,8 @@ async fn switch_quality(video_record: Video) {
 
     let path = format!(
         "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
-        video_record.cid, level
+        video_record.metadata.video.link.to_string(),
+        level
     );
 
     cat_and_buffer(path, source_buffer.clone()).await;

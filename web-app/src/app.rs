@@ -1,13 +1,18 @@
 use crate::components::Navbar;
-use crate::pages::{Home, LiveStream, VideoOnDemand};
+use crate::pages::{Home, LiveStream, Video, VideoOnDemand};
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew_router::prelude::{Router, Switch};
 
+use cid::Cid;
+
 #[derive(Switch, Debug, Clone)]
 pub enum Route {
-    #[to = "/vod"]
-    Video,
+    #[to = "/video/{cid}"]
+    Video(Cid),
+
+    #[to = "/videos"]
+    Videos,
 
     #[to = "/live"]
     Live,
@@ -42,8 +47,9 @@ impl Component for App {
                     render = Router::render(move |switch: Route| {
                         match switch {
                             Route::Live => html! {<LiveStream />},
-                            Route::Video => html! {<VideoOnDemand />},
+                            Route::Videos => html! {<VideoOnDemand />},
                             Route::Home => html! {<Home />},
+                            Route::Video(cid) => html! {<Video metadata_cid=cid />}
                         }
                     })
                 />

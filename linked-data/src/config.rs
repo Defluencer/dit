@@ -1,18 +1,11 @@
-//use crate::dag_nodes::IPLDLink;
+use crate::{LIVE_CHAT_TOPIC, LIVE_VIDEO_TOPIC};
 
 use std::collections::HashMap;
-
-use tokio::stream::StreamExt;
-
-use hyper::body::Bytes;
-
-use ipfs_api::response::Error;
-use ipfs_api::IpfsClient;
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Config {
+pub struct Configuration {
     pub gossipsub_topics: Topics,
     pub addresses: Addrs,
     pub tracks: HashMap<String, Track>,
@@ -41,7 +34,7 @@ pub struct Track {
     pub bandwidth: usize,
 }
 
-impl Default for Config {
+impl Default for Configuration {
     fn default() -> Self {
         let mut tracks = HashMap::new();
 
@@ -83,8 +76,8 @@ impl Default for Config {
 
         Self {
             gossipsub_topics: Topics {
-                video: "livelikevideo".into(),
-                chat: "livelikechat".into(),
+                video: LIVE_VIDEO_TOPIC.into(),
+                chat: LIVE_CHAT_TOPIC.into(),
             },
 
             addresses: Addrs {
@@ -97,22 +90,4 @@ impl Default for Config {
             segment_duration: 4,
         }
     }
-}
-
-pub async fn _get_config(ipfs: &IpfsClient) -> Config {
-    if let Ok(config) = ipfs.name_resolve(None, false, false).await {
-        let buffer: Result<Bytes, Error> = ipfs.dag_get(&config.path).collect().await;
-
-        if let Ok(buffer) = buffer {
-            if let Ok(config) = serde_json::from_slice(&buffer) {
-                return config;
-            }
-        }
-    }
-
-    let config = Config::default();
-
-    eprintln!("Cannot load config. Fallback -> {:#?}", config);
-
-    config
 }

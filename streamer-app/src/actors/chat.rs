@@ -1,7 +1,5 @@
 use crate::actors::archivist::Archive;
-use crate::dag_nodes::IPLDLink;
 
-use std::collections::HashSet;
 use std::str;
 
 use tokio::stream::StreamExt;
@@ -13,53 +11,12 @@ use tokio::sync::mpsc::Sender;
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
-use serde::{Deserialize, Serialize};
+use linked_data::chat::{ChatIdentity, ChatMessage};
 
 //use cid::Cid;
 use multibase::Base;
 
 //TODO check if BrightID can be integrated
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
-pub struct ChatIdentity {
-    #[serde(rename = "key")]
-    pub public_key: String,
-}
-
-/// Chat message optionaly signed with some form of private key
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChatMessage {
-    pub identity: ChatIdentity,
-
-    pub signature: String,
-
-    pub data: ChatContent,
-}
-
-/// User name, message and a link to VideoNode as timestamp
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChatContent {
-    pub name: String,
-
-    pub message: String,
-
-    pub timestamp: IPLDLink,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Blacklist {
-    pub blacklist: HashSet<ChatIdentity>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Whitelist {
-    pub whitelist: HashSet<ChatIdentity>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Moderators {
-    pub mods: HashSet<ChatIdentity>,
-}
 
 pub struct ChatAggregator {
     ipfs: IpfsClient,
