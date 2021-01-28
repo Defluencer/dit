@@ -51,8 +51,6 @@ where
     Ok(cid)
 }
 
-//TODO fix this mess...
-
 //Hack to get around js api
 //Have to deserialize into rust cid from js object representing cid
 

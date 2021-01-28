@@ -1,4 +1,4 @@
-const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
+const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 45005, protocol: 'http' })
 
 export async function subscribe(topic, pubsubMessage) {
     await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))

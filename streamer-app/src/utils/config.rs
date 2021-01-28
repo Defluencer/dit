@@ -14,7 +14,7 @@ pub async fn get_config() -> Configuration {
 
             match serde_json::to_vec_pretty(&config) {
                 Ok(data) => {
-                    if let Err(_) = fs::write("config.json", data).await {
+                    if fs::write("config.json", data).await.is_err() {
                         eprintln!("Cannot write config to disk");
                     }
                 }
