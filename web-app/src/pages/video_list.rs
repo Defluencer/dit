@@ -1,8 +1,7 @@
 use crate::components::VideoThumbnail;
 use crate::utils::{
-    get_local_list, get_local_storage, get_local_video_metadata, ipfs_dag_get_list,
-    ipfs_dag_get_metadata, ipfs_name_resolve_list, /* ipfs_subscribe, ipfs_unsubscribe, */
-    set_local_list, set_local_video_metadata,
+    get_local_list, get_local_storage, ipfs_dag_get_callback, ipfs_name_resolve_list,
+    /* ipfs_subscribe, ipfs_unsubscribe, */ set_local_list,
 };
 
 //use std::convert::TryFrom;
@@ -18,7 +17,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew::services::ConsoleService;
 //use yew::Callback;
 
-use linked_data::beacon::{VideoList, VideoMetadata};
+use linked_data::beacon::{TempVideoList, TempVideoMetadata, VideoList, VideoMetadata};
 use linked_data::BEACON_IPNS_CID;
 
 use cid::Cid;
@@ -49,40 +48,15 @@ impl Component for VideoOnDemand {
 
         let storage = get_local_storage(&window);
 
-        let data = get_local_list(storage.as_ref());
+        let list_cid = get_local_list(storage.as_ref());
 
-        let (list_cid, video_list) = {
-            if let Some((list_cid, video_list)) = data {
-                (Some(list_cid), Some(video_list))
-            } else {
-                (None, None)
-            }
-        };
+        if let Some(cid) = list_cid {
+            let cb = link.callback(Msg::List);
 
-        let metadata = match &video_list.as_ref() {
-            Some(list) => {
-                #[cfg(debug_assertions)]
-                ConsoleService::info("Get All Video Metadata");
-
-                let mut metadata = Vec::with_capacity(list.metadata.len());
-
-                for cid in list.metadata.iter() {
-                    match get_local_video_metadata(&cid.link, storage.as_ref()) {
-                        Some(video_md) => metadata.push((cid.link, video_md)),
-                        None => spawn_local(ipfs_dag_get_metadata(
-                            cid.link,
-                            link.callback(Msg::Metadata),
-                        )),
-                    }
-                }
-
-                metadata
-            }
-            None => Vec::with_capacity(10),
-        };
+            spawn_local(ipfs_dag_get_callback::<TempVideoList, _>(cid, cb));
+        }
 
         //listen_to_beacon(link.callback(Msg::Beacon));
-
         spawn_local(ipfs_name_resolve_list(
             BEACON_IPNS_CID,
             link.callback(Msg::Beacon),
@@ -91,9 +65,9 @@ impl Component for VideoOnDemand {
         Self {
             link,
             list_cid,
-            video_list,
+            video_list: None,
             storage,
-            metadata,
+            metadata: Vec::with_capacity(10),
         }
     }
 
@@ -135,6 +109,7 @@ impl Component for VideoOnDemand {
 }
 
 impl VideoOnDemand {
+    /// Receive cid of video list, it then try to get the list
     fn beacon_update(&mut self, cid: Cid) -> bool {
         if Some(cid) == self.list_cid {
             return false;
@@ -145,11 +120,12 @@ impl VideoOnDemand {
 
         let cb = self.link.callback(Msg::List);
 
-        spawn_local(ipfs_dag_get_list(cid, cb));
+        spawn_local(ipfs_dag_get_callback::<TempVideoList, _>(cid, cb));
 
         false
     }
 
+    /// Receive video list, it then save list locally and try to get all metadata
     fn video_list_update(&mut self, new_list_cid: Cid, new_list: VideoList) -> bool {
         #[cfg(debug_assertions)]
         ConsoleService::info("Video List Update");
@@ -167,31 +143,12 @@ impl VideoOnDemand {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("{} New Videos", &new_vids_count));
 
-        set_local_list(&new_list_cid, &new_list, self.storage.as_ref());
-
-        let mut update = false;
+        set_local_list(&new_list_cid, self.storage.as_ref());
 
         //iter from newest take only new videos then iter from oldest new videos
         for metadata in new_list.metadata.iter().rev().take(new_vids_count).rev() {
-            let cid = metadata.link;
-
-            if let Some(metadata) = get_local_video_metadata(&cid, self.storage.as_ref()) {
-                #[cfg(debug_assertions)]
-                ConsoleService::info(&format!(
-                    "Add Display => {} \n {}",
-                    &cid.to_string(),
-                    &serde_json::to_string_pretty(&metadata).expect("Can't print")
-                ));
-
-                self.metadata.push((cid, metadata));
-
-                update = true;
-
-                continue;
-            }
-
-            spawn_local(ipfs_dag_get_metadata(
-                cid,
+            spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, _>(
+                metadata.link,
                 self.link.callback(Msg::Metadata),
             ))
         }
@@ -199,10 +156,10 @@ impl VideoOnDemand {
         self.list_cid = Some(new_list_cid);
         self.video_list = Some(new_list);
 
-        update
+        false
     }
 
-    /// Called when ipfs dag get returns video metadata then update local storage and thumbnails
+    /// Receive video metadata, it then update thumbnails
     fn video_metadata_update(&mut self, cid: Cid, metadata: VideoMetadata) -> bool {
         let video_list = match self.video_list.as_ref() {
             Some(vl) => vl,
@@ -213,12 +170,10 @@ impl VideoOnDemand {
         ConsoleService::info("Video Metadata Update");
 
         //iter from newest
-        for video_list_cid in video_list.metadata.iter().rev() {
-            let video_list_cid = video_list_cid.link;
+        for metadata_link in video_list.metadata.iter().rev() {
+            let metadata_cid = metadata_link.link;
 
-            if cid == video_list_cid {
-                set_local_video_metadata(&cid, &metadata, self.storage.as_ref());
-
+            if cid == metadata_cid {
                 #[cfg(debug_assertions)]
                 ConsoleService::info(&format!(
                     "Display Add => {} \n {}",
@@ -251,7 +206,7 @@ impl VideoOnDemand {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
 
-        if from != INFLUENCER_PEER_ID {
+        if from != STREAMER_PEER_ID {
             #[cfg(debug_assertions)]
             ConsoleService::warn("Unauthorized Sender");
             return;
@@ -281,9 +236,9 @@ impl VideoOnDemand {
         cb.emit(cid);
     }) as Box<dyn Fn(String, Vec<u8>)>);
 
-    ipfs_subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
+    ipfs_subscribe(CONTENT_UPDATE_TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
 } */
 
 /* fn stop_list_update() {
-    ipfs_unsubscribe(TOPIC.into());
+    ipfs_unsubscribe(CONTENT_UPDATE_TOPIC.into());
 } */

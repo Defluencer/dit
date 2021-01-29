@@ -28,19 +28,13 @@ pub struct VideoMetadata {
     pub video: IPLDLink,
 }
 
-//Hack
+//Hack is needed to get from JsValue to Rust type via js http api
 
-#[derive(Deserialize)]
-pub struct TempVideoList {
-    pub counter: usize,
-    pub metadata: Vec<FakeCid>,
-}
+impl From<TempVideoList> for VideoList {
+    fn from(temp: TempVideoList) -> Self {
+        let mut metadata = Vec::with_capacity(temp.metadata.len());
 
-impl TempVideoList {
-    pub fn into_video_list(self) -> VideoList {
-        let mut metadata = Vec::with_capacity(self.metadata.len());
-
-        for fake_cid in self.metadata.into_iter() {
+        for fake_cid in temp.metadata.into_iter() {
             let multihash =
                 Multihash::from_bytes(&fake_cid.hash.data).expect("Can't get multihash");
 
@@ -49,11 +43,40 @@ impl TempVideoList {
             metadata.push(IPLDLink { link: cid });
         }
 
-        VideoList {
-            counter: self.counter,
+        Self {
+            counter: temp.counter,
             metadata,
         }
     }
+}
+
+impl From<TempVideoMetadata> for VideoMetadata {
+    fn from(temp: TempVideoMetadata) -> Self {
+        let multihash = Multihash::from_bytes(&temp.image.hash.data).expect("Can't get multihash");
+
+        let cid = Cid::new_v1(RAW, multihash);
+
+        let image = IPLDLink { link: cid };
+
+        let multihash = Multihash::from_bytes(&temp.video.hash.data).expect("Can't get multihash");
+
+        let cid = Cid::new_v1(DAG_CBOR, multihash);
+
+        let video = IPLDLink { link: cid };
+
+        Self {
+            title: temp.title,
+            duration: temp.duration,
+            image,
+            video,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct TempVideoList {
+    pub counter: usize,
+    pub metadata: Vec<FakeCid>,
 }
 
 #[derive(Deserialize)]
@@ -62,27 +85,4 @@ pub struct TempVideoMetadata {
     pub duration: f64,
     pub image: FakeCid,
     pub video: FakeCid,
-}
-
-impl TempVideoMetadata {
-    pub fn into_metadata(self) -> VideoMetadata {
-        let multihash = Multihash::from_bytes(&self.image.hash.data).expect("Can't get multihash");
-
-        let cid = Cid::new_v1(RAW, multihash);
-
-        let image = IPLDLink { link: cid };
-
-        let multihash = Multihash::from_bytes(&self.video.hash.data).expect("Can't get multihash");
-
-        let cid = Cid::new_v1(DAG_CBOR, multihash);
-
-        let video = IPLDLink { link: cid };
-
-        VideoMetadata {
-            title: self.title,
-            duration: self.duration,
-            image,
-            video,
-        }
-    }
 }

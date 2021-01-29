@@ -1,4 +1,4 @@
-use crate::utils::bindings::{ipfs_cat, ipfs_dag_get, ipfs_name_resolve};
+use crate::utils::bindings::{ipfs_cat, ipfs_dag_get, ipfs_dag_get_path, ipfs_name_resolve};
 
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -10,8 +10,6 @@ use yew::Callback;
 
 use js_sys::Uint8Array;
 use web_sys::SourceBuffer;
-
-use linked_data::beacon::{TempVideoList, TempVideoMetadata, VideoList, VideoMetadata};
 
 use cid::Cid;
 
@@ -41,7 +39,11 @@ pub async fn ipfs_name_resolve_list(cid: &str, cb: Callback<Cid>) {
         }
     };
 
-    let path = js_value.as_string().expect("Invalid Js String");
+    let path = match js_value.as_string() {
+        Some(string) => string,
+        None => return,
+    };
+
     let path = PathBuf::try_from(path).expect("Invalid Path");
     let file_name = path.file_name().expect("Invalid File Name");
     let string = file_name.to_str().expect("Invalid Unicode");
@@ -50,9 +52,34 @@ pub async fn ipfs_name_resolve_list(cid: &str, cb: Callback<Cid>) {
     cb.emit(cid);
 }
 
-/* pub async fn ipfs_dag_get_node_async<T>(cid: Cid, cb: Callback<(Cid, T)>)
+pub async fn ipfs_dag_get_path_async<T, U>(cid: Cid, path: &str) -> Result<U, ()>
 where
     T: for<'a> serde::Deserialize<'a>,
+    U: for<'a> From<T>,
+{
+    let node = match ipfs_dag_get_path(&cid.to_string(), path).await {
+        Ok(result) => result,
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return Err(());
+        }
+    };
+
+    let temp: T = match node.into_serde() {
+        Ok(result) => result,
+        Err(e) => {
+            ConsoleService::error(&format!("{:?}", e));
+            return Err(());
+        }
+    };
+
+    Ok(temp.into())
+}
+
+pub async fn ipfs_dag_get_callback<T, U>(cid: Cid, cb: Callback<(Cid, U)>)
+where
+    T: for<'a> serde::Deserialize<'a>,
+    U: for<'a> From<T>,
 {
     let node = match ipfs_dag_get(&cid.to_string()).await {
         Ok(result) => result,
@@ -62,7 +89,7 @@ where
         }
     };
 
-    let node: T = match node.into_serde() {
+    let temp: T = match node.into_serde() {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
@@ -70,49 +97,7 @@ where
         }
     };
 
-    cb.emit((cid, node));
-} */
-
-pub async fn ipfs_dag_get_list(cid: Cid, cb: Callback<(Cid, VideoList)>) {
-    let node = match ipfs_dag_get(&cid.to_string()).await {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let temp: TempVideoList = match node.into_serde() {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let node = temp.into_video_list();
-
-    cb.emit((cid, node));
-}
-
-pub async fn ipfs_dag_get_metadata(cid: Cid, cb: Callback<(Cid, VideoMetadata)>) {
-    let node = match ipfs_dag_get(&cid.to_string()).await {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let temp: TempVideoMetadata = match node.into_serde() {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let node = temp.into_metadata();
+    let node = temp.into();
 
     cb.emit((cid, node));
 }

@@ -1,7 +1,9 @@
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::utils::{cat_and_buffer, ipfs_dag_get_path, ExponentialMovingAverage, Track, Tracks};
+use crate::utils::{
+    cat_and_buffer, ipfs_dag_get_path_async, ExponentialMovingAverage, Track, Tracks,
+};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -12,7 +14,7 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url, Window};
 use yew::services::ConsoleService;
 
 use linked_data::beacon::VideoMetadata;
-use linked_data::video::TempSetupNode;
+use linked_data::video::{SetupNode, TempSetupNode};
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -321,25 +323,13 @@ async fn add_source_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Adding Source Buffer");
 
-    let cid = &video_record.metadata.video.link.to_string();
+    let cid = video_record.metadata.video.link;
 
-    let setup_node = match ipfs_dag_get_path(cid, SETUP_PATH).await {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let temp_node: TempSetupNode = match setup_node.into_serde() {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let setup_node = temp_node.into_setup_node();
+    let setup_node =
+        match ipfs_dag_get_path_async::<TempSetupNode, SetupNode>(cid, SETUP_PATH).await {
+            Ok(result) => result,
+            Err(_) => return,
+        };
 
     #[cfg(debug_assertions)]
     ConsoleService::info(&format!(

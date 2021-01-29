@@ -12,8 +12,9 @@ use cid::Cid;
 
 pub const STREAMER_PEER_ID: &str = "12D3KooWPLy5RjRxZau5gW7CW8bLFa5C6mTVaxqaZesa2UzbQ6HE";
 
-pub const LIVE_VIDEO_TOPIC: &str = "livevideo";
-pub const LIVE_CHAT_TOPIC: &str = "livechat";
+pub const CONTENT_UPDATE_TOPIC: &str = "defluencer_content_update";
+pub const LIVE_VIDEO_TOPIC: &str = "defluencer_live_video";
+pub const LIVE_CHAT_TOPIC: &str = "efluencer_live_chat";
 
 pub const BEACON_IPNS_CID: &str = "k51qzi5uqu5dkynceicmtl4hvjaqdyfuqyjspexcwqfvdnzfb58d7tr4dewfat";
 
@@ -51,8 +52,7 @@ where
     Ok(cid)
 }
 
-//Hack to get around js api
-//Have to deserialize into rust cid from js object representing cid
+//Hack is needed to get from JsValue to Rust type via js http api
 
 pub const RAW: u64 = 0x55;
 pub const DAG_CBOR: u64 = 0x71;
