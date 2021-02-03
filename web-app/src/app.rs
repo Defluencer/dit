@@ -16,8 +16,8 @@ pub enum Route {
     #[to = "/{cid}/live"]
     Live(Cid), // cid for now and ENS later
 
-    #[to = "/{cid}"]
-    Defluencer(Cid), // cid for now and ENS later
+    #[to = "/{ens_name}"]
+    Defluencer(String),
 
     #[to = "/"]
     Home,
@@ -49,7 +49,7 @@ impl Component for App {
                         match switch {
                             Route::Live(cid) => html! {<LiveStream beacon_cid=cid />},
                             Route::VideoList(cid) => html! {<VideoOnDemand beacon_cid=cid />},
-                            Route::Defluencer(cid) => html! { <Defluencer beacon_cid=cid /> },
+                            Route::Defluencer(name) => html! { <Defluencer ens_name=name /> },
                             Route::Home => html! {<Home />},
                             Route::Video(cid) => html! {<Video metadata_cid=cid />}
                         }
