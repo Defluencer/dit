@@ -1,5 +1,3 @@
-use crate::{LIVE_CHAT_TOPIC, LIVE_VIDEO_TOPIC};
-
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -17,8 +15,8 @@ pub struct Configuration {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Topics {
-    pub video: String,
-    pub chat: String,
+    pub live_video: String,
+    pub live_chat: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -76,8 +74,8 @@ impl Default for Configuration {
 
         Self {
             gossipsub_topics: Topics {
-                video: LIVE_VIDEO_TOPIC.into(),
-                chat: LIVE_CHAT_TOPIC.into(),
+                live_video: "defluencer_live_video".into(),
+                live_chat: "defluencer_live_chat".into(),
             },
 
             addresses: Addrs {

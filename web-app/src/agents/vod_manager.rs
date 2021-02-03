@@ -1,9 +1,9 @@
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::utils::{
-    cat_and_buffer, ipfs_dag_get_path_async, ExponentialMovingAverage, Track, Tracks,
-};
+use crate::utils::ema::ExponentialMovingAverage;
+use crate::utils::ipfs::{cat_and_buffer, ipfs_dag_get_path_async};
+use crate::utils::tracks::{Track, Tracks};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;

@@ -17,7 +17,7 @@ pub async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
     let segment = match ipfs_cat(&path).await {
         Ok(vs) => vs,
         Err(e) => {
-            ConsoleService::warn(&format!("{:?}", e));
+            ConsoleService::warn(&format!("{:#?}", e));
             return;
         }
     };
@@ -25,19 +25,41 @@ pub async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
     let segment: &Uint8Array = segment.unchecked_ref();
 
     if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(segment) {
-        ConsoleService::warn(&format!("{:?}", e));
+        ConsoleService::warn(&format!("{:#?}", e));
         return;
     }
 }
 
-pub async fn ipfs_name_resolve_list(cid: &str, cb: Callback<Cid>) {
-    let js_value = match ipfs_name_resolve(cid).await {
+pub async fn ipfs_resolve_and_get_callback<T, U>(ipns: String, cb: Callback<(Cid, U)>)
+where
+    T: for<'a> serde::Deserialize<'a>,
+    U: for<'a> From<T>,
+{
+    let js_value = match ipfs_name_resolve(&ipns).await {
         Ok(result) => result,
         Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
+            ConsoleService::error(&format!("{:#?}", e));
             return;
         }
     };
+
+    let node = match ipfs_dag_get(&ipns).await {
+        Ok(result) => result,
+        Err(e) => {
+            ConsoleService::error(&format!("{:#?}", e));
+            return;
+        }
+    };
+
+    let temp: T = match node.into_serde() {
+        Ok(result) => result,
+        Err(e) => {
+            ConsoleService::error(&format!("{:#?}", e));
+            return;
+        }
+    };
+
+    let node = temp.into();
 
     let path = match js_value.as_string() {
         Some(string) => string,
@@ -49,7 +71,7 @@ pub async fn ipfs_name_resolve_list(cid: &str, cb: Callback<Cid>) {
     let string = file_name.to_str().expect("Invalid Unicode");
     let cid = Cid::try_from(string).expect("Invalid Cid");
 
-    cb.emit(cid);
+    cb.emit((cid, node));
 }
 
 pub async fn ipfs_dag_get_path_async<T, U>(cid: Cid, path: &str) -> Result<U, ()>
@@ -60,7 +82,7 @@ where
     let node = match ipfs_dag_get_path(&cid.to_string(), path).await {
         Ok(result) => result,
         Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
+            ConsoleService::error(&format!("{:#?}", e));
             return Err(());
         }
     };
@@ -68,7 +90,7 @@ where
     let temp: T = match node.into_serde() {
         Ok(result) => result,
         Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
+            ConsoleService::error(&format!("{:#?}", e));
             return Err(());
         }
     };
@@ -84,7 +106,7 @@ where
     let node = match ipfs_dag_get(&cid.to_string()).await {
         Ok(result) => result,
         Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
+            ConsoleService::error(&format!("{:#?}", e));
             return;
         }
     };
@@ -92,7 +114,7 @@ where
     let temp: T = match node.into_serde() {
         Ok(result) => result,
         Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
+            ConsoleService::error(&format!("{:#?}", e));
             return;
         }
     };

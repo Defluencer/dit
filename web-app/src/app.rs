@@ -1,5 +1,4 @@
-use crate::components::Navbar;
-use crate::pages::{Home, LiveStream, Video, VideoOnDemand};
+use crate::pages::{Defluencer, Home, LiveStream, Video, VideoOnDemand};
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew_router::prelude::{Router, Switch};
@@ -11,11 +10,14 @@ pub enum Route {
     #[to = "/video/{cid}"]
     Video(Cid),
 
-    #[to = "/videos"]
-    Videos,
+    #[to = "/{cid}/videos"]
+    VideoList(Cid), // cid for now and ENS later
 
-    #[to = "/live"]
-    Live,
+    #[to = "/{cid}/live"]
+    Live(Cid), // cid for now and ENS later
+
+    #[to = "/{cid}"]
+    Defluencer(Cid), // cid for now and ENS later
 
     #[to = "/"]
     Home,
@@ -42,12 +44,12 @@ impl Component for App {
     fn view(&self) -> Html {
         html! {
             <>
-                <Navbar />
                 <Router<Route>
                     render = Router::render(move |switch: Route| {
                         match switch {
-                            Route::Live => html! {<LiveStream />},
-                            Route::Videos => html! {<VideoOnDemand />},
+                            Route::Live(cid) => html! {<LiveStream beacon_cid=cid />},
+                            Route::VideoList(cid) => html! {<VideoOnDemand beacon_cid=cid />},
+                            Route::Defluencer(cid) => html! { <Defluencer beacon_cid=cid /> },
                             Route::Home => html! {<Home />},
                             Route::Video(cid) => html! {<Video metadata_cid=cid />}
                         }

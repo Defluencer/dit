@@ -1,3 +1,4 @@
+use crate::config::Topics;
 use crate::{FakeCid, IPLDLink, DAG_CBOR, RAW};
 
 use serde::{Deserialize, Serialize};
@@ -5,17 +6,18 @@ use serde::{Deserialize, Serialize};
 use cid::Cid;
 use multihash::Multihash;
 
-/// Beacon pediodically send up to date video list cid crypto-signed
-/* #[derive(Deserialize, Serialize)]
-pub struct Beep {
-    pub list: IPLDLink,
-    pub signature: String,
-} */
+/// Beacon
+#[derive(Deserialize, Serialize)]
+pub struct Beacon {
+    pub topics: Topics,
 
-/// List of video metadata plus update count
+    pub peer_id: String,    // base58btc encoded string
+    pub video_list: String, // ipns hash egg. "/ipns/<hash>"
+}
+
+/// List of all video metadata
 #[derive(Deserialize, Serialize)]
 pub struct VideoList {
-    pub counter: usize, // total number of video posted. Can ONLY go up. used to determine most recent update
     pub metadata: Vec<IPLDLink>, // oldest to newest
 }
 
@@ -30,6 +32,8 @@ pub struct VideoMetadata {
 
 //Hack is needed to get from JsValue to Rust type via js http api
 
+//TODO fix this hack
+
 impl From<TempVideoList> for VideoList {
     fn from(temp: TempVideoList) -> Self {
         let mut metadata = Vec::with_capacity(temp.metadata.len());
@@ -43,10 +47,7 @@ impl From<TempVideoList> for VideoList {
             metadata.push(IPLDLink { link: cid });
         }
 
-        Self {
-            counter: temp.counter,
-            metadata,
-        }
+        Self { metadata }
     }
 }
 

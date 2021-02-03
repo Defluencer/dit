@@ -1,6 +1,5 @@
 use crate::components::VideoPlayer;
-
-use crate::utils::ipfs_dag_get_callback;
+use crate::utils::ipfs::ipfs_dag_get_callback;
 
 use wasm_bindgen_futures::spawn_local;
 

@@ -31,7 +31,7 @@ async fn main() {
         ipfs.clone(),
         video_rx,
         archive_tx.clone(),
-        config.gossipsub_topics.video,
+        config.gossipsub_topics.live_video,
         config.tracks,
     );
     let video_handle = tokio::spawn(async move {
@@ -41,7 +41,7 @@ async fn main() {
     let mut chat = ChatAggregator::new(
         ipfs.clone(),
         archive_tx.clone(),
-        config.gossipsub_topics.chat,
+        config.gossipsub_topics.live_chat,
     );
     let chat_handle = tokio::spawn(async move {
         chat.start_receiving().await;

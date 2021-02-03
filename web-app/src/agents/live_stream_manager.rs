@@ -3,10 +3,10 @@ use std::convert::TryFrom;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::utils::{
-    cat_and_buffer, ipfs_dag_get, ipfs_subscribe, ipfs_unsubscribe, ExponentialMovingAverage,
-    Track, Tracks,
-};
+use crate::utils::bindings::{ipfs_dag_get, ipfs_subscribe, ipfs_unsubscribe};
+use crate::utils::ema::ExponentialMovingAverage;
+use crate::utils::ipfs::cat_and_buffer;
+use crate::utils::tracks::{Track, Tracks};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -115,7 +115,7 @@ impl Drop for LiveStreamManager {
         #[cfg(debug_assertions)]
         ConsoleService::info("Dropping LiveStreamManager");
 
-        ipfs_unsubscribe(self.topic.clone().into());
+        ipfs_unsubscribe(&self.topic);
 
         let handle = self.stream.handle.load(Ordering::Relaxed);
 
@@ -538,7 +538,8 @@ fn ipfs_pubsub(topic: &str, buffer: Buffer, streamer_peer_id: String) {
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn(String, Vec<u8>)>);
-    ipfs_subscribe(topic.into(), callback.into_js_value().unchecked_ref());
+
+    ipfs_subscribe(topic, callback.into_js_value().unchecked_ref());
 }
 
 /// Decode vector of byte into CID

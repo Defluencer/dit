@@ -232,6 +232,8 @@ impl Archivist {
             }
         };
 
+        println!("Pinning Nodes...");
+
         match self.ipfs.pin_add(&cid.to_string(), true).await {
             Ok(_) => println!("Stream CID => {}", &cid.to_string()),
             Err(e) => eprintln!("IPFS pin add failed {}", e),
