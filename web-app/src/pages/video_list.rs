@@ -1,30 +1,28 @@
-use crate::components::VideoThumbnail;
-use crate::utils::{
-    get_local_list, get_local_storage, get_local_video_metadata, ipfs_dag_get_list,
-    ipfs_dag_get_metadata, ipfs_name_resolve_list, /* ipfs_subscribe, ipfs_unsubscribe, */
-    set_local_list, set_local_video_metadata,
+use crate::components::{Navbar, VideoThumbnail};
+use crate::utils::ens::get_beacon_from_name;
+use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
+use crate::utils::local_storage::{
+    get_local_beacon, get_local_list, get_local_storage, set_local_beacon, set_local_list,
 };
-
-//use std::convert::TryFrom;
-
-//use wasm_bindgen::prelude::Closure;
-//use wasm_bindgen::JsCast;
 
 use wasm_bindgen_futures::spawn_local;
 
 use web_sys::Storage;
 
-use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
+use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
-//use yew::Callback;
 
-use linked_data::beacon::{VideoList, VideoMetadata};
-use linked_data::BEACON_IPNS_CID;
+use linked_data::beacon::{Beacon, TempVideoList, TempVideoMetadata, VideoList, VideoMetadata};
 
 use cid::Cid;
 
 pub struct VideoOnDemand {
     link: ComponentLink<Self>,
+
+    ens_name: String,
+
+    beacon_cid: Option<Cid>,
+    beacon: Option<Beacon>,
 
     list_cid: Option<Cid>,
     video_list: Option<VideoList>,
@@ -35,71 +33,54 @@ pub struct VideoOnDemand {
 }
 
 pub enum Msg {
-    Beacon(Cid),
+    Name(Cid),
+    Beacon((Cid, Beacon)),
     List((Cid, VideoList)),
     Metadata((Cid, VideoMetadata)),
 }
 
+#[derive(Properties, Clone)]
+pub struct Props {
+    pub ens_name: String,
+}
+
 impl Component for VideoOnDemand {
     type Message = Msg;
-    type Properties = ();
+    type Properties = Props;
 
-    fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
+    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let ens_name = props.ens_name;
+
         let window = web_sys::window().expect("Can't get window");
-
         let storage = get_local_storage(&window);
 
-        let data = get_local_list(storage.as_ref());
+        let beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
 
-        let (list_cid, video_list) = {
-            if let Some((list_cid, video_list)) = data {
-                (Some(list_cid), Some(video_list))
-            } else {
-                (None, None)
-            }
-        };
+        if let Some(cid) = beacon_cid {
+            spawn_local(ipfs_dag_get_callback(cid, link.callback(Msg::Beacon)));
+        }
 
-        let metadata = match &video_list.as_ref() {
-            Some(list) => {
-                #[cfg(debug_assertions)]
-                ConsoleService::info("Get All Video Metadata");
-
-                let mut metadata = Vec::with_capacity(list.metadata.len());
-
-                for cid in list.metadata.iter() {
-                    match get_local_video_metadata(&cid.link, storage.as_ref()) {
-                        Some(video_md) => metadata.push((cid.link, video_md)),
-                        None => spawn_local(ipfs_dag_get_metadata(
-                            cid.link,
-                            link.callback(Msg::Metadata),
-                        )),
-                    }
-                }
-
-                metadata
-            }
-            None => Vec::with_capacity(10),
-        };
-
-        //listen_to_beacon(link.callback(Msg::Beacon));
-
-        spawn_local(ipfs_name_resolve_list(
-            BEACON_IPNS_CID,
-            link.callback(Msg::Beacon),
+        spawn_local(get_beacon_from_name(
+            ens_name.clone(),
+            link.callback(Msg::Name),
         ));
 
         Self {
             link,
-            list_cid,
-            video_list,
+            ens_name,
+            beacon_cid,
+            beacon: None,
+            list_cid: None,
+            video_list: None,
             storage,
-            metadata,
+            metadata: Vec::with_capacity(10),
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Beacon(cid) => self.beacon_update(cid),
+            Msg::Name(cid) => self.name_update(cid),
+            Msg::Beacon((_, beacon)) => self.beacon_update(beacon),
             Msg::List((cid, list)) => self.video_list_update(cid, list),
             Msg::Metadata((cid, metadata)) => self.video_metadata_update(cid, metadata),
         }
@@ -110,22 +91,25 @@ impl Component for VideoOnDemand {
     }
 
     fn view(&self) -> Html {
-        if self.metadata.is_empty() {
-            html! {
-                <div class="vod_page">
-                    <div class="center_text">  {"Loading..."} </div>
-                </div>
-            }
-        } else {
-            html! {
-                <div class="vod_page">
-                {
-                    for self.metadata.iter().rev().map(|(cid, mt)| html! {
-                        <VideoThumbnail metadata_cid=cid metadata=mt />
-                    })
+        html! {
+            <div class="vod_page">
+            <Navbar ens_name=self.ens_name.clone() />
+            {
+                if self.metadata.is_empty() {
+                    html! {
+                        <div class="center_text">  {"Loading..."} </div>
+                    }
+                } else {
+                    html! {
+                        {
+                            for self.metadata.iter().rev().map(|(cid, mt)| html! {
+                                <VideoThumbnail metadata_cid=cid metadata=mt />
+                            })
+                        }
+                    }
                 }
-                </div>
             }
+            </div>
         }
     }
 
@@ -135,74 +119,72 @@ impl Component for VideoOnDemand {
 }
 
 impl VideoOnDemand {
-    fn beacon_update(&mut self, cid: Cid) -> bool {
-        if Some(cid) == self.list_cid {
-            return false;
-        }
-
+    /// Receive Content hash from ethereum name service then get beacon
+    fn name_update(&mut self, cid: Cid) -> bool {
         #[cfg(debug_assertions)]
-        ConsoleService::info("Beacon Update");
+        ConsoleService::info("Name Update");
 
-        let cb = self.link.callback(Msg::List);
+        set_local_beacon(&self.ens_name, &cid, self.storage.as_ref());
 
-        spawn_local(ipfs_dag_get_list(cid, cb));
+        spawn_local(ipfs_dag_get_callback(cid, self.link.callback(Msg::Beacon)));
+
+        self.beacon_cid = Some(cid);
 
         false
     }
 
+    /// Receive beacon node, it then try to get the list
+    fn beacon_update(&mut self, beacon: Beacon) -> bool {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Beacon Update");
+
+        if let Some(cid) = get_local_list(&beacon.video_list, self.storage.as_ref()) {
+            spawn_local(ipfs_dag_get_callback::<TempVideoList, _>(
+                cid,
+                self.link.callback(Msg::List),
+            ));
+        }
+
+        spawn_local(ipfs_resolve_and_get_callback::<TempVideoList, _>(
+            beacon.video_list.clone(),
+            self.link.callback(Msg::List),
+        ));
+
+        self.beacon = Some(beacon);
+
+        false
+    }
+
+    /// Receive video list, it then save list locally and try to get all metadata
     fn video_list_update(&mut self, new_list_cid: Cid, new_list: VideoList) -> bool {
+        let beacon = match self.beacon.as_ref() {
+            Some(b) => b,
+            None => return false,
+        };
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Video List Update");
 
-        let mut new_vids_count = new_list.counter;
-
-        if let Some(old_list) = self.video_list.as_ref() {
-            if new_list.counter > old_list.counter {
-                new_vids_count = new_list.counter - old_list.counter;
-            } else {
-                return false;
-            }
-        }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("{} New Videos", &new_vids_count));
-
-        set_local_list(&new_list_cid, &new_list, self.storage.as_ref());
-
-        let mut update = false;
-
-        //iter from newest take only new videos then iter from oldest new videos
-        for metadata in new_list.metadata.iter().rev().take(new_vids_count).rev() {
-            let cid = metadata.link;
-
-            if let Some(metadata) = get_local_video_metadata(&cid, self.storage.as_ref()) {
-                #[cfg(debug_assertions)]
-                ConsoleService::info(&format!(
-                    "Add Display => {} \n {}",
-                    &cid.to_string(),
-                    &serde_json::to_string_pretty(&metadata).expect("Can't print")
-                ));
-
-                self.metadata.push((cid, metadata));
-
-                update = true;
-
-                continue;
-            }
-
-            spawn_local(ipfs_dag_get_metadata(
-                cid,
-                self.link.callback(Msg::Metadata),
-            ))
+        if self.video_list.is_some() {
+            self.metadata.clear();
         }
 
         self.list_cid = Some(new_list_cid);
         self.video_list = Some(new_list);
 
-        update
+        set_local_list(&beacon.video_list, &new_list_cid, self.storage.as_ref());
+
+        for metadata in self.video_list.as_ref().unwrap().metadata.iter() {
+            spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, _>(
+                metadata.link,
+                self.link.callback(Msg::Metadata),
+            ))
+        }
+
+        false
     }
 
-    /// Called when ipfs dag get returns video metadata then update local storage and thumbnails
+    /// Receive video metadata, it then update thumbnails
     fn video_metadata_update(&mut self, cid: Cid, metadata: VideoMetadata) -> bool {
         let video_list = match self.video_list.as_ref() {
             Some(vl) => vl,
@@ -213,12 +195,10 @@ impl VideoOnDemand {
         ConsoleService::info("Video Metadata Update");
 
         //iter from newest
-        for video_list_cid in video_list.metadata.iter().rev() {
-            let video_list_cid = video_list_cid.link;
+        for metadata_link in video_list.metadata.iter().rev() {
+            let metadata_cid = metadata_link.link;
 
-            if cid == video_list_cid {
-                set_local_video_metadata(&cid, &metadata, self.storage.as_ref());
-
+            if cid == metadata_cid {
                 #[cfg(debug_assertions)]
                 ConsoleService::info(&format!(
                     "Display Add => {} \n {}",
@@ -251,7 +231,7 @@ impl VideoOnDemand {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
 
-        if from != INFLUENCER_PEER_ID {
+        if from != STREAMER_PEER_ID {
             #[cfg(debug_assertions)]
             ConsoleService::warn("Unauthorized Sender");
             return;
@@ -281,9 +261,9 @@ impl VideoOnDemand {
         cb.emit(cid);
     }) as Box<dyn Fn(String, Vec<u8>)>);
 
-    ipfs_subscribe(TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
+    ipfs_subscribe(CONTENT_UPDATE_TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
 } */
 
 /* fn stop_list_update() {
-    ipfs_unsubscribe(TOPIC.into());
+    ipfs_unsubscribe(CONTENT_UPDATE_TOPIC.into());
 } */

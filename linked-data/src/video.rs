@@ -39,7 +39,28 @@ pub struct SetupNode {
     pub initialization_segments: Vec<IPLDLink>,
 }
 
-//Hack
+//Hack is needed to get from JsValue to Rust type via js http api
+
+impl From<TempSetupNode> for SetupNode {
+    fn from(temp: TempSetupNode) -> Self {
+        let mut initialization_segments = Vec::with_capacity(temp.initialization_segments.len());
+
+        for fake_cid in temp.initialization_segments.into_iter() {
+            let multihash =
+                Multihash::from_bytes(&fake_cid.hash.data).expect("Can't get multihash");
+
+            let cid = Cid::new_v1(RAW, multihash);
+
+            initialization_segments.push(IPLDLink { link: cid });
+        }
+
+        Self {
+            codecs: temp.codecs,
+            qualities: temp.qualities,
+            initialization_segments,
+        }
+    }
+}
 
 #[derive(Deserialize)]
 pub struct TempSetupNode {
@@ -51,25 +72,4 @@ pub struct TempSetupNode {
 
     #[serde(rename = "quality")]
     pub qualities: Vec<String>,
-}
-
-impl TempSetupNode {
-    pub fn into_setup_node(self) -> SetupNode {
-        let mut initialization_segments = Vec::with_capacity(self.initialization_segments.len());
-
-        for fake_cid in self.initialization_segments.into_iter() {
-            let multihash =
-                Multihash::from_bytes(&fake_cid.hash.data).expect("Can't get multihash");
-
-            let cid = Cid::new_v1(RAW, multihash);
-
-            initialization_segments.push(IPLDLink { link: cid });
-        }
-
-        SetupNode {
-            codecs: self.codecs,
-            qualities: self.qualities,
-            initialization_segments,
-        }
-    }
 }

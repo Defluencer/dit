@@ -12,7 +12,7 @@ The project aim is to provide decentralized live and on demand video streaming w
 ## Details
 - [Web App](https://github.com/SionoiS/dit/blob/master/web-app/README.md)
 - [Streamer App](https://github.com/SionoiS/dit/blob/master/streamer-app/README.md)
-- [Data](https://github.com/SionoiS/dit/blob/signaling/linked-data/README.md)
+- [Data](https://github.com/SionoiS/dit/blob/master/linked-data/README.md)
 
 ## License
 Licensed under either of

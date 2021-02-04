@@ -5,4 +5,4 @@ As video play, new nodes are created and linked to previous ones. A node contain
 ## Stream
 Nodes are created at specific intervals and linked together to form a structure around the video allowing it to be addressable by timecode.
 ## Beacon
-Simple CRDT containing a list of links to some content. By broadcasting this, other peers can access latest content.
+Simple list of links to some content. By broadcasting this, other peers can access latest content.

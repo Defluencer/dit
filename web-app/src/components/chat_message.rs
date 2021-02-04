@@ -15,7 +15,7 @@ impl ChatMessageData {
     fn render(&self) -> Html {
         html! {
             <div class="chat_message">
-                //<h3>{ &self.sender_name }</h3>
+                <h3>{ &self.sender_name }</h3>
                 <p>{ &self.message }</p>
             </div>
         }

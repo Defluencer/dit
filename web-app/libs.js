@@ -1,4 +1,4 @@
-const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 45005, protocol: 'http' })
+const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
 
 export async function subscribe(topic, pubsubMessage) {
     await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))
@@ -38,4 +38,12 @@ export async function cat(path) {
     }
 
     return value
+}
+
+const web3 = new Web3(window.ethereum)
+
+export async function getContenthash(ensName) {
+    const result = await web3.eth.ens.getContenthash(ensName);
+
+    return result.decoded
 }

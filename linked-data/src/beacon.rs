@@ -1,3 +1,4 @@
+use crate::config::Topics;
 use crate::{FakeCid, IPLDLink, DAG_CBOR, RAW};
 
 use serde::{Deserialize, Serialize};
@@ -5,17 +6,18 @@ use serde::{Deserialize, Serialize};
 use cid::Cid;
 use multihash::Multihash;
 
-/// Beacon pediodically send up to date video list cid crypto-signed
-/* #[derive(Deserialize, Serialize)]
-pub struct Beep {
-    pub list: IPLDLink,
-    pub signature: String,
-} */
+/// Beacon
+#[derive(Deserialize, Serialize)]
+pub struct Beacon {
+    pub topics: Topics,
 
-/// List of video metadata plus update count
+    pub peer_id: String,    // base58btc encoded string
+    pub video_list: String, // ipns hash egg. "/ipns/<hash>"
+}
+
+/// List of all video metadata
 #[derive(Deserialize, Serialize)]
 pub struct VideoList {
-    pub counter: usize, // total number of video posted. Can ONLY go up. used to determine most recent update
     pub metadata: Vec<IPLDLink>, // oldest to newest
 }
 
@@ -28,19 +30,15 @@ pub struct VideoMetadata {
     pub video: IPLDLink,
 }
 
-//Hack
+//Hack is needed to get from JsValue to Rust type via js http api
 
-#[derive(Deserialize)]
-pub struct TempVideoList {
-    pub counter: usize,
-    pub metadata: Vec<FakeCid>,
-}
+//TODO fix this hack
 
-impl TempVideoList {
-    pub fn into_video_list(self) -> VideoList {
-        let mut metadata = Vec::with_capacity(self.metadata.len());
+impl From<TempVideoList> for VideoList {
+    fn from(temp: TempVideoList) -> Self {
+        let mut metadata = Vec::with_capacity(temp.metadata.len());
 
-        for fake_cid in self.metadata.into_iter() {
+        for fake_cid in temp.metadata.into_iter() {
             let multihash =
                 Multihash::from_bytes(&fake_cid.hash.data).expect("Can't get multihash");
 
@@ -49,11 +47,37 @@ impl TempVideoList {
             metadata.push(IPLDLink { link: cid });
         }
 
-        VideoList {
-            counter: self.counter,
-            metadata,
+        Self { metadata }
+    }
+}
+
+impl From<TempVideoMetadata> for VideoMetadata {
+    fn from(temp: TempVideoMetadata) -> Self {
+        let multihash = Multihash::from_bytes(&temp.image.hash.data).expect("Can't get multihash");
+
+        let cid = Cid::new_v1(RAW, multihash);
+
+        let image = IPLDLink { link: cid };
+
+        let multihash = Multihash::from_bytes(&temp.video.hash.data).expect("Can't get multihash");
+
+        let cid = Cid::new_v1(DAG_CBOR, multihash);
+
+        let video = IPLDLink { link: cid };
+
+        Self {
+            title: temp.title,
+            duration: temp.duration,
+            image,
+            video,
         }
     }
+}
+
+#[derive(Deserialize)]
+pub struct TempVideoList {
+    pub counter: usize,
+    pub metadata: Vec<FakeCid>,
 }
 
 #[derive(Deserialize)]
@@ -62,27 +86,4 @@ pub struct TempVideoMetadata {
     pub duration: f64,
     pub image: FakeCid,
     pub video: FakeCid,
-}
-
-impl TempVideoMetadata {
-    pub fn into_metadata(self) -> VideoMetadata {
-        let multihash = Multihash::from_bytes(&self.image.hash.data).expect("Can't get multihash");
-
-        let cid = Cid::new_v1(RAW, multihash);
-
-        let image = IPLDLink { link: cid };
-
-        let multihash = Multihash::from_bytes(&self.video.hash.data).expect("Can't get multihash");
-
-        let cid = Cid::new_v1(DAG_CBOR, multihash);
-
-        let video = IPLDLink { link: cid };
-
-        VideoMetadata {
-            title: self.title,
-            duration: self.duration,
-            image,
-            video,
-        }
-    }
 }
