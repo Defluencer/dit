@@ -1,25 +1,37 @@
 use crate::components::{ChatWindow, LiveStreamPlayer, Navbar};
+use crate::utils::ens::get_beacon_from_name;
 use crate::utils::ipfs::ipfs_dag_get_callback;
+use crate::utils::local_storage::{get_local_beacon, get_local_storage, set_local_beacon};
 
 use wasm_bindgen_futures::spawn_local;
 
+use web_sys::Storage;
+
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::services::ConsoleService;
 
 use cid::Cid;
 
 use linked_data::beacon::Beacon;
 
 pub struct LiveStream {
-    beacon_cid: Cid,
+    link: ComponentLink<Self>,
+
+    ens_name: String,
+
+    beacon_cid: Option<Cid>,
     beacon: Option<Beacon>,
+
+    storage: Option<Storage>,
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub beacon_cid: Cid,
+    pub ens_name: String,
 }
 
 pub enum Msg {
+    Name(Cid),
     Beacon((Cid, Beacon)),
 }
 
@@ -28,19 +40,34 @@ impl Component for LiveStream {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        spawn_local(ipfs_dag_get_callback(
-            props.beacon_cid,
-            link.callback(Msg::Beacon),
+        let ens_name = props.ens_name;
+
+        let window = web_sys::window().expect("Can't get window");
+        let storage = get_local_storage(&window);
+
+        let beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
+
+        if let Some(cid) = beacon_cid {
+            spawn_local(ipfs_dag_get_callback(cid, link.callback(Msg::Beacon)));
+        }
+
+        spawn_local(get_beacon_from_name(
+            ens_name.clone(),
+            link.callback(Msg::Name),
         ));
 
         Self {
-            beacon_cid: props.beacon_cid,
+            link,
+            ens_name,
+            beacon_cid,
             beacon: None,
+            storage,
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::Name(cid) => self.name_update(cid),
             Msg::Beacon((_, beacon)) => self.beacon_update(beacon),
         }
     }
@@ -52,7 +79,7 @@ impl Component for LiveStream {
     fn view(&self) -> Html {
         html! {
             <div class="live_stream_page">
-                <Navbar beacon_cid=self.beacon_cid />
+                <Navbar ens_name=self.ens_name.clone() />
                 {
                     if let Some(beacon) = self.beacon.as_ref() {
                         html! {
@@ -73,7 +100,21 @@ impl Component for LiveStream {
 }
 
 impl LiveStream {
-    /// Receive cid of beacon node
+    /// Receive Content hash from ethereum name service then get beacon
+    fn name_update(&mut self, cid: Cid) -> bool {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Name Update");
+
+        set_local_beacon(&self.ens_name, &cid, self.storage.as_ref());
+
+        spawn_local(ipfs_dag_get_callback(cid, self.link.callback(Msg::Beacon)));
+
+        self.beacon_cid = Some(cid);
+
+        false
+    }
+
+    /// Receive beacon node
     fn beacon_update(&mut self, beacon: Beacon) -> bool {
         self.beacon = Some(beacon);
 

@@ -8,7 +8,11 @@ use yew::Callback;
 
 use cid::Cid;
 
-pub async fn get_beacon_from_name(name: String, cb: Callback<Cid>) {
+pub async fn get_beacon_from_name(mut name: String, cb: Callback<Cid>) {
+    name.insert_str(0, "defluencer.");
+
+    name.push_str(".eth");
+
     let js_value = match ens_get_content_hash(&name).await {
         Ok(hash) => hash,
         Err(e) => {

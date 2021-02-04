@@ -4,11 +4,9 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 
 use yew_router::components::RouterAnchor;
 
-use cid::Cid;
-
 #[derive(Properties, Clone)]
 pub struct Navbar {
-    pub beacon_cid: Cid,
+    pub ens_name: String,
 }
 
 impl Component for Navbar {
@@ -36,10 +34,10 @@ impl Component for Navbar {
                     /* <Anchor route=Route::Home classes="navbar_tab">
                         <div>{"Home"}</div>
                     </Anchor> */
-                    <Anchor route=Route::Live(self.beacon_cid) classes="navbar_tab">
+                    <Anchor route=Route::Live(self.ens_name.clone()) classes="navbar_tab">
                         <div>{"Live Stream"}</div>
                     </Anchor>
-                    <Anchor route=Route::VideoList(self.beacon_cid) classes="navbar_tab">
+                    <Anchor route=Route::VideoList(self.ens_name.clone()) classes="navbar_tab">
                         <div>{"Videos"}</div>
                     </Anchor>
                 </nav>

@@ -25,7 +25,7 @@ pub struct Props {
 }
 
 pub enum Msg {
-    Beacon(Cid),
+    Name(Cid),
 }
 
 impl Component for Defluencer {
@@ -35,15 +35,15 @@ impl Component for Defluencer {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let ens_name = props.ens_name;
 
-        spawn_local(get_beacon_from_name(
-            ens_name.clone(),
-            link.callback(Msg::Beacon),
-        ));
-
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
 
         let beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
+
+        spawn_local(get_beacon_from_name(
+            ens_name.clone(),
+            link.callback(Msg::Name),
+        ));
 
         Self {
             ens_name,
@@ -54,7 +54,7 @@ impl Component for Defluencer {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Beacon(cid) => self.beacon_update(cid),
+            Msg::Name(cid) => self.name_update(cid),
         }
     }
 
@@ -69,7 +69,7 @@ impl Component for Defluencer {
                 if let Some(cid) = self.beacon_cid {
                     html! {
                         <>
-                            <Navbar beacon_cid=cid />
+                            <Navbar ens_name=self.ens_name.clone() />
                             <div class="center_text"> {"Channel Page -> W.I.P."} </div>
                         </>
                     }
@@ -85,10 +85,10 @@ impl Component for Defluencer {
 }
 
 impl Defluencer {
-    /// Receive beacon cid
-    fn beacon_update(&mut self, cid: Cid) -> bool {
+    /// Receive Content hash from ethereum name service then get beacon
+    fn name_update(&mut self, cid: Cid) -> bool {
         #[cfg(debug_assertions)]
-        ConsoleService::info("Beacon Update");
+        ConsoleService::info("Name Update");
 
         set_local_beacon(&self.ens_name, &cid, self.storage.as_ref());
 

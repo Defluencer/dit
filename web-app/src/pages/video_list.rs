@@ -1,6 +1,9 @@
 use crate::components::{Navbar, VideoThumbnail};
+use crate::utils::ens::get_beacon_from_name;
 use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
-use crate::utils::local_storage::{get_local_list, get_local_storage, set_local_list};
+use crate::utils::local_storage::{
+    get_local_beacon, get_local_list, get_local_storage, set_local_beacon, set_local_list,
+};
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -16,7 +19,9 @@ use cid::Cid;
 pub struct VideoOnDemand {
     link: ComponentLink<Self>,
 
-    beacon_cid: Cid,
+    ens_name: String,
+
+    beacon_cid: Option<Cid>,
     beacon: Option<Beacon>,
 
     list_cid: Option<Cid>,
@@ -28,6 +33,7 @@ pub struct VideoOnDemand {
 }
 
 pub enum Msg {
+    Name(Cid),
     Beacon((Cid, Beacon)),
     List((Cid, VideoList)),
     Metadata((Cid, VideoMetadata)),
@@ -35,7 +41,7 @@ pub enum Msg {
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub beacon_cid: Cid,
+    pub ens_name: String,
 }
 
 impl Component for VideoOnDemand {
@@ -43,17 +49,26 @@ impl Component for VideoOnDemand {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        spawn_local(ipfs_dag_get_callback(
-            props.beacon_cid,
-            link.callback(Msg::Beacon),
-        ));
+        let ens_name = props.ens_name;
 
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
 
+        let beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
+
+        if let Some(cid) = beacon_cid {
+            spawn_local(ipfs_dag_get_callback(cid, link.callback(Msg::Beacon)));
+        }
+
+        spawn_local(get_beacon_from_name(
+            ens_name.clone(),
+            link.callback(Msg::Name),
+        ));
+
         Self {
             link,
-            beacon_cid: props.beacon_cid,
+            ens_name,
+            beacon_cid,
             beacon: None,
             list_cid: None,
             video_list: None,
@@ -64,6 +79,7 @@ impl Component for VideoOnDemand {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::Name(cid) => self.name_update(cid),
             Msg::Beacon((_, beacon)) => self.beacon_update(beacon),
             Msg::List((cid, list)) => self.video_list_update(cid, list),
             Msg::Metadata((cid, metadata)) => self.video_metadata_update(cid, metadata),
@@ -77,7 +93,7 @@ impl Component for VideoOnDemand {
     fn view(&self) -> Html {
         html! {
             <div class="vod_page">
-            <Navbar beacon_cid=self.beacon_cid />
+            <Navbar ens_name=self.ens_name.clone() />
             {
                 if self.metadata.is_empty() {
                     html! {
@@ -103,6 +119,20 @@ impl Component for VideoOnDemand {
 }
 
 impl VideoOnDemand {
+    /// Receive Content hash from ethereum name service then get beacon
+    fn name_update(&mut self, cid: Cid) -> bool {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Name Update");
+
+        set_local_beacon(&self.ens_name, &cid, self.storage.as_ref());
+
+        spawn_local(ipfs_dag_get_callback(cid, self.link.callback(Msg::Beacon)));
+
+        self.beacon_cid = Some(cid);
+
+        false
+    }
+
     /// Receive beacon node, it then try to get the list
     fn beacon_update(&mut self, beacon: Beacon) -> bool {
         #[cfg(debug_assertions)]
