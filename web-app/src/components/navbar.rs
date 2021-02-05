@@ -31,9 +31,6 @@ impl Component for Navbar {
         html! {
             <div class="nav_background">
                 <nav>
-                    /* <Anchor route=Route::Home classes="navbar_tab">
-                        <div>{"Home"}</div>
-                    </Anchor> */
                     <Anchor route=Route::Live(self.ens_name.clone()) classes="navbar_tab">
                         <div>{"Live Stream"}</div>
                     </Anchor>
