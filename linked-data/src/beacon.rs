@@ -76,7 +76,6 @@ impl From<TempVideoMetadata> for VideoMetadata {
 
 #[derive(Deserialize)]
 pub struct TempVideoList {
-    pub counter: usize,
     pub metadata: Vec<FakeCid>,
 }
 

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::components::{Navbar, VideoThumbnail};
 use crate::utils::ens::get_beacon_from_name;
 use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
@@ -54,16 +56,20 @@ impl Component for VideoOnDemand {
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
 
-        let beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
+        let mut beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
+
+        if let Ok(cid) = Cid::from_str(&ens_name) {
+            beacon_cid = Some(cid);
+        } else {
+            spawn_local(get_beacon_from_name(
+                ens_name.clone(),
+                link.callback(Msg::Name),
+            ));
+        }
 
         if let Some(cid) = beacon_cid {
             spawn_local(ipfs_dag_get_callback(cid, link.callback(Msg::Beacon)));
         }
-
-        spawn_local(get_beacon_from_name(
-            ens_name.clone(),
-            link.callback(Msg::Name),
-        ));
 
         Self {
             link,
