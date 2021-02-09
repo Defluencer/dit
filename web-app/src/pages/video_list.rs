@@ -18,6 +18,7 @@ use linked_data::beacon::{Beacon, TempVideoList, TempVideoMetadata, VideoList, V
 
 use cid::Cid;
 
+/// The Video on Demand Page
 pub struct VideoOnDemand {
     link: ComponentLink<Self>,
 
@@ -58,6 +59,7 @@ impl Component for VideoOnDemand {
 
         let mut beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
 
+        //Maybe a name or cid
         if let Ok(cid) = Cid::from_str(&ens_name) {
             beacon_cid = Some(cid);
         } else {
@@ -118,10 +120,6 @@ impl Component for VideoOnDemand {
             </div>
         }
     }
-
-    /* fn destroy(&mut self) {
-        stop_list_update();
-    } */
 }
 
 impl VideoOnDemand {
@@ -228,48 +226,3 @@ impl VideoOnDemand {
         false
     }
 }
-
-/* fn listen_to_beacon(cb: Callback<Cid>) {
-    let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Beacon Message");
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Sender => {}", from));
-
-        if from != STREAMER_PEER_ID {
-            #[cfg(debug_assertions)]
-            ConsoleService::warn("Unauthorized Sender");
-            return;
-        }
-
-        let data_utf8 = match String::from_utf8(data) {
-            Ok(string) => string,
-            Err(_) => {
-                #[cfg(debug_assertions)]
-                ConsoleService::warn("Invalid UTF-8");
-                return;
-            }
-        };
-
-        let cid = match Cid::try_from(data_utf8) {
-            Ok(cid) => cid,
-            Err(_) => {
-                #[cfg(debug_assertions)]
-                ConsoleService::warn("Invalid CID");
-                return;
-            }
-        };
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Message => {}", cid.to_string()));
-
-        cb.emit(cid);
-    }) as Box<dyn Fn(String, Vec<u8>)>);
-
-    ipfs_subscribe(CONTENT_UPDATE_TOPIC.into(), pubsub_closure.into_js_value().unchecked_ref());
-} */
-
-/* fn stop_list_update() {
-    ipfs_unsubscribe(CONTENT_UPDATE_TOPIC.into());
-} */

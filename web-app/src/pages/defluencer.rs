@@ -13,6 +13,7 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
+/// Specific Defluencer Home Page
 pub struct Defluencer {
     ens_name: String,
 
@@ -42,6 +43,7 @@ impl Component for Defluencer {
 
         let mut beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
 
+        //Maybe a name or cid
         if let Ok(cid) = Cid::from_str(&ens_name) {
             beacon_cid = Some(cid);
         } else {

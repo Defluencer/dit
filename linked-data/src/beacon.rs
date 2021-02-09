@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use cid::Cid;
 use multihash::Multihash;
 
-/// Beacon
+/// PubSub topics, Peer ID and IPNS link to video list
 #[derive(Deserialize, Serialize)]
 pub struct Beacon {
     pub topics: Topics,
@@ -15,13 +15,13 @@ pub struct Beacon {
     pub video_list: String, // ipns hash egg. "/ipns/<hash>"
 }
 
-/// List of all video metadata
+/// List of all video metadata links
 #[derive(Deserialize, Serialize)]
 pub struct VideoList {
     pub metadata: Vec<IPLDLink>, // oldest to newest
 }
 
-/// Video metadata
+/// Title, duration, image link, video link
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct VideoMetadata {
     pub title: String,
@@ -33,6 +33,7 @@ pub struct VideoMetadata {
 //Hack is needed to get from JsValue to Rust type via js http api
 
 //TODO fix this hack
+//Maybe work only with cbor as binary might be easier for Js <-> WASM interop
 
 impl From<TempVideoList> for VideoList {
     fn from(temp: TempVideoList) -> Self {

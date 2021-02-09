@@ -16,6 +16,7 @@ use cid::Cid;
 
 use linked_data::beacon::Beacon;
 
+/// The Live Stream Page
 pub struct LiveStream {
     link: ComponentLink<Self>,
 
@@ -49,6 +50,7 @@ impl Component for LiveStream {
 
         let mut beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
 
+        //Maybe a name or cid
         if let Ok(cid) = Cid::from_str(&ens_name) {
             beacon_cid = Some(cid);
         } else {
