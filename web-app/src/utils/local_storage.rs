@@ -117,3 +117,44 @@ pub fn get_local_beacon(ens_name: &str, storage: Option<&Storage>) -> Option<Cid
 
     Some(cid)
 }
+
+const IPFS_API_ADDRS_KEY: &str = "ipfs_api_addrs";
+
+pub fn set_local_ipfs_addrs(addrs: &str, storage: Option<&Storage>) {
+    let storage = match storage {
+        Some(st) => st,
+        None => return,
+    };
+
+    #[cfg(debug_assertions)]
+    ConsoleService::info(&format!(
+        "Storage Set => {} \n {}",
+        IPFS_API_ADDRS_KEY, addrs
+    ));
+
+    if let Err(e) = storage.set_item(IPFS_API_ADDRS_KEY, addrs) {
+        ConsoleService::error(&format!("{:#?}", e));
+    }
+}
+
+pub fn get_local_ipfs_addrs(storage: Option<&Storage>) -> Option<String> {
+    let storage = storage?;
+
+    let addrs = match storage.get_item(IPFS_API_ADDRS_KEY) {
+        Ok(option) => option,
+        Err(e) => {
+            ConsoleService::error(&format!("{:#?}", e));
+            return None;
+        }
+    };
+
+    let addrs = addrs?;
+
+    #[cfg(debug_assertions)]
+    ConsoleService::info(&format!(
+        "Storage Get => {} \n {}",
+        IPFS_API_ADDRS_KEY, &addrs
+    ));
+
+    Some(addrs)
+}

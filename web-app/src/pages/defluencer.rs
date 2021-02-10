@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::components::Navbar;
 use crate::utils::ens::get_beacon_from_name;
 use crate::utils::local_storage::{get_local_beacon, get_local_storage, set_local_beacon};
@@ -11,6 +13,7 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
+/// Specific Defluencer Home Page
 pub struct Defluencer {
     ens_name: String,
 
@@ -38,12 +41,17 @@ impl Component for Defluencer {
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
 
-        let beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
+        let mut beacon_cid = get_local_beacon(&ens_name, storage.as_ref());
 
-        spawn_local(get_beacon_from_name(
-            ens_name.clone(),
-            link.callback(Msg::Name),
-        ));
+        //Maybe a name or cid
+        if let Ok(cid) = Cid::from_str(&ens_name) {
+            beacon_cid = Some(cid);
+        } else {
+            spawn_local(get_beacon_from_name(
+                ens_name.clone(),
+                link.callback(Msg::Name),
+            ));
+        }
 
         Self {
             ens_name,
@@ -70,7 +78,7 @@ impl Component for Defluencer {
                     html! {
                         <>
                             <Navbar ens_name=self.ens_name.clone() />
-                            <div class="center_text"> {"Channel Page -> W.I.P."} </div>
+                            <div class="center_text"> {"Defluencer Page -> W.I.P."} </div>
                         </>
                     }
                 } else {
@@ -87,6 +95,12 @@ impl Component for Defluencer {
 impl Defluencer {
     /// Receive Content hash from ethereum name service then get beacon
     fn name_update(&mut self, cid: Cid) -> bool {
+        if let Some(beacon_cid) = self.beacon_cid.as_ref() {
+            if *beacon_cid == cid {
+                return false;
+            }
+        }
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Name Update");
 

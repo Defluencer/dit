@@ -4,6 +4,8 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 
 use yew_router::components::RouterAnchor;
 
+type Anchor = RouterAnchor<Route>;
+
 #[derive(Properties, Clone)]
 pub struct Navbar {
     pub ens_name: String,
@@ -26,14 +28,9 @@ impl Component for Navbar {
     }
 
     fn view(&self) -> Html {
-        type Anchor = RouterAnchor<Route>;
-
         html! {
             <div class="nav_background">
                 <nav>
-                    /* <Anchor route=Route::Home classes="navbar_tab">
-                        <div>{"Home"}</div>
-                    </Anchor> */
                     <Anchor route=Route::Live(self.ens_name.clone()) classes="navbar_tab">
                         <div>{"Live Stream"}</div>
                     </Anchor>

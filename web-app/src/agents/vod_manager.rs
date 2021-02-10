@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::utils::ema::ExponentialMovingAverage;
 use crate::utils::ipfs::{cat_and_buffer, ipfs_dag_get_path_async};
-use crate::utils::tracks::{Track, Tracks};
+use crate::utils::tracks::{seconds_to_timecode, Track, Tracks};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -593,19 +593,4 @@ fn on_video_seeking(video_record: Video, media_element: &HtmlMediaElement) {
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
     media_element.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
-}
-
-/// Translate total number of seconds to timecode.
-fn seconds_to_timecode(seconds: f64) -> (u8, u8, u8) {
-    let rem_seconds = seconds.round();
-
-    let hours = (rem_seconds / 3600.0) as u8;
-    let rem_seconds = rem_seconds.rem_euclid(3600.0);
-
-    let minutes = (rem_seconds / 60.0) as u8;
-    let rem_seconds = rem_seconds.rem_euclid(60.0);
-
-    let seconds = rem_seconds as u8;
-
-    (hours, minutes, seconds)
 }

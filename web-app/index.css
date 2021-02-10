@@ -85,3 +85,10 @@ nav {
     align-items: center;
     width: 100%;
 }
+
+.video_thumbnail {
+    display: block;
+    float: left;
+    margin: 10px;
+}
+

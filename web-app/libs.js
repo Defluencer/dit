@@ -1,4 +1,21 @@
-const ipfs = window.IpfsHttpClient({ host: 'localhost', port: 5001, protocol: 'http' })
+const IPFS_API_ADDRS_KEY = 'ipfs_api_addrs'
+const DEFAULT_ADDRS = 'http://localhost:5001/api/v0'
+
+function getURL() {
+    const localStorage = window.localStorage
+
+    var url = localStorage.getItem(IPFS_API_ADDRS_KEY)
+
+    if (url === null) {
+        url = DEFAULT_ADDRS
+
+        localStorage.setItem(IPFS_API_ADDRS_KEY, url)
+    }
+
+    return url
+}
+
+const ipfs = window.IpfsHttpClient(getURL())
 
 export async function subscribe(topic, pubsubMessage) {
     await ipfs.pubsub.subscribe(topic, msg => pubsubMessage(msg.from, msg.data))

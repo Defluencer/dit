@@ -1,4 +1,4 @@
-use crate::pages::{Defluencer, Home, LiveStream, Video, VideoOnDemand};
+use crate::pages::{Defluencer, Home, LiveStream, Settings, Video, VideoOnDemand};
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew_router::prelude::{Router, Switch};
@@ -7,16 +7,19 @@ use cid::Cid;
 
 #[derive(Switch, Debug, Clone)]
 pub enum Route {
-    #[to = "/video/{cid}"]
+    #[to = "/#/video/{cid}"]
     Video(Cid),
 
-    #[to = "/{ens_name}/videos"]
+    #[to = "/#/settings"]
+    Settings,
+
+    #[to = "/#/{ens_name}/videos"]
     VideoList(String),
 
-    #[to = "/{ens_name}/live"]
+    #[to = "/#/{ens_name}/live"]
     Live(String),
 
-    #[to = "/{ens_name}"]
+    #[to = "/#/{ens_name}"]
     Defluencer(String),
 
     #[to = "/"]
@@ -48,6 +51,7 @@ impl Component for App {
                     render = Router::render(move |switch: Route| {
                         match switch {
                             Route::Video(cid) => html! { <Video metadata_cid=cid /> },
+                            Route::Settings => html! { <Settings /> },
                             Route::VideoList(name) => html! { <VideoOnDemand ens_name=name /> },
                             Route::Live(name) => html! { <LiveStream ens_name=name /> },
                             Route::Defluencer(name) => html! { <Defluencer ens_name=name /> },
