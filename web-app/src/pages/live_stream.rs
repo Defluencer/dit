@@ -110,6 +110,12 @@ impl Component for LiveStream {
 impl LiveStream {
     /// Receive Content hash from ethereum name service then get beacon
     fn name_update(&mut self, cid: Cid) -> bool {
+        if let Some(beacon_cid) = self.beacon_cid.as_ref() {
+            if *beacon_cid == cid {
+                return false;
+            }
+        }
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Name Update");
 
@@ -124,6 +130,9 @@ impl LiveStream {
 
     /// Receive beacon node
     fn beacon_update(&mut self, beacon: Beacon) -> bool {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Beacon Update");
+
         self.beacon = Some(beacon);
 
         true

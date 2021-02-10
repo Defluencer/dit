@@ -1,7 +1,6 @@
 use crate::utils::bindings::{ipfs_cat, ipfs_dag_get, ipfs_dag_get_path, ipfs_name_resolve};
 
 use std::convert::TryFrom;
-use std::path::PathBuf;
 
 use wasm_bindgen::JsCast;
 
@@ -43,7 +42,14 @@ where
         }
     };
 
-    let node = match ipfs_dag_get(&ipns).await {
+    let path = match js_value.as_string() {
+        Some(string) => string,
+        None => return,
+    };
+
+    let cid = Cid::try_from(path).expect("Invalid Cid");
+
+    let node = match ipfs_dag_get(&cid.to_string()).await {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
@@ -60,16 +66,6 @@ where
     };
 
     let node = temp.into();
-
-    let path = match js_value.as_string() {
-        Some(string) => string,
-        None => return,
-    };
-
-    let path = PathBuf::try_from(path).expect("Invalid Path");
-    let file_name = path.file_name().expect("Invalid File Name");
-    let string = file_name.to_str().expect("Invalid Unicode");
-    let cid = Cid::try_from(string).expect("Invalid Cid");
 
     cb.emit((cid, node));
 }

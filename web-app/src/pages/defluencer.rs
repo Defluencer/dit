@@ -78,7 +78,7 @@ impl Component for Defluencer {
                     html! {
                         <>
                             <Navbar ens_name=self.ens_name.clone() />
-                            <div class="center_text"> {"Channel Page -> W.I.P."} </div>
+                            <div class="center_text"> {"Defluencer Page -> W.I.P."} </div>
                         </>
                     }
                 } else {
@@ -95,6 +95,12 @@ impl Component for Defluencer {
 impl Defluencer {
     /// Receive Content hash from ethereum name service then get beacon
     fn name_update(&mut self, cid: Cid) -> bool {
+        if let Some(beacon_cid) = self.beacon_cid.as_ref() {
+            if *beacon_cid == cid {
+                return false;
+            }
+        }
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Name Update");
 

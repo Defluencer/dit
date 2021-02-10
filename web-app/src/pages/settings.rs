@@ -47,6 +47,7 @@ impl Component for Settings {
     fn view(&self) -> Html {
         html! {
             <>
+                <h3> { "Settings" } </h3>
                 <label for="ipfs_addrs"> { "IPFS API address: " } </label>
                 <input type="text" id="ipfs_addrs" name="ipfs_addrs"
                     onchange=self.link.callback(Msg::Addrs)

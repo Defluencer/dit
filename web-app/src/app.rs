@@ -7,19 +7,19 @@ use cid::Cid;
 
 #[derive(Switch, Debug, Clone)]
 pub enum Route {
-    #[to = "/video/{cid}"]
+    #[to = "/#/video/{cid}"]
     Video(Cid),
 
-    #[to = "/settings"]
+    #[to = "/#/settings"]
     Settings,
 
-    #[to = "/{ens_name}/videos"]
+    #[to = "/#/{ens_name}/videos"]
     VideoList(String),
 
-    #[to = "/{ens_name}/live"]
+    #[to = "/#/{ens_name}/live"]
     Live(String),
 
-    #[to = "/{ens_name}"]
+    #[to = "/#/{ens_name}"]
     Defluencer(String),
 
     #[to = "/"]
