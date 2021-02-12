@@ -1,12 +1,12 @@
 use crate::pages::{Defluencer, Home, LiveStream, Settings, Video, VideoOnDemand};
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
-use yew_router::prelude::{Router, Switch};
+use yew_router::prelude::{Route, Router, Switch};
 
 use cid::Cid;
 
 #[derive(Switch, Debug, Clone)]
-pub enum Route {
+pub enum AppRoute {
     #[to = "/#/video/{cid}"]
     Video(Cid),
 
@@ -24,6 +24,12 @@ pub enum Route {
 
     #[to = "/"]
     Home,
+}
+
+impl AppRoute {
+    pub fn into_route(self) -> Route {
+        Route::from(self)
+    }
 }
 
 pub struct App {}
@@ -47,15 +53,15 @@ impl Component for App {
     fn view(&self) -> Html {
         html! {
             <>
-                <Router<Route>
-                    render = Router::render(move |switch: Route| {
+                <Router<AppRoute>
+                    render = Router::render(move |switch: AppRoute| {
                         match switch {
-                            Route::Video(cid) => html! { <Video metadata_cid=cid /> },
-                            Route::Settings => html! { <Settings /> },
-                            Route::VideoList(name) => html! { <VideoOnDemand ens_name=name /> },
-                            Route::Live(name) => html! { <LiveStream ens_name=name /> },
-                            Route::Defluencer(name) => html! { <Defluencer ens_name=name /> },
-                            Route::Home => html! { <Home /> },
+                            AppRoute::Video(cid) => html! { <Video metadata_cid=cid /> },
+                            AppRoute::Settings => html! { <Settings /> },
+                            AppRoute::VideoList(name) => html! { <VideoOnDemand ens_name=name /> },
+                            AppRoute::Live(name) => html! { <LiveStream ens_name=name /> },
+                            AppRoute::Defluencer(name) => html! { <Defluencer ens_name=name /> },
+                            AppRoute::Home => html! { <Home /> },
                         }
                     })
                 />

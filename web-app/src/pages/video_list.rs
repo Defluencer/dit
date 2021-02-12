@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::components::{Navbar, VideoThumbnail};
@@ -25,16 +25,16 @@ pub struct VideoOnDemand {
 
     ens_name: String,
 
+    storage: Option<Storage>,
+
     beacon_cid: Option<Cid>,
     beacon: Option<Beacon>,
 
     list_cid: Option<Cid>,
     video_list: Option<VideoList>,
 
-    storage: Option<Storage>,
-
-    metadata_set: HashSet<Cid>,
-    metadata_vec: Vec<(Cid, VideoMetadata)>,
+    call_count: usize,
+    metadata_map: HashMap<Cid, VideoMetadata>,
 }
 
 pub enum Msg {
@@ -83,8 +83,8 @@ impl Component for VideoOnDemand {
             list_cid: None,
             video_list: None,
             storage,
-            metadata_set: HashSet::with_capacity(10),
-            metadata_vec: Vec::with_capacity(10),
+            call_count: 0,
+            metadata_map: HashMap::with_capacity(10),
         }
     }
 
@@ -102,25 +102,37 @@ impl Component for VideoOnDemand {
     }
 
     fn view(&self) -> Html {
-        html! {
-            <div class="vod_page">
-                <Navbar ens_name=self.ens_name.clone() />
-                {
-                    if self.metadata_vec.is_empty() {
-                        html! {
-                            <div class="center_text">  {"Loading..."} </div>
-                        }
-                    } else {
+        if let Some(video_list) = self.video_list.as_ref() {
+            html! {
+                <div class="vod_page">
+                    <Navbar ens_name=self.ens_name.clone() />
+                    <div class="video_list">
+                    {
                         html! {
                             {
-                                for self.metadata_vec.iter().rev().map(|(cid, mt)| html! {
-                                    <VideoThumbnail metadata_cid=cid metadata=mt />
-                                })
+                                for video_list.metadata.iter().rev().map(|ipld| {
+                                    let cid = ipld.link;
+
+                                    let mt = &self.metadata_map[&cid];
+
+                                    html! {
+                                        <VideoThumbnail metadata_cid=cid metadata=mt />
+                                    }
+                                }
+                                )
                             }
                         }
                     }
-                }
-            </div>
+                    </div>
+                </div>
+            }
+        } else {
+            html! {
+                <div class="vod_page">
+                    <Navbar ens_name=self.ens_name.clone() />
+                    <div class="center_text">  {"Loading..."} </div>
+                </div>
+            }
         }
     }
 }
@@ -171,9 +183,9 @@ impl VideoOnDemand {
     }
 
     /// Receive video list, save locally and try to get all metadata
-    fn video_list_update(&mut self, cid: Cid, list: VideoList) -> bool {
+    fn video_list_update(&mut self, list_cid: Cid, list: VideoList) -> bool {
         if let Some(old_list_cid) = self.list_cid.as_ref() {
-            if *old_list_cid == cid && self.video_list.is_some() {
+            if *old_list_cid == list_cid && self.video_list.is_some() {
                 return false;
             }
         }
@@ -187,62 +199,49 @@ impl VideoOnDemand {
         ConsoleService::info("Video List Update");
 
         if let Some(old_list_cid) = self.list_cid.as_ref() {
-            if *old_list_cid != cid {
-                self.list_cid = Some(cid);
-                set_local_list(&beacon.video_list, &cid, self.storage.as_ref());
+            if *old_list_cid != list_cid {
+                self.list_cid = Some(list_cid);
+                set_local_list(&beacon.video_list, &list_cid, self.storage.as_ref());
             }
         } else {
-            self.list_cid = Some(cid);
-            set_local_list(&beacon.video_list, &cid, self.storage.as_ref());
+            self.list_cid = Some(list_cid);
+            set_local_list(&beacon.video_list, &list_cid, self.storage.as_ref());
         }
 
-        self.video_list = Some(list);
-
-        self.metadata_set.clear();
-        self.metadata_vec.clear();
-
-        for metadata in self.video_list.as_ref().unwrap().metadata.iter() {
+        for metadata in list.metadata.iter().rev() {
             spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, _>(
                 metadata.link,
                 self.link.callback(Msg::Metadata),
             ))
         }
 
+        self.call_count += list.metadata.len();
+
+        self.video_list = Some(list);
+
         false
     }
 
     /// Receive video metadata then update thumbnails
-    fn video_metadata_update(&mut self, cid: Cid, metadata: VideoMetadata) -> bool {
-        let video_list = match self.video_list.as_ref() {
-            Some(vl) => vl,
-            None => return false,
-        };
+    fn video_metadata_update(&mut self, metadata_cid: Cid, metadata: VideoMetadata) -> bool {
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!(
+            "Display Add => {} \n {}",
+            &metadata_cid.to_string(),
+            &serde_json::to_string_pretty(&metadata).expect("Can't print")
+        ));
 
-        //iter from newest
-        for metadata_link in video_list.metadata.iter().rev() {
-            let metadata_cid = metadata_link.link;
+        self.metadata_map.insert(metadata_cid, metadata);
 
-            if cid == metadata_cid {
-                if self.metadata_set.insert(cid) {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::info(&format!(
-                        "Display Add => {} \n {}",
-                        &cid.to_string(),
-                        &serde_json::to_string_pretty(&metadata).expect("Can't print")
-                    ));
+        if self.call_count > 0 {
+            self.call_count -= 1;
+        }
 
-                    self.metadata_vec.push((cid, metadata));
-                }
+        if self.call_count == 0 {
+            #[cfg(debug_assertions)]
+            ConsoleService::info("Refresh");
 
-                if self.metadata_vec.len() == video_list.metadata.len() {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::info("Refresh");
-
-                    return true;
-                }
-
-                return false;
-            }
+            return true;
         }
 
         false

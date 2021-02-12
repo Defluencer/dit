@@ -1,3 +1,5 @@
+use crate::components::Navbar;
+
 use web_sys::{HtmlInputElement, Storage, Window};
 
 use wasm_bindgen::JsCast;
@@ -46,13 +48,20 @@ impl Component for Settings {
 
     fn view(&self) -> Html {
         html! {
-            <>
-                <h3> { "Settings" } </h3>
-                <label for="ipfs_addrs"> { "IPFS API address: " } </label>
-                <input type="text" id="ipfs_addrs" name="ipfs_addrs"
-                    onchange=self.link.callback(Msg::Addrs)
-                    placeholder="IPFS API address" />
-            </>
+            <div class="settings_page">
+                <Navbar ens_name="" />
+                <div class="settings">
+                    <h3> { "Settings" } </h3>
+                    <div>
+                        <label for="ipfs_addrs"> { "IPFS API address: " } </label>
+                        <input type="text" id="ipfs_addrs" name="ipfs_addrs"
+                            onchange=self.link.callback(Msg::Addrs)
+                            placeholder="IPFS API address" />
+                    </div>
+                    <p> { "Your IPFS node config must also allow cross origin resource sharing and PubSub for live streaming." } </p>
+                    <a href="https://github.com/SionoiS/dit/blob/master/web-app/README.md"> { "Go to my Github for more info" } </a>
+                </div>
+            </div>
         }
     }
 

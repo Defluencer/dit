@@ -86,9 +86,30 @@ nav {
     width: 100%;
 }
 
-.video_thumbnail {
-    display: block;
-    float: left;
-    margin: 10px;
+.video_list {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
 }
 
+.video_thumbnail {
+    background-color: lightgray;
+    margin: 10px;
+    padding: 20px;
+}
+
+.home_description {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.home_text {
+    align-self: center;
+}
+
+.settings {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}

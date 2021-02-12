@@ -22,7 +22,7 @@ pub struct VideoList {
 }
 
 /// Title, duration, image link, video link
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
     pub title: String,
     pub duration: f64,

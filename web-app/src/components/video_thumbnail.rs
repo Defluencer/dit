@@ -1,4 +1,4 @@
-use crate::app::Route;
+use crate::app::AppRoute;
 use crate::utils::tracks::seconds_to_timecode;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
@@ -10,7 +10,7 @@ use linked_data::beacon::VideoMetadata;
 
 use cid::Cid;
 
-type Anchor = RouterAnchor<Route>;
+type Anchor = RouterAnchor<AppRoute>;
 
 #[derive(PartialEq, Clone, Properties)]
 pub struct VideoThumbnail {
@@ -39,7 +39,7 @@ impl Component for VideoThumbnail {
 
         html! {
             <div class="video_thumbnail">
-                <Anchor route=Route::Video(self.metadata_cid) classes="thumbnail_link">
+                <Anchor route=AppRoute::Video(self.metadata_cid) classes="thumbnail_link">
                     <div class="thumbnail_title"> {&self.metadata.title} </div>
                     <div class="thumbnail_image">
                         <img src=format!("ipfs://{}", &self.metadata.image.link.to_string()) alt="This image require IPFS native browser" />

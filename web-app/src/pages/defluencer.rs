@@ -73,20 +73,18 @@ impl Component for Defluencer {
     fn view(&self) -> Html {
         html! {
             <div class="defluencer_page">
-            {
-                if let Some(cid) = self.beacon_cid {
-                    html! {
-                        <>
-                            <Navbar ens_name=self.ens_name.clone() />
-                            <div class="center_text"> {"Defluencer Page -> W.I.P."} </div>
-                        </>
-                    }
-                } else {
-                    html! {
-                        <div class="center_text">  {"Loading..."} </div>
+                <Navbar ens_name=self.ens_name.clone() />
+                {
+                    if let Some(cid) = self.beacon_cid {
+                        html! {
+                            <div class="center_text"> {"Defluencer Personal Page -> W.I.P."} </div>
+                        }
+                    } else {
+                        html! {
+                            <div class="center_text">  {"Loading..."} </div>
+                        }
                     }
                 }
-            }
             </div>
         }
     }
