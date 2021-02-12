@@ -52,3 +52,6 @@ IPFS + any browser
     - ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["GET", "POST", "PUT"]'
     - ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["http://localhost:5001", "http://127.0.0.1:5001", "http://<INSERT_CID_HERE>.ipfs.localhost:8080"]'
 - [Start IPFS Daemon](https://docs.ipfs.io/reference/cli/#ipfs-daemon) with PubSub enabled using this command: ipfs daemon --enable-pubsub-experiment
+
+### Dev Build
+Checkout defluencer.eth on Ropsten testnet.
