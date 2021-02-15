@@ -49,7 +49,7 @@ impl Component for Settings {
     fn view(&self) -> Html {
         html! {
             <div class="settings_page">
-                <Navbar ens_name="" />
+                <Navbar />
                 <div class="settings">
                     <h3> { "Settings" } </h3>
                     <div>

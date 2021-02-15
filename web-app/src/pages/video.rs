@@ -1,4 +1,4 @@
-use crate::components::VideoPlayer;
+use crate::components::{Navbar, VideoPlayer};
 use crate::utils::ipfs::ipfs_dag_get_callback;
 
 use wasm_bindgen_futures::spawn_local;
@@ -46,18 +46,17 @@ impl Component for Video {
     }
 
     fn view(&self) -> Html {
-        if let Some(md) = &self.metadata {
-            html! {
-                <div class="video_page">
-                    <VideoPlayer  metadata=md />
-                </div>
-            }
-        } else {
-            html! {
-                <div class="video_page">
-                    <div class="center_text"> {"Loading..."} </div>
-                </div>
-            }
+        html! {
+            <div class="video_page">
+                <Navbar />
+                {
+                    if let Some(md) = &self.metadata {
+                        html! { <VideoPlayer  metadata=md /> }
+                    } else {
+                        html! { <div class="center_text"> {"Loading..."} </div> }
+                    }
+                }
+            </div>
         }
     }
 

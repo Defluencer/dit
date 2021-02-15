@@ -23,7 +23,7 @@ impl Component for Home {
     fn view(&self) -> Html {
         html! {
             <div class="home_page">
-                <Navbar ens_name="" />
+                <Navbar />
                 <div class="home_description">
                     <h1 class="home_text"> { "Defluencers" } </h1>
                     <h2 class="home_text"> { "Become Sovereign!" } </h2>

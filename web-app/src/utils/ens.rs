@@ -7,7 +7,7 @@ use cid::multibase::Base;
 use cid::multihash::MultihashGeneric;
 use cid::Cid;
 
-pub async fn get_beacon_from_name(mut name: String, cb: Callback<Cid>) {
+pub async fn get_beacon_from_name(mut name: String, cb: Callback<Result<Cid, ()>>) {
     name.insert_str(0, "defluencer.");
 
     name.push_str(".eth");
@@ -19,6 +19,8 @@ pub async fn get_beacon_from_name(mut name: String, cb: Callback<Cid>) {
         Ok(hash) => hash,
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
+
+            cb.emit(Err(()));
             return;
         }
     };
@@ -26,7 +28,10 @@ pub async fn get_beacon_from_name(mut name: String, cb: Callback<Cid>) {
     //btc58 encoded multihash
     let encoded = match js_value.as_string() {
         Some(string) => string,
-        None => return,
+        None => {
+            cb.emit(Err(()));
+            return;
+        }
     };
 
     let data = Base::decode(&Base::Base58Btc, encoded).expect("Can't decode");
@@ -35,5 +40,5 @@ pub async fn get_beacon_from_name(mut name: String, cb: Callback<Cid>) {
 
     let cid = Cid::new_v1(0x71, hash);
 
-    cb.emit(cid);
+    cb.emit(Ok(cid));
 }

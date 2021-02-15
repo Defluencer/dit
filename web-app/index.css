@@ -43,14 +43,11 @@ nav {
 
 .video_player {
     width: 80%;
-    height: 93vh;
-    float: left;
-    object-fit: contain;
+    height: auto;
 }
 
 .chat_window {
     width: 20%;
-    height: 100%;
     float: right;
     display: block;
 }

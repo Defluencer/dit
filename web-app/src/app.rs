@@ -1,4 +1,4 @@
-use crate::pages::{Defluencer, Home, LiveStream, Settings, Video, VideoOnDemand};
+use crate::pages::{Defluencer, Home, Settings, Video};
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew_router::prelude::{Route, Router, Switch};
@@ -12,12 +12,6 @@ pub enum AppRoute {
 
     #[to = "/#/settings"]
     Settings,
-
-    #[to = "/#/{ens_name}/videos"]
-    VideoList(String),
-
-    #[to = "/#/{ens_name}/live"]
-    Live(String),
 
     #[to = "/#/{ens_name}"]
     Defluencer(String),
@@ -58,8 +52,6 @@ impl Component for App {
                         match switch {
                             AppRoute::Video(cid) => html! { <Video metadata_cid=cid /> },
                             AppRoute::Settings => html! { <Settings /> },
-                            AppRoute::VideoList(name) => html! { <VideoOnDemand ens_name=name /> },
-                            AppRoute::Live(name) => html! { <LiveStream ens_name=name /> },
                             AppRoute::Defluencer(name) => html! { <Defluencer ens_name=name /> },
                             AppRoute::Home => html! { <Home /> },
                         }

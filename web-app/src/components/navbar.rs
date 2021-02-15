@@ -1,6 +1,6 @@
 use crate::app::AppRoute;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 
 use yew::ChangeData;
 
@@ -12,14 +12,7 @@ type Anchor = RouterAnchor<AppRoute>;
 pub struct Navbar {
     link: ComponentLink<Self>,
 
-    ens_name: String,
-
     route_dispatcher: RouteAgentDispatcher,
-}
-
-#[derive(Properties, Clone)]
-pub struct Props {
-    pub ens_name: String,
 }
 
 pub enum Msg {
@@ -28,14 +21,11 @@ pub enum Msg {
 
 impl Component for Navbar {
     type Message = Msg;
-    type Properties = Props;
+    type Properties = ();
 
-    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let ens_name = props.ens_name;
-
+    fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         Self {
             link,
-            ens_name,
             route_dispatcher: RouteAgentDispatcher::new(),
         }
     }
@@ -63,22 +53,6 @@ impl Component for Navbar {
                         onchange=self.link.callback(Msg::Addrs)
                         />
                     </div>
-                    {
-                        if  self.ens_name.is_empty() {
-                            html! {}
-                        } else {
-                            html! {
-                                <>
-                                <Anchor route=AppRoute::Live(self.ens_name.clone()) classes="navbar_tab">
-                                    <div>{"Live Stream"}</div>
-                                </Anchor>
-                                <Anchor route=AppRoute::VideoList(self.ens_name.clone()) classes="navbar_tab">
-                                    <div>{"Videos"}</div>
-                                </Anchor>
-                                </>
-                            }
-                        }
-                    }
                     <Anchor route=AppRoute::Settings classes="navbar_tab">
                         <div>{"Settings"}</div>
                     </Anchor>
