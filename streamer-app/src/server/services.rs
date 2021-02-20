@@ -13,7 +13,7 @@ const FMP4: &str = "fmp4";
 
 pub async fn put_requests(
     req: Request<Body>,
-    mut collector: Sender<VideoData>,
+    collector: Sender<VideoData>,
 ) -> Result<Response<Body>, Error> {
     #[cfg(debug_assertions)]
     println!("{:#?}", req);

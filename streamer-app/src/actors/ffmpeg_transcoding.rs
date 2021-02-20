@@ -82,7 +82,7 @@ pub async fn start_transcoding(ffmpeg_addr: String, stream_app_addr: String) {
     #[cfg(target_os = "windows")]
     command.creation_flags(0x00000010); //https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
 
-    let handle = match command.spawn() {
+    let mut handle = match command.spawn() {
         Ok(result) => {
             println!("Transcoding System Online");
 
@@ -94,7 +94,7 @@ pub async fn start_transcoding(ffmpeg_addr: String, stream_app_addr: String) {
         }
     };
 
-    if let Err(e) = handle.await {
+    if let Err(e) = handle.wait().await {
         eprintln!("FFMPEG command failed to run. {}", e);
     }
 }

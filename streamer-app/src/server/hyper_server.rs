@@ -60,7 +60,7 @@ impl<T> Service<T> for MakeService {
     }
 }
 
-async fn shutdown_signal(mut archive_tx: Sender<Archive>) {
+async fn shutdown_signal(archive_tx: Sender<Archive>) {
     ctrl_c()
         .await
         .expect("Failed to install CTRL+C signal handler");

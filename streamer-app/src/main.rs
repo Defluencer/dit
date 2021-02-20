@@ -12,6 +12,8 @@ use tokio::sync::mpsc::channel;
 
 use ipfs_api::IpfsClient;
 
+use tokio::join;
+
 #[tokio::main]
 async fn main() {
     println!("Initialization...");
@@ -60,7 +62,7 @@ async fn main() {
                 start_transcoding(ffmpeg_addr, server_addr_clone).await;
             });
 
-            tokio::join!(
+            join!(
                 archive_handle,
                 chat_handle,
                 video_handle,
@@ -69,7 +71,7 @@ async fn main() {
             );
         }
         None => {
-            tokio::join!(archive_handle, chat_handle, video_handle, server_handle);
+            join!(archive_handle, chat_handle, video_handle, server_handle);
         }
     }
 }
