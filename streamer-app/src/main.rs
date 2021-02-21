@@ -22,13 +22,13 @@ async fn main() {
 
     let config = get_config().await;
 
-    let (archive_tx, archive_rx) = channel(25);
+    let (archive_tx, archive_rx) = channel(50);
     let mut archivist = Archivist::new(ipfs.clone(), archive_rx, config.segment_duration);
     let archive_handle = tokio::spawn(async move {
         archivist.collect().await;
     });
 
-    let (video_tx, video_rx) = channel(config.tracks.len());
+    let (video_tx, video_rx) = channel(config.tracks.len() * 2);
     let mut video = VideoAggregator::new(
         ipfs.clone(),
         video_rx,
@@ -53,7 +53,7 @@ async fn main() {
     let server_addr_clone = config.addresses.app_addr.clone();
 
     let server_handle = tokio::spawn(async move {
-        start_server(server_addr, video_tx, archive_tx).await;
+        start_server(server_addr, video_tx, archive_tx, ipfs).await;
     });
 
     match config.addresses.ffmpeg_addr {

@@ -1,16 +1,13 @@
 use crate::actors::archivist::Archive;
+use crate::server::{FMP4, MP4};
 use crate::utils::ipfs_dag_put_node_async;
 
 use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::io::Cursor;
+use std::path::PathBuf;
 
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
 
-use hyper::body::Bytes;
-
-use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
 
 use linked_data::config::Track;
@@ -19,10 +16,7 @@ use linked_data::IPLDLink;
 
 use cid::Cid;
 
-pub enum VideoData {
-    Initialization(String, Bytes),
-    Media(String, Bytes),
-}
+pub type VideoData = (PathBuf, Cid);
 
 pub struct VideoAggregator {
     ipfs: IpfsClient,
@@ -75,31 +69,43 @@ impl VideoAggregator {
         println!("Video System Online");
 
         while let Some(msg) = self.video_rx.recv().await {
-            match msg {
-                VideoData::Initialization(quality, bytes) => self.init_seg(&quality, bytes).await,
-                VideoData::Media(quality, bytes) => self.media_seg(&quality, bytes).await,
+            let (path, cid) = msg;
+
+            #[cfg(debug_assertions)]
+            println!("IPFS: add => {}", &cid.to_string());
+
+            let quality = path
+                .parent()
+                .expect("Orphan path!")
+                .file_name()
+                .expect("Dir with no name!")
+                .to_str()
+                .expect("Invalid Unicode!");
+
+            if path.extension().unwrap() == FMP4 {
+                self.media_seg(quality, cid).await;
+                continue;
+            }
+
+            if path.extension().unwrap() == MP4 {
+                self.init_seg(quality, cid).await;
+                continue;
             }
         }
     }
 
     /// Process initialization segments.
-    async fn init_seg(&mut self, quality: &str, data: Bytes) {
-        //Panic on error because stream can't go on without setup node.
-
-        let segment_cid = self
-            .ipfs_add_async(data)
-            .await
-            .expect("SetupNode IPFS add failed");
-
-        if !self.add_track(quality, segment_cid) {
+    async fn init_seg(&mut self, quality: &str, cid: Cid) {
+        if !self.add_track(quality, cid) {
             return;
         }
 
         self.sort_by_level();
 
+        //Panic on error because live stream can't go on without setup node anyway.
         let setup_node_cid = ipfs_dag_put_node_async(&self.ipfs, &self.setup_node)
             .await
-            .expect("SetupNode IPFS dag put failed");
+            .expect("IPFS: dag put failed");
 
         self.video_node.setup = IPLDLink {
             link: setup_node_cid,
@@ -110,10 +116,13 @@ impl VideoAggregator {
     fn add_track(&mut self, quality: &str, cid: Cid) -> bool {
         self.setup_node.qualities.push(quality.into());
 
+        //TODO handle case if tracks does not contain quality
         let codec = self.tracks[quality].codec.clone();
+
         self.setup_node.codecs.push(codec);
 
         let link = IPLDLink { link: cid };
+
         self.setup_node.initialization_segments.push(link);
 
         self.setup_node.initialization_segments.len() >= self.tracks.len()
@@ -137,25 +146,17 @@ impl VideoAggregator {
     }
 
     /// Process media segments.
-    async fn media_seg(&mut self, quality: &str, data: Bytes) {
-        let video_segment_cid = match self.ipfs_add_async(data).await {
-            Ok(cid) => cid,
-            Err(e) => {
-                eprintln!("IPFS add failed {}", e);
-                return;
-            }
-        };
-
-        if !self.add_variant(quality, video_segment_cid) {
+    async fn media_seg(&mut self, quality: &str, cid: Cid) {
+        if !self.add_variant(quality, cid) {
             return;
         }
 
         let video_node_cid = match ipfs_dag_put_node_async(&self.ipfs, &self.video_node).await {
             Ok(res) => res,
             Err(e) => {
-                self.video_node.qualities.clear(); // re-set on error
+                self.video_node.qualities.clear(); // reset on error
 
-                eprintln!("IPFS dag put failed {}", e);
+                eprintln!("IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -169,31 +170,6 @@ impl VideoAggregator {
         }
 
         self.publish(video_node_cid).await;
-    }
-
-    /// Add video data to IPFS. Return a CID.
-    async fn ipfs_add_async(&mut self, data: Bytes) -> Result<Cid, Error> {
-        let add = ipfs_api::request::Add {
-            trickle: None,
-            only_hash: None,
-            wrap_with_directory: None,
-            chunker: None,
-            pin: Some(false),
-            raw_leaves: None,
-            cid_version: Some(1),
-            hash: None,
-            inline: None,
-            inline_limit: None,
-        };
-
-        let response = self.ipfs.add_with_options(Cursor::new(data), add).await?;
-
-        let cid = Cid::try_from(response.hash).expect("Invalid Cid");
-
-        #[cfg(debug_assertions)]
-        println!("IPFS added => {}", &cid);
-
-        Ok(cid)
     }
 
     /// Add CID to video dag node. Return true if all variants were added.
@@ -210,8 +186,8 @@ impl VideoAggregator {
         let topic = &self.gossipsub_topic;
 
         match self.ipfs.pubsub_pub(topic, &cid.to_string()).await {
-            Ok(_) => println!("GossipSub published => {}", &cid),
-            Err(e) => eprintln!("IPFS pubsub pub failed {}", e),
+            Ok(_) => println!("IPFS: GossipSub published => {}", &cid),
+            Err(e) => eprintln!("IPFS: pubsub pub failed {}", e),
         }
 
         let link = IPLDLink { link: cid };

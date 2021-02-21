@@ -85,10 +85,9 @@ impl Archivist {
             let json_string = serde_json::to_string(&msg).expect("Can't serialize chat msg");
 
             let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-                Ok(response) => Cid::try_from(response.cid.cid_string)
-                    .expect("CID from dag put response failed"),
+                Ok(response) => Cid::try_from(response.cid.cid_string).expect("Invalid Cid"),
                 Err(e) => {
-                    eprintln!("IPFS dag put failed {}", e);
+                    eprintln!("IPFS: dag put failed {}", e);
                     return;
                 }
             };
@@ -139,7 +138,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &node).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS dag put failed {}", e);
+                eprintln!("IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -159,7 +158,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.minute_node).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS dag put failed {}", e);
+                eprintln!("IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -176,7 +175,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.hour_node).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS dag put failed {}", e);
+                eprintln!("IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -215,7 +214,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.day_node).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS dag put failed {}", e);
+                eprintln!("IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -227,7 +226,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &stream).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS dag put failed {}", e);
+                eprintln!("IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -235,8 +234,8 @@ impl Archivist {
         println!("Pinning Nodes...");
 
         match self.ipfs.pin_add(&cid.to_string(), true).await {
-            Ok(_) => println!("Stream CID => {}", &cid.to_string()),
-            Err(e) => eprintln!("IPFS pin add failed {}", e),
+            Ok(_) => println!("IPFS: Pinned Stream CID => {}", &cid.to_string()),
+            Err(e) => eprintln!("IPFS: pin add failed {}", e),
         }
     }
 }

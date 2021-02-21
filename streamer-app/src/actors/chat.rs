@@ -94,7 +94,7 @@ impl ChatAggregator {
         let msg_str = match str::from_utf8(decoded) {
             Ok(data) => data,
             Err(_) => {
-                eprintln!("Chat message invalid UTF-8");
+                eprintln!("Invalid UTF-8");
                 return None;
             }
         };
@@ -102,7 +102,7 @@ impl ChatAggregator {
         let chat_message = match serde_json::from_str(msg_str) {
             Ok(data) => data,
             Err(_) => {
-                eprintln!("Chat message deserialization failed");
+                eprintln!("Deserialization failed");
                 return None;
             }
         };

@@ -1,64 +1,17 @@
 use crate::actors::{Archive, VideoData};
 use crate::server::services::put_requests;
 
-use std::future::Future;
+use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::str::FromStr;
 
 use tokio::signal::ctrl_c;
 use tokio::sync::mpsc::Sender;
 
-use hyper::service::Service;
-use hyper::{Body, Error, Request, Response, Server};
+use hyper::service::{make_service_fn, service_fn};
+use hyper::Server;
 
-type FutureWrapper<T, U> = Pin<Box<dyn Future<Output = Result<T, U>> + Send>>;
-
-struct IngessService {
-    collector: Sender<VideoData>,
-}
-
-impl Service<Request<Body>> for IngessService {
-    type Response = Response<Body>;
-    type Error = Error;
-    type Future = FutureWrapper<Self::Response, Self::Error>;
-
-    fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
-        Box::pin(put_requests(req, self.collector.clone()))
-    }
-}
-
-struct MakeService {
-    collector: Sender<VideoData>,
-}
-
-impl MakeService {
-    fn new(collector: Sender<VideoData>) -> Self {
-        Self { collector }
-    }
-}
-
-impl<T> Service<T> for MakeService {
-    type Response = IngessService;
-    type Error = Error;
-    type Future = FutureWrapper<Self::Response, Self::Error>;
-
-    fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, _: T) -> Self::Future {
-        let collector = self.collector.clone();
-
-        let fut = async move { Ok(IngessService { collector }) };
-
-        Box::pin(fut)
-    }
-}
+use ipfs_api::IpfsClient;
 
 async fn shutdown_signal(archive_tx: Sender<Archive>) {
     ctrl_c()
@@ -76,14 +29,32 @@ pub async fn start_server(
     server_addr: String,
     collector: Sender<VideoData>,
     archive_tx: Sender<Archive>,
+    ipfs: IpfsClient,
 ) {
-    let server_addr = server_addr
-        .parse::<SocketAddr>()
-        .expect("Parsing socket address failed");
+    let server_addr = SocketAddr::from_str(&server_addr).expect("Invalid server address");
 
-    let service = MakeService::new(collector.clone());
+    let service = make_service_fn(move |_| {
+        let ipfs = ipfs.clone();
+        let collector = collector.clone();
 
-    let server = Server::bind(&server_addr).serve(service);
+        async move {
+            Ok::<_, Infallible>(service_fn(move |req| {
+                put_requests(req, collector.clone(), ipfs.clone())
+            }))
+        }
+    });
+
+    let server = Server::bind(&server_addr)
+        //.http1_keepalive(true)
+        .http1_half_close(true)
+        //.http1_max_buf_size(100000000000)
+        //.http1_only(true)
+        //.tcp_keepalive(Some(Duration::from_millis(4000)))
+        //.tcp_nodelay(true)
+        //.tcp_sleep_on_accept_errors(true)
+        .serve(service);
+
+    println!("Ingess Server Online");
 
     let graceful = server.with_graceful_shutdown(shutdown_signal(archive_tx));
 
