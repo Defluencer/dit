@@ -147,7 +147,7 @@ impl Archivist {
 
         //since duration > 1 sec
         for _ in 0..self.segment_duration {
-            self.minute_node.links_to_seconds.push(link.clone());
+            self.minute_node.links_to_seconds.push(link);
         }
 
         //self.minute_node.links_to_seconds.push(link);

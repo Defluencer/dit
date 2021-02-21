@@ -57,7 +57,7 @@ pub async fn put_requests(
     }
 
     if path.extension().unwrap() == M3U8 {
-        return manifest_response(res, body, &path).await;
+        return manifest_response(res, body, &path, collector).await;
     }
 
     //Change error type
@@ -72,7 +72,7 @@ pub async fn put_requests(
         Err(error) => return internal_error_response(res, &error),
     };
 
-    let msg = (path.to_path_buf(), cid);
+    let msg = VideoData::Segment((path.to_path_buf(), cid));
 
     if let Err(error) = collector.send(msg).await {
         return internal_error_response(res, &error);
@@ -103,20 +103,19 @@ async fn manifest_response(
     mut res: Response<Body>,
     body: Body,
     path: &Path,
+    collector: Sender<VideoData>,
 ) -> Result<Response<Body>, Error> {
-    #[cfg(debug_assertions)]
-    {
-        let data = hyper::body::to_bytes(body).await?;
+    let bytes = hyper::body::to_bytes(body).await?;
 
-        match m3u8_rs::parse_playlist_res(&data) {
-            Ok(m3u8_rs::playlist::Playlist::MasterPlaylist(pl)) => {
-                println!("Service: {:#?}", pl)
-            }
-            Ok(m3u8_rs::playlist::Playlist::MediaPlaylist(pl)) => {
-                println!("Service: {:#?}", pl)
-            }
-            Err(e) => println!("Service Error: {:?}", e),
-        }
+    let playlist = match m3u8_rs::parse_playlist(&bytes) {
+        Ok((_, playlist)) => playlist,
+        Err(e) => return internal_error_response(res, &e),
+    };
+
+    let msg = VideoData::Playlist(playlist);
+
+    if let Err(error) = collector.send(msg).await {
+        return internal_error_response(res, &error);
     }
 
     *res.status_mut() = StatusCode::NO_CONTENT;

@@ -28,13 +28,12 @@ async fn main() {
         archivist.collect().await;
     });
 
-    let (video_tx, video_rx) = channel(config.tracks.len() * 2);
+    let (video_tx, video_rx) = channel(16);
     let mut video = VideoAggregator::new(
         ipfs.clone(),
         video_rx,
         archive_tx.clone(),
         config.gossipsub_topics.live_video,
-        config.tracks,
     );
     let video_handle = tokio::spawn(async move {
         video.start_receiving().await;
