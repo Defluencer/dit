@@ -45,13 +45,7 @@ pub async fn start_server(
     });
 
     let server = Server::bind(&server_addr)
-        //.http1_keepalive(true)
         .http1_half_close(true)
-        //.http1_max_buf_size(100000000000)
-        //.http1_only(true)
-        //.tcp_keepalive(Some(Duration::from_millis(4000)))
-        //.tcp_nodelay(true)
-        //.tcp_sleep_on_accept_errors(true)
         .serve(service);
 
     println!("Ingess Server Online");
