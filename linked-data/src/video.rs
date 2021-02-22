@@ -16,7 +16,7 @@ pub struct VideoNode {
 
     // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/..
     #[serde(rename = "setup")]
-    pub setup: IPLDLink,
+    pub setup: Option<IPLDLink>,
 
     // <StreamHash>/time/hour/0/minute/36/second/12/video/previous/..
     #[serde(rename = "previous")]
@@ -37,6 +37,9 @@ pub struct SetupNode {
     // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/initseg/0/..
     #[serde(rename = "initseg")]
     pub initialization_segments: Vec<IPLDLink>,
+
+    // <StreamHash>/time/hour/0/minute/36/second/12/video/setup/initseg/0/..
+    pub bandwidths: Vec<usize>,
 }
 
 //Hack is needed to get from JsValue to Rust type via js http api
@@ -58,6 +61,7 @@ impl From<TempSetupNode> for SetupNode {
             codecs: temp.codecs,
             qualities: temp.qualities,
             initialization_segments,
+            bandwidths: temp.bandwidths,
         }
     }
 }
@@ -72,4 +76,6 @@ pub struct TempSetupNode {
 
     #[serde(rename = "quality")]
     pub qualities: Vec<String>,
+
+    pub bandwidths: Vec<usize>,
 }

@@ -26,7 +26,7 @@ where
     let cid = Cid::try_from(response.cid.cid_string).expect("Invalid Cid");
 
     #[cfg(debug_assertions)]
-    println!("Dag Put => {}", &cid);
+    println!("IPFS: dag put => {}", &cid);
 
     Ok(cid)
 }

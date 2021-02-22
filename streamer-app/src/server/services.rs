@@ -1,22 +1,45 @@
 use crate::actors::VideoData;
 
+use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::path::Path;
 
+use futures_util::stream::TryStreamExt;
+
 use tokio::sync::mpsc::Sender;
+use tokio_util::io::StreamReader;
 
 use hyper::header::{HeaderValue, LOCATION};
 use hyper::{Body, Error, Method, Request, Response, StatusCode};
 
+use ipfs_api::IpfsClient;
+
+use cid::Cid;
+
 const M3U8: &str = "m3u8";
-const MP4: &str = "mp4";
-const FMP4: &str = "fmp4";
+pub const MP4: &str = "mp4";
+pub const FMP4: &str = "fmp4";
+
+const OPTIONS: ipfs_api::request::Add = ipfs_api::request::Add {
+    trickle: None,
+    only_hash: None,
+    wrap_with_directory: None,
+    chunker: None,
+    pin: Some(false),
+    raw_leaves: None,
+    cid_version: Some(1),
+    hash: None,
+    inline: None,
+    inline_limit: None,
+};
 
 pub async fn put_requests(
     req: Request<Body>,
-    mut collector: Sender<VideoData>,
+    collector: Sender<VideoData>,
+    ipfs: IpfsClient,
 ) -> Result<Response<Body>, Error> {
     #[cfg(debug_assertions)]
-    println!("{:#?}", req);
+    println!("Service: {:#?}", req);
 
     let mut res = Response::new(Body::empty());
 
@@ -30,83 +53,93 @@ pub async fn put_requests(
             && path.extension().unwrap() != FMP4
             && path.extension().unwrap() != MP4)
     {
-        *res.status_mut() = StatusCode::NOT_FOUND;
-
-        #[cfg(debug_assertions)]
-        println!("{:#?}", res);
-
-        return Ok(res);
+        return not_found_response(res);
     }
 
     if path.extension().unwrap() == M3U8 {
-        #[cfg(debug_assertions)]
-        {
-            let data = hyper::body::to_bytes(body).await?;
-
-            match m3u8_rs::parse_playlist_res(&data) {
-                Ok(m3u8_rs::playlist::Playlist::MasterPlaylist(pl)) => {
-                    println!("{:#?}", pl)
-                }
-                Ok(m3u8_rs::playlist::Playlist::MediaPlaylist(pl)) => {
-                    println!("{:#?}", pl)
-                }
-                Err(e) => println!("Error: {:?}", e),
-            }
-        }
-
-        *res.status_mut() = StatusCode::NO_CONTENT;
-
-        let header_value = HeaderValue::from_str(path.to_str().unwrap()).unwrap();
-
-        res.headers_mut().insert(LOCATION, header_value);
-
-        #[cfg(debug_assertions)]
-        println!("{:#?}", res);
-
-        return Ok(res);
+        return manifest_response(res, body, &path, collector).await;
     }
 
-    let data = hyper::body::to_bytes(body).await?;
+    //Change error type
+    let stream =
+        body.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()));
 
-    #[cfg(debug_assertions)]
-    println!("Bytes received => {}", data.len());
+    //Stream to AsyncRead
+    let reader = StreamReader::new(stream);
 
-    let variant = path
-        .parent()
-        .expect("Orphan path!")
-        .file_name()
-        .expect("Dir with no name!")
-        .to_os_string()
-        .into_string()
-        .expect("Dir name is invalid Unicode!");
-
-    let msg = if path.extension().unwrap() == FMP4 {
-        VideoData::Media(variant, data)
-    } else if path.extension().unwrap() == MP4 {
-        VideoData::Initialization(variant, data)
-    } else {
-        panic!("Not fmp4 or mp4");
+    let cid = match ipfs.add_with_options(reader, OPTIONS).await {
+        Ok(res) => Cid::try_from(res.hash).expect("Invalid Cid"),
+        Err(error) => return internal_error_response(res, &error),
     };
 
+    let msg = VideoData::Segment((path.to_path_buf(), cid));
+
     if let Err(error) = collector.send(msg).await {
-        eprintln!("Video receiver hung up! Error: {}", error);
-
-        *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-
-        #[cfg(debug_assertions)]
-        println!("{:#?}", res);
-
-        return Ok(res);
+        return internal_error_response(res, &error);
     }
 
     *res.status_mut() = StatusCode::CREATED;
+
+    let header_value = HeaderValue::from_str(parts.uri.path()).expect("Invalid Header Value");
+
+    res.headers_mut().insert(LOCATION, header_value);
+
+    #[cfg(debug_assertions)]
+    println!("Service: {:#?}", res);
+
+    Ok(res)
+}
+
+fn not_found_response(mut res: Response<Body>) -> Result<Response<Body>, Error> {
+    *res.status_mut() = StatusCode::NOT_FOUND;
+
+    #[cfg(debug_assertions)]
+    println!("Service: {:#?}", res);
+
+    Ok(res)
+}
+
+async fn manifest_response(
+    mut res: Response<Body>,
+    body: Body,
+    path: &Path,
+    collector: Sender<VideoData>,
+) -> Result<Response<Body>, Error> {
+    let bytes = hyper::body::to_bytes(body).await?;
+
+    let playlist = match m3u8_rs::parse_playlist(&bytes) {
+        Ok((_, playlist)) => playlist,
+        Err(e) => return internal_error_response(res, &e),
+    };
+
+    let msg = VideoData::Playlist(playlist);
+
+    if let Err(error) = collector.send(msg).await {
+        return internal_error_response(res, &error);
+    }
+
+    *res.status_mut() = StatusCode::NO_CONTENT;
 
     let header_value = HeaderValue::from_str(path.to_str().unwrap()).unwrap();
 
     res.headers_mut().insert(LOCATION, header_value);
 
     #[cfg(debug_assertions)]
-    println!("{:#?}", res);
+    println!("Service: {:#?}", res);
+
+    Ok(res)
+}
+
+fn internal_error_response(
+    mut res: Response<Body>,
+    error: &dyn Debug,
+) -> Result<Response<Body>, Error> {
+    eprintln!("Service Error: {:#?}", error);
+
+    *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+
+    #[cfg(debug_assertions)]
+    println!("Service: {:#?}", res);
 
     Ok(res)
 }

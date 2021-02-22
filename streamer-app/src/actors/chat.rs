@@ -2,8 +2,8 @@ use crate::actors::archivist::Archive;
 
 use std::str;
 
-use tokio::stream::StreamExt;
 use tokio::sync::mpsc::Sender;
+use tokio_stream::StreamExt;
 
 //use hyper::body::Bytes;
 
@@ -14,7 +14,6 @@ use ipfs_api::IpfsClient;
 use linked_data::chat::{ChatIdentity, ChatMessage};
 
 //use cid::Cid;
-use multibase::Base;
 
 //TODO check if BrightID can be integrated
 
@@ -88,14 +87,14 @@ impl ChatAggregator {
 
     /// Decode chat messages from Base64 then serialize to ChatMessage
     fn decode_message(&self, response: &PubsubSubResponse) -> Option<ChatMessage> {
-        let encoded = response.data.as_ref()?;
+        let decoded = response.data.as_ref()?;
 
-        let decoded = Base::decode(&Base::Base64Pad, encoded).expect("Decoding message failed");
+        //let decoded = Base::decode(&Base::Base64Pad, encoded).expect("Decoding message failed");
 
-        let msg_str = match str::from_utf8(&decoded) {
+        let msg_str = match str::from_utf8(decoded) {
             Ok(data) => data,
             Err(_) => {
-                eprintln!("Chat message invalid UTF-8");
+                eprintln!("Invalid UTF-8");
                 return None;
             }
         };
@@ -103,7 +102,7 @@ impl ChatAggregator {
         let chat_message = match serde_json::from_str(msg_str) {
             Ok(data) => data,
             Err(_) => {
-                eprintln!("Chat message deserialization failed");
+                eprintln!("Deserialization failed");
                 return None;
             }
         };

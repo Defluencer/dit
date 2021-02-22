@@ -1,5 +1,5 @@
 # Decentralized Influencer Toolkit
-The project aim is to provide decentralized live and on demand video streaming with chat. Build a home or a business on the decentralized web! With true ownership comes responsabilities but also freedom.
+The project aim is to provide; live streaming, live chat, moderation tools and video on demand on the decentralized web.
 
 ## Project Status
 - Live Streaming: Mostly working.
@@ -28,3 +28,6 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+## Tips
+BTC & ETH => sionois.eth
