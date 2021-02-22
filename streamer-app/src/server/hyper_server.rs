@@ -45,7 +45,7 @@ pub async fn start_server(
     });
 
     let server = Server::bind(&server_addr)
-        .http1_half_close(true)
+        .http1_half_close(true) //FFMPEG requirement
         .serve(service);
 
     println!("Ingess Server Online");

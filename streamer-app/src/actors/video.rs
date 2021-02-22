@@ -31,7 +31,7 @@ pub struct VideoAggregator {
 
     video_rx: Receiver<VideoData>,
 
-    gossipsub_topic: String,
+    topic: String,
 
     init_map: HashMap<String, Cid>,
     setup_count: usize,
@@ -48,7 +48,7 @@ impl VideoAggregator {
         ipfs: IpfsClient,
         video_rx: Receiver<VideoData>,
         archive_tx: Sender<Archive>,
-        gossipsub_topic: String,
+        topic: String,
     ) -> Self {
         Self {
             ipfs,
@@ -56,9 +56,9 @@ impl VideoAggregator {
             archive_tx,
             video_rx,
 
-            gossipsub_topic,
+            topic,
 
-            init_map: HashMap::with_capacity(0),
+            init_map: HashMap::with_capacity(4),
             setup_count: 0,
             setup_link: None,
             setup_node: None,
@@ -88,15 +88,15 @@ impl VideoAggregator {
         #[cfg(debug_assertions)]
         println!("{:#?}", pl);
 
-        //TODO figure out if master playlist always arrive after init segments
-        //timing of init seg and playlist is tricky
-
         self.setup_count = pl.variants.len();
 
         let initialization_segments = Vec::with_capacity(self.setup_count);
         let mut qualities = Vec::with_capacity(self.setup_count);
         let mut codecs = Vec::with_capacity(self.setup_count);
         let mut bandwidths = Vec::with_capacity(self.setup_count);
+
+        //TODO reorder vectors based on bandwidth
+        //would fix ordering constraint we have now
 
         //Assumes variants ordering is highest to lowest quality
         for variant in pl.variants.into_iter().rev() {
@@ -127,9 +127,6 @@ impl VideoAggregator {
             qualities.push(quality.to_owned());
         }
 
-        //TODO reorder vectors based on bandwidth
-        //would fix ordering constraint we have now
-
         let setup_node = SetupNode {
             initialization_segments,
             qualities,
@@ -137,14 +134,35 @@ impl VideoAggregator {
             bandwidths,
         };
 
-        if setup_node.initialization_segments.len() != self.setup_count {
-            self.setup_node = Some(setup_node);
+        self.setup_node = Some(setup_node);
 
+        self.mint_setup_node().await;
+    }
+
+    async fn mint_setup_node(&mut self) {
+        if self.init_map.is_empty() {
             return;
         }
 
+        let setup_node = match self.setup_node.as_mut() {
+            Some(sn) => sn,
+            None => return,
+        };
+
+        if self.init_map.len() != self.setup_count {
+            return;
+        }
+
+        for quality in setup_node.qualities.iter() {
+            let cid = self.init_map[quality];
+
+            let link = IPLDLink { link: cid };
+
+            setup_node.initialization_segments.push(link);
+        }
+
         //Panic on error because live stream can't go on without setup node anyway.
-        let cid = ipfs_dag_put_node_async(&self.ipfs, &setup_node)
+        let cid = ipfs_dag_put_node_async(&self.ipfs, setup_node)
             .await
             .expect("SetupNode Dag Put Failed");
 
@@ -178,31 +196,7 @@ impl VideoAggregator {
 
         self.init_map.insert(quality.to_owned(), cid);
 
-        let setup_node = match self.setup_node.as_mut() {
-            Some(sn) => sn,
-            None => return,
-        };
-
-        if self.init_map.len() != self.setup_count {
-            return;
-        }
-
-        for quality in setup_node.qualities.iter() {
-            let cid = self.init_map[quality];
-
-            let link = IPLDLink { link: cid };
-
-            setup_node.initialization_segments.push(link);
-        }
-
-        //Panic on error because live stream can't go on without setup node anyway.
-        let cid = ipfs_dag_put_node_async(&self.ipfs, &setup_node)
-            .await
-            .expect("SetupNode Dag Put Failed");
-
-        self.setup_link = Some(IPLDLink { link: cid });
-        self.setup_node = None;
-        self.init_map = HashMap::with_capacity(0);
+        self.mint_setup_node().await;
     }
 
     /// Process media segments.
@@ -223,15 +217,15 @@ impl VideoAggregator {
             .parse::<usize>()
             .expect("Not a number");
 
-        let index = index - self.node_mint_count;
+        let buf_i = index - self.node_mint_count;
 
-        if let Some(node) = self.video_nodes.get_mut(index) {
+        if let Some(node) = self.video_nodes.get_mut(buf_i) {
             node.qualities
                 .insert(quality.to_owned(), IPLDLink { link: cid });
 
             node.setup = self.setup_link;
 
-            if index == 0 {
+            if buf_i == 0 {
                 node.previous = self.previous;
             }
         } else {
@@ -252,45 +246,48 @@ impl VideoAggregator {
             self.video_nodes.push_back(node);
         }
 
-        if let Some(node) = self.video_nodes.front() {
-            if node.qualities.len() != self.setup_count {
+        self.mint_video_node().await;
+    }
+
+    async fn mint_video_node(&mut self) {
+        let node = match self.video_nodes.front() {
+            Some(node) => node,
+            None => return,
+        };
+
+        if node.setup.is_none() {
+            return;
+        }
+
+        if node.qualities.len() != self.setup_count {
+            return;
+        }
+
+        if node.previous.is_none() && self.node_mint_count > 0 {
+            return;
+        }
+
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, node).await {
+            Ok(res) => res,
+            Err(e) => {
+                eprintln!("IPFS: dag put failed {}", e);
                 return;
             }
+        };
 
-            if node.setup.is_none() {
-                return;
-            }
+        self.video_nodes.pop_front();
+        self.node_mint_count += 1;
+        self.previous = Some(IPLDLink { link: cid });
 
-            if node.previous.is_none() && self.node_mint_count > 0 {
-                return;
-            }
+        let msg = Archive::Video(cid);
 
-            let cid = match ipfs_dag_put_node_async(&self.ipfs, node).await {
-                Ok(res) => res,
-                Err(e) => {
-                    eprintln!("IPFS: dag put failed {}", e);
-                    return;
-                }
-            };
+        if let Err(error) = self.archive_tx.send(msg).await {
+            eprintln!("Archive receiver hung up! Error: {}", error);
+        }
 
-            self.video_nodes.pop_front();
-            self.node_mint_count += 1;
-            self.previous = Some(IPLDLink { link: cid });
-
-            let msg = Archive::Video(cid);
-
-            if let Err(error) = self.archive_tx.send(msg).await {
-                eprintln!("Archive receiver hung up! Error: {}", error);
-            }
-
-            match self
-                .ipfs
-                .pubsub_pub(&self.gossipsub_topic, &cid.to_string())
-                .await
-            {
-                Ok(_) => println!("IPFS: GossipSub published => {}", &cid),
-                Err(e) => eprintln!("IPFS: pubsub pub failed {}", e),
-            }
+        match self.ipfs.pubsub_pub(&self.topic, &cid.to_string()).await {
+            Ok(_) => println!("IPFS: GossipSub published => {}", &cid),
+            Err(e) => eprintln!("IPFS: pubsub pub failed {}", e),
         }
     }
 }

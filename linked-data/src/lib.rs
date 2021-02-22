@@ -4,7 +4,7 @@ pub mod config;
 pub mod stream;
 pub mod video;
 
-use std::str::FromStr;
+use std::convert::TryFrom;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -39,7 +39,7 @@ where
 {
     let cid_str: &str = Deserialize::deserialize(deserializer)?;
 
-    let cid = Cid::from_str(cid_str).expect("Deserialize string to CID failed");
+    let cid = Cid::try_from(cid_str).expect("Deserialize string to CID failed");
 
     Ok(cid)
 }
