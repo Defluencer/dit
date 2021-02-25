@@ -1,4 +1,7 @@
-use crate::utils::bindings::ens_get_content_hash;
+use wasm_bindgen::JsValue;
+
+use web3::transports::eip_1193::{Eip1193, Provider};
+use web3::Web3;
 
 use yew::services::ConsoleService;
 use yew::Callback;
@@ -7,8 +10,31 @@ use cid::multibase::Base;
 use cid::multihash::MultihashGeneric;
 use cid::Cid;
 
+pub struct EthereaumNameService {
+    client: Web3<Eip1193>,
+}
+
+impl EthereaumNameService {
+    pub fn new() -> Result<Self, JsValue> {
+        let provider = Provider::default()?;
+
+        let transport = Eip1193::new(provider);
+
+        let client = Web3::new(transport);
+
+        Ok(Self { client })
+    }
+}
+
 pub async fn get_beacon_from_name(mut name: String, cb: Callback<Result<Cid, ()>>) {
-    name.insert_str(0, "defluencer.");
+    let client = EthereaumNameService::new().unwrap().client;
+
+    let res = client.eth().request_accounts().await;
+
+    #[cfg(debug_assertions)]
+    ConsoleService::info(&format!("ENS get => {:#?}", &res));
+
+    /* name.insert_str(0, "defluencer.");
 
     name.push_str(".eth");
 
@@ -40,5 +66,7 @@ pub async fn get_beacon_from_name(mut name: String, cb: Callback<Result<Cid, ()>
 
     let cid = Cid::new_v1(0x71, hash);
 
-    cb.emit(Ok(cid));
+    cb.emit(Ok(cid)); */
+
+    cb.emit(Err(()));
 }
