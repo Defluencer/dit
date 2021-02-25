@@ -13,6 +13,8 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 use yew::{Callback, InputData};
 
+use linked_data::chat::ChatContent;
+
 pub struct ChatWindow {
     link: ComponentLink<Self>,
 
@@ -30,7 +32,7 @@ pub struct ChatWindow {
 }
 
 pub enum Msg {
-    Received((String, String)),
+    Received(ChatContent),
     Sent,
     Input(String),
 }
@@ -114,13 +116,11 @@ impl Component for ChatWindow {
 }
 
 impl ChatWindow {
-    fn msg_received(&mut self, message: (String, String)) -> bool {
-        let (sender, content) = message;
-
+    fn msg_received(&mut self, content: ChatContent) -> bool {
         let message_data = ChatMessageData {
             id: self.next_id,
-            sender_name: Rc::from(sender),
-            message: Rc::from(content),
+            sender_name: Rc::from(content.name),
+            message: Rc::from(content.message),
         };
 
         self.chat_messages.push_back(message_data);

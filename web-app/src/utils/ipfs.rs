@@ -1,40 +1,44 @@
-use crate::utils::bindings::{ipfs_cat, ipfs_dag_get, ipfs_dag_get_path, ipfs_name_resolve};
+use ipfs_api::IpfsClient;
 
 use std::convert::TryFrom;
 
-use wasm_bindgen::JsCast;
+use futures_util::TryStreamExt;
 
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use js_sys::Uint8Array;
 use web_sys::SourceBuffer;
 
 use cid::Cid;
 
-pub async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
-    let segment = match ipfs_cat(&path).await {
-        Ok(vs) => vs,
+pub async fn cat_and_buffer(ipfs: IpfsClient, path: String, source_buffer: SourceBuffer) {
+    let mut buffer = match ipfs
+        .cat(&path)
+        .map_ok(|chunk| chunk.to_vec())
+        .try_concat()
+        .await
+    {
+        Ok(vec) => vec,
         Err(e) => {
-            ConsoleService::warn(&format!("{:#?}", e));
+            ConsoleService::error(&format!("{:#?}", e));
             return;
         }
     };
 
-    let segment: &Uint8Array = segment.unchecked_ref();
-
-    if let Err(e) = source_buffer.append_buffer_with_array_buffer_view(segment) {
+    if let Err(e) = source_buffer.append_buffer_with_u8_array(&mut buffer) {
         ConsoleService::warn(&format!("{:#?}", e));
         return;
     }
 }
 
-pub async fn ipfs_resolve_and_get_callback<T, U>(ipns: String, cb: Callback<(Cid, U)>)
-where
+pub async fn ipfs_resolve_and_get_callback<T>(
+    ipfs: IpfsClient,
+    ipns: String,
+    cb: Callback<(Cid, T)>,
+) where
     T: for<'a> serde::Deserialize<'a>,
-    U: for<'a> From<T>,
 {
-    let js_value = match ipfs_name_resolve(&ipns).await {
+    let res = match ipfs.name_resolve(Some(&ipns), true, false).await {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
@@ -42,40 +46,34 @@ where
         }
     };
 
-    let path = match js_value.as_string() {
-        Some(string) => string,
-        None => return,
-    };
+    let cid = Cid::try_from(res.path).expect("Invalid Cid");
 
-    let cid = Cid::try_from(path).expect("Invalid Cid");
-
-    let node = match ipfs_dag_get(&cid.to_string()).await {
-        Ok(result) => result,
+    let node = match ipfs
+        .dag_get(&cid.to_string())
+        .map_ok(|chunk| chunk.to_vec())
+        .try_concat()
+        .await
+    {
+        Ok(result) => serde_json::from_slice::<T>(&result).expect("Invalid Dag Node"),
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
             return;
         }
     };
-
-    let temp: T = match node.into_serde() {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:#?}", e));
-            return;
-        }
-    };
-
-    let node = temp.into();
 
     cb.emit((cid, node));
 }
 
-pub async fn ipfs_dag_get_path_async<T, U>(cid: Cid, path: &str) -> Result<U, ()>
+pub async fn ipfs_dag_get_path_async<T>(ipfs: IpfsClient, path: &str) -> Result<T, ()>
 where
     T: for<'a> serde::Deserialize<'a>,
-    U: for<'a> From<T>,
 {
-    let node = match ipfs_dag_get_path(&cid.to_string(), path).await {
+    let result = match ipfs
+        .dag_get(&path)
+        .map_ok(|chunk| chunk.to_vec())
+        .try_concat()
+        .await
+    {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
@@ -83,23 +81,21 @@ where
         }
     };
 
-    let temp: T = match node.into_serde() {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:#?}", e));
-            return Err(());
-        }
-    };
+    let node = serde_json::from_slice::<T>(&result).expect("Invalid Dag Node");
 
-    Ok(temp.into())
+    Ok(node)
 }
 
-pub async fn ipfs_dag_get_callback<T, U>(cid: Cid, cb: Callback<(Cid, U)>)
+pub async fn ipfs_dag_get_callback<T>(ipfs: IpfsClient, cid: Cid, cb: Callback<(Cid, T)>)
 where
     T: for<'a> serde::Deserialize<'a>,
-    U: for<'a> From<T>,
 {
-    let node = match ipfs_dag_get(&cid.to_string()).await {
+    let result = match ipfs
+        .dag_get(&cid.to_string())
+        .map_ok(|chunk| chunk.to_vec())
+        .try_concat()
+        .await
+    {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
@@ -107,15 +103,7 @@ where
         }
     };
 
-    let temp: T = match node.into_serde() {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:#?}", e));
-            return;
-        }
-    };
-
-    let node = temp.into();
+    let node = serde_json::from_slice::<T>(&result).expect("Invalid Dag Node");
 
     cb.emit((cid, node));
 }

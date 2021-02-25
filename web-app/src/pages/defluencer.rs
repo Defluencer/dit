@@ -15,9 +15,11 @@ use web_sys::Storage;
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use linked_data::beacon::{Beacon, TempVideoList, TempVideoMetadata, VideoList, VideoMetadata};
+use linked_data::beacon::{Beacon, VideoList, VideoMetadata};
 
 use cid::Cid;
+
+use ipfs_api::IpfsClient;
 
 /// Specific Defluencer Home Page
 pub struct Defluencer {
@@ -37,6 +39,8 @@ pub struct Defluencer {
 
     call_count: usize,
     metadata_map: HashMap<Cid, VideoMetadata>,
+
+    ipfs: IpfsClient,
 }
 
 pub enum Msg {
@@ -56,6 +60,8 @@ impl Component for Defluencer {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let ipfs = IpfsClient::default();
+
         let ens_name = props.ens_name;
 
         let window = web_sys::window().expect("Can't get window");
@@ -63,7 +69,11 @@ impl Component for Defluencer {
 
         let beacon_cid = match Cid::from_str(&ens_name) {
             Ok(cid) => {
-                spawn_local(ipfs_dag_get_callback(cid, link.callback(Msg::Beacon)));
+                spawn_local(ipfs_dag_get_callback(
+                    ipfs.clone(),
+                    cid,
+                    link.callback(Msg::Beacon),
+                ));
 
                 Some(cid)
             }
@@ -88,6 +98,7 @@ impl Component for Defluencer {
             storage,
             call_count: 0,
             metadata_map: HashMap::with_capacity(10),
+            ipfs,
         }
     }
 
@@ -160,7 +171,11 @@ impl Defluencer {
             }
         };
 
-        spawn_local(ipfs_dag_get_callback(cid, self.link.callback(Msg::Beacon)));
+        spawn_local(ipfs_dag_get_callback(
+            self.ipfs.clone(),
+            cid,
+            self.link.callback(Msg::Beacon),
+        ));
 
         if let Some(beacon_cid) = self.beacon_cid.as_ref() {
             if *beacon_cid == cid {
@@ -186,13 +201,15 @@ impl Defluencer {
         if let Some(cid) = get_local_list(&beacon.video_list, self.storage.as_ref()) {
             self.list_cid = Some(cid);
 
-            spawn_local(ipfs_dag_get_callback::<TempVideoList, _>(
+            spawn_local(ipfs_dag_get_callback(
+                self.ipfs.clone(),
                 cid,
                 self.link.callback(Msg::List),
             ));
         }
 
-        spawn_local(ipfs_resolve_and_get_callback::<TempVideoList, _>(
+        spawn_local(ipfs_resolve_and_get_callback(
+            self.ipfs.clone(),
             beacon.video_list.clone(),
             self.link.callback(Msg::List),
         ));
@@ -229,7 +246,8 @@ impl Defluencer {
         }
 
         for metadata in list.metadata.iter().rev() {
-            spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, _>(
+            spawn_local(ipfs_dag_get_callback(
+                self.ipfs.clone(),
                 metadata.link,
                 self.link.callback(Msg::Metadata),
             ))

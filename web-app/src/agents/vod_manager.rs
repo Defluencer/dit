@@ -14,7 +14,9 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url, Window};
 use yew::services::ConsoleService;
 
 use linked_data::beacon::VideoMetadata;
-use linked_data::video::{SetupNode, TempSetupNode};
+use linked_data::video::SetupNode;
+
+use ipfs_api::IpfsClient;
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -43,6 +45,8 @@ struct Video {
     ema: ExponentialMovingAverage,
 
     handle: Arc<AtomicIsize>,
+
+    ipfs: IpfsClient,
 }
 
 pub struct VideoOnDemandManager {
@@ -63,6 +67,8 @@ impl VideoOnDemandManager {
         let url = Url::create_object_url_with_source(&media_source)
             .expect("Can't create url from source");
 
+        let ipfs = IpfsClient::default();
+
         let video_record = Video {
             metadata,
 
@@ -77,6 +83,8 @@ impl VideoOnDemandManager {
             ema,
 
             handle: Arc::new(AtomicIsize::new(0)),
+
+            ipfs,
         };
 
         Self { video_record, url }
@@ -323,13 +331,18 @@ async fn add_source_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Adding Source Buffer");
 
-    let cid = video_record.metadata.video.link;
+    let ipfs = video_record.ipfs.clone();
 
-    let setup_node =
-        match ipfs_dag_get_path_async::<TempSetupNode, SetupNode>(cid, SETUP_PATH).await {
-            Ok(result) => result,
-            Err(_) => return,
-        };
+    let path = format!(
+        "{}{}",
+        video_record.metadata.video.link.to_string(),
+        SETUP_PATH
+    );
+
+    let setup_node = match ipfs_dag_get_path_async::<SetupNode>(ipfs.clone(), &path).await {
+        Ok(result) => result,
+        Err(_) => return,
+    };
 
     #[cfg(debug_assertions)]
     ConsoleService::info(&format!(
@@ -393,7 +406,7 @@ async fn add_source_buffer(video_record: Video) {
 
     on_source_buffer_update_end(video_record, &source_buffer);
 
-    cat_and_buffer(path, source_buffer.clone()).await;
+    cat_and_buffer(ipfs.clone(), path, source_buffer.clone()).await;
 }
 
 /// Get CID from timecode then fetch video data from ipfs
@@ -452,7 +465,7 @@ fn load_media_segment(video_record: Video) {
         quality
     );
 
-    let future = cat_and_buffer(path, source_buffer);
+    let future = cat_and_buffer(video_record.ipfs.clone(), path, source_buffer);
 
     video_record.ema.start_timer();
     video_record.state.store(6, Ordering::Relaxed);
@@ -499,7 +512,7 @@ async fn switch_quality(video_record: Video) {
         level
     );
 
-    cat_and_buffer(path, source_buffer.clone()).await;
+    cat_and_buffer(video_record.ipfs.clone(), path, source_buffer.clone()).await;
 
     //state load segment
     video_record.state.store(1, Ordering::Relaxed);

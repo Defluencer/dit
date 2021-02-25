@@ -3,10 +3,11 @@ use std::convert::TryFrom;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::utils::bindings::{ipfs_dag_get, ipfs_subscribe, ipfs_unsubscribe};
 use crate::utils::ema::ExponentialMovingAverage;
-use crate::utils::ipfs::cat_and_buffer;
+use crate::utils::ipfs::{cat_and_buffer, ipfs_dag_get_path_async};
 use crate::utils::tracks::{Track, Tracks};
+
+use futures_util::StreamExt;
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -20,6 +21,8 @@ use yew::services::ConsoleService;
 use linked_data::video::SetupNode;
 
 use cid::Cid;
+
+use ipfs_api::IpfsClient;
 
 //const CODEC_PATH: &str = "/setup/codec";
 //const QUALITY_PATH: &str = "/setup/quality";
@@ -46,6 +49,8 @@ struct LiveStream {
     handle: Arc<AtomicIsize>,
 
     ema: ExponentialMovingAverage,
+
+    ipfs: IpfsClient,
 }
 
 pub struct LiveStreamManager {
@@ -59,9 +64,11 @@ pub struct LiveStreamManager {
 impl LiveStreamManager {
     /// Ready Live Stream to link with video element.
     pub fn new(topic: String, streamer_peer_id: String) -> Self {
+        let ipfs = IpfsClient::default();
+
         let buffer = Arc::new(RwLock::new(VecDeque::with_capacity(5)));
 
-        ipfs_pubsub(&topic, buffer.clone(), streamer_peer_id);
+        ipfs_pubsub(&ipfs, &topic, buffer.clone(), streamer_peer_id);
 
         let window = web_sys::window().expect("Can't get window");
 
@@ -87,6 +94,8 @@ impl LiveStreamManager {
             handle: Arc::new(AtomicIsize::new(0)),
 
             ema,
+
+            ipfs,
         };
 
         Self { stream, topic, url }
@@ -115,7 +124,7 @@ impl Drop for LiveStreamManager {
         #[cfg(debug_assertions)]
         ConsoleService::info("Dropping LiveStreamManager");
 
-        ipfs_unsubscribe(&self.topic);
+        //ipfs_unsubscribe(&self.topic);
 
         let handle = self.stream.handle.load(Ordering::Relaxed);
 
@@ -190,40 +199,11 @@ async fn add_source_buffer(stream: LiveStream) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Adding Source Buffer");
 
-    /* let codecs = match ipfs_dag_get(&cid, CODEC_PATH).await {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let qualities = match ipfs_dag_get(&cid, QUALITY_PATH).await {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let codecs: Vec<String> = from_value(codecs).expect("Can't deserialize codecs");
-    let qualities: Vec<String> = from_value(qualities).expect("Can't deserialize qualities"); */
-
-    let setup_node = match ipfs_dag_get(&cid).await {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    let setup_node: SetupNode = match setup_node.into_serde() {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
+    let setup_node: SetupNode =
+        match ipfs_dag_get_path_async(stream.ipfs.clone(), &cid.to_string()).await {
+            Ok(sn) => sn,
+            Err(_) => return,
+        };
 
     let mut vec = Vec::with_capacity(4);
 
@@ -271,7 +251,7 @@ async fn add_source_buffer(stream: LiveStream) {
 
     let path = format!("{}/setup/initseg/{}", cid, 0);
 
-    cat_and_buffer(path, source_buffer.clone()).await;
+    cat_and_buffer(stream.ipfs.clone(), path, source_buffer.clone()).await;
 
     match stream.tracks.write() {
         Ok(mut tracks) => *tracks = vec,
@@ -320,7 +300,7 @@ fn load_media_segment(stream: LiveStream) {
 
     let path = format!("{}/quality/{}", cid, quality);
 
-    let future = cat_and_buffer(path, source_buffer);
+    let future = cat_and_buffer(stream.ipfs.clone(), path, source_buffer);
 
     stream.ema.start_timer();
 
@@ -377,7 +357,7 @@ async fn switch_quality(stream: LiveStream) {
 
     let path = format!("{}/setup/initseg/{}", cid, level);
 
-    cat_and_buffer(path, source_buffer).await;
+    cat_and_buffer(stream.ipfs.clone(), path, source_buffer).await;
 
     //state load segment
     stream.state.store(1, Ordering::Relaxed);
@@ -511,35 +491,50 @@ fn on_source_buffer_update_end(stream: LiveStream, source_buffer: &SourceBuffer)
 }
 
 /// Process Pubsub message.
-fn ipfs_pubsub(topic: &str, buffer: Buffer, streamer_peer_id: String) {
-    let closure = move |from: String, data: Vec<u8>| {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("PubSub Message");
+async fn ipfs_pubsub(ipfs: &IpfsClient, topic: &str, buffer: Buffer, streamer_peer_id: String) {
+    let mut stream = ipfs.pubsub_sub(topic, true);
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Sender => {}", from));
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(response) => {
+                #[cfg(debug_assertions)]
+                ConsoleService::info("PubSub Message");
 
-        if from != streamer_peer_id {
-            #[cfg(debug_assertions)]
-            ConsoleService::warn("Unauthorized Sender");
-            return;
+                let from = match response.from {
+                    Some(from) => from,
+                    None => return,
+                };
+
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!("Sender => {}", from));
+
+                if from != streamer_peer_id {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::warn("Unauthorized Sender");
+                    return;
+                }
+
+                let data = match response.data {
+                    Some(data) => data,
+                    None => return,
+                };
+
+                let cid = match decode_cid(data) {
+                    Some(cid) => cid,
+                    None => return,
+                };
+
+                //TODO get missing cid by checking previous value
+                if let Ok(mut buffer) = buffer.write() {
+                    buffer.push_back(cid);
+                }
+            }
+            Err(error) => {
+                eprintln!("{}", error);
+                continue;
+            }
         }
-
-        let cid = match decode_cid(data) {
-            Some(cid) => cid,
-            None => return,
-        };
-
-        //TODO get missing cid by checking previous value
-
-        if let Ok(mut buffer) = buffer.write() {
-            buffer.push_back(cid);
-        }
-    };
-
-    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn(String, Vec<u8>)>);
-
-    ipfs_subscribe(topic, callback.into_js_value().unchecked_ref());
+    }
 }
 
 /// Decode vector of byte into CID

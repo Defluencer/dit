@@ -1,27 +1,74 @@
-use crate::utils::bindings::{ipfs_publish, ipfs_subscribe, ipfs_unsubscribe};
-
-use wasm_bindgen::prelude::Closure;
-use wasm_bindgen::JsCast;
+use futures_util::StreamExt;
 
 use yew::services::ConsoleService;
 use yew::Callback;
 
+use ipfs_api::response::PubsubSubResponse;
+use ipfs_api::IpfsClient;
+
+use linked_data::chat::{ChatContent, ChatIdentity, ChatMessage};
+
 pub struct LiveChatManager {
     topic: String,
+
+    ipfs: IpfsClient,
+
+    cb: Callback<ChatContent>,
 }
 
 impl LiveChatManager {
-    pub fn new(topic: String, cb: Callback<(String, String)>) -> Self {
-        load_live_chat(&topic, cb);
+    pub fn new(topic: String, cb: Callback<ChatContent>) -> Self {
+        let ipfs = IpfsClient::default();
 
-        Self { topic }
+        Self { topic, ipfs, cb }
     }
 
-    pub fn send_chat(&self, msg: &str) {
-        ipfs_publish(&self.topic, msg);
+    async fn load_live_chat(&mut self) {
+        let mut stream = self.ipfs.pubsub_sub(&self.topic, true);
+
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(response) => self.process_msg(&response),
+                Err(error) => {
+                    eprintln!("{}", error);
+                    continue;
+                }
+            }
+        }
+    }
+
+    fn process_msg(&mut self, msg: &PubsubSubResponse) {
+        let decoded = match msg.data.as_ref() {
+            Some(data) => data,
+            None => return,
+        };
+
+        let chat_message: ChatMessage = match serde_json::from_slice(decoded) {
+            Ok(msg) => msg,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
+
+        let content = chat_message.data;
+
+        self.cb.emit(content);
+    }
+
+    pub async fn send_chat(&self, msg: &str) {
+        //ipfs_publish(&self.topic, msg);
+
+        match self.ipfs.pubsub_pub(&self.topic, msg).await {
+            Ok(_) => {}
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        }
     }
 }
-
+/*
 impl Drop for LiveChatManager {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
@@ -29,37 +76,4 @@ impl Drop for LiveChatManager {
 
         ipfs_unsubscribe(&self.topic);
     }
-}
-
-fn load_live_chat(topic: &str, cb: Callback<(String, String)>) {
-    let pubsub_closure = Closure::wrap(Box::new(move |from, data| {
-        let msg = match pubsub_message(from, data) {
-            Some(msg) => msg,
-            None => return,
-        };
-
-        cb.emit(msg);
-    }) as Box<dyn Fn(String, Vec<u8>)>);
-
-    ipfs_subscribe(topic, pubsub_closure.into_js_value().unchecked_ref());
-}
-
-fn pubsub_message(from: String, data: Vec<u8>) -> Option<(String, String)> {
-    #[cfg(debug_assertions)]
-    ConsoleService::info(&format!("Sender => {}", from));
-
-    let msg = match String::from_utf8(data) {
-        Ok(string) => string,
-        Err(_) => {
-            #[cfg(debug_assertions)]
-            ConsoleService::warn("Invalid UTF-8");
-
-            return None;
-        }
-    };
-
-    #[cfg(debug_assertions)]
-    ConsoleService::info(&format!("Message => {}", msg));
-
-    Some((from, msg))
-}
+} */
