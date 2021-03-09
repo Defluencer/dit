@@ -6,15 +6,16 @@ use web3::Web3;
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use cid::multibase::Base;
 use cid::multihash::MultihashGeneric;
 use cid::Cid;
+use cid::Version;
 
-pub struct EthereaumNameService {
+#[derive(Clone)]
+pub struct EthereumNameService {
     client: Web3<Eip1193>,
 }
 
-impl EthereaumNameService {
+impl EthereumNameService {
     pub fn new() -> Result<Self, JsValue> {
         let provider = Provider::default()?;
 
@@ -24,49 +25,48 @@ impl EthereaumNameService {
 
         Ok(Self { client })
     }
+
+    pub async fn get_content_cid(&self, name: String) -> Result<Cid, ()> {
+        let name = &format!("defluencer.{}.eth", name);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("ENS get => {}", name));
+
+        let hash = match self.client.ens().get_content_hash(name).await {
+            Ok(hash) => hash,
+            Err(e) => {
+                ConsoleService::error(&format!("{:#?}", e));
+                return Err(());
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("hash => {:#x?}", &hash));
+
+        // https://eips.ethereum.org/EIPS/eip-1577
+
+        if &0xe3 != hash.get(0).expect("Empty Hash") {
+            return Err(());
+        }
+
+        let version = match hash.get(1).expect("Empty Hash") {
+            0 => Version::V0,
+            1 => Version::V1,
+            _ => return Err(()),
+        };
+
+        let content_type = *hash.get(3).expect("Empty Hash") as u64;
+
+        let slice = &hash[4..]; // ignore first 4 bytes
+
+        let multihash = MultihashGeneric::from_bytes(slice).expect("Invalid Multihash");
+
+        let cid = Cid::new(version, content_type, multihash).expect("Invalid Cid");
+
+        Ok(cid)
+    }
 }
 
-pub async fn get_beacon_from_name(mut name: String, cb: Callback<Result<Cid, ()>>) {
-    let client = EthereaumNameService::new().unwrap().client;
-
-    let res = client.eth().request_accounts().await;
-
-    #[cfg(debug_assertions)]
-    ConsoleService::info(&format!("ENS get => {:#?}", &res));
-
-    /* name.insert_str(0, "defluencer.");
-
-    name.push_str(".eth");
-
-    #[cfg(debug_assertions)]
-    ConsoleService::info(&format!("ENS get => {}", &name));
-
-    let js_value = match ens_get_content_hash(&name).await {
-        Ok(hash) => hash,
-        Err(e) => {
-            ConsoleService::error(&format!("{:#?}", e));
-
-            cb.emit(Err(()));
-            return;
-        }
-    };
-
-    //btc58 encoded multihash
-    let encoded = match js_value.as_string() {
-        Some(string) => string,
-        None => {
-            cb.emit(Err(()));
-            return;
-        }
-    };
-
-    let data = Base::decode(&Base::Base58Btc, encoded).expect("Can't decode");
-
-    let hash = MultihashGeneric::from_bytes(&data).expect("Not multihash");
-
-    let cid = Cid::new_v1(0x71, hash);
-
-    cb.emit(Ok(cid)); */
-
-    cb.emit(Err(()));
+pub async fn get_beacon(client: EthereumNameService, name: String, cb: Callback<Result<Cid, ()>>) {
+    cb.emit(client.get_content_cid(name).await);
 }
