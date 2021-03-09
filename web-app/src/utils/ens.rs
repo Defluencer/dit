@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use wasm_bindgen::JsValue;
 
 use web3::transports::eip_1193::{Eip1193, Provider};
@@ -6,9 +8,7 @@ use web3::Web3;
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use cid::multihash::MultihashGeneric;
 use cid::Cid;
-use cid::Version;
 
 #[derive(Clone)]
 pub struct EthereumNameService {
@@ -46,27 +46,18 @@ impl EthereumNameService {
         // https://eips.ethereum.org/EIPS/eip-1577
 
         if &0xe3 != hash.get(0).expect("Empty Hash") {
+            //Not IPFS
             return Err(());
         }
 
-        let version = match hash.get(1).expect("Empty Hash") {
-            0 => Version::V0,
-            1 => Version::V1,
-            _ => return Err(()),
-        };
-
-        let content_type = *hash.get(3).expect("Empty Hash") as u64;
-
-        let slice = &hash[4..]; // ignore first 4 bytes
-
-        let multihash = MultihashGeneric::from_bytes(slice).expect("Invalid Multihash");
-
-        let cid = Cid::new(version, content_type, multihash).expect("Invalid Cid");
+        let cid = Cid::try_from(&hash[2..]).expect("Invalid Cid");
 
         Ok(cid)
     }
 }
 
-pub async fn get_beacon(client: EthereumNameService, name: String, cb: Callback<Result<Cid, ()>>) {
+pub async fn get_beacon_from_name(name: String, cb: Callback<Result<Cid, ()>>) {
+    let client = EthereumNameService::new().unwrap();
+
     cb.emit(client.get_content_cid(name).await);
 }
