@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+/* use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::components::{Navbar, VideoThumbnail};
@@ -247,3 +247,4 @@ impl VideoOnDemand {
         false
     }
 }
+ */

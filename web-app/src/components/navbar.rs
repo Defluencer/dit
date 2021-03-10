@@ -64,15 +64,11 @@ impl Component for Navbar {
 
 impl Navbar {
     fn addrs(&mut self, msg: ChangeData) -> bool {
-        match msg {
-            ChangeData::Value(search_value) => {
-                let route = crate::app::AppRoute::Defluencer(search_value);
+        if let ChangeData::Value(search_value) = msg {
+            let route = crate::app::AppRoute::Defluencer(search_value);
 
-                self.route_dispatcher
-                    .send(RouteRequest::ChangeRoute(route.into_route()));
-            }
-            ChangeData::Select(_) => {}
-            ChangeData::Files(_) => {}
+            self.route_dispatcher
+                .send(RouteRequest::ChangeRoute(route.into_route()));
         }
 
         false

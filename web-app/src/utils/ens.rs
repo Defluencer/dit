@@ -2,6 +2,8 @@ use std::convert::TryFrom;
 
 use wasm_bindgen::JsValue;
 
+use wasm_bindgen_futures::spawn_local;
+
 use web3::transports::eip_1193::{Eip1193, Provider};
 use web3::Web3;
 
@@ -26,7 +28,7 @@ impl EthereumNameService {
         Ok(Self { client })
     }
 
-    pub async fn get_beacon_cid(&self, name: String) -> Result<Cid, ()> {
+    pub async fn get_ipfs_content(&self, name: &str) -> Result<Cid, ()> {
         let name = &format!("defluencer.{}.eth", name);
 
         #[cfg(debug_assertions)]
@@ -41,7 +43,7 @@ impl EthereumNameService {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Hash => {:#x?}", &hash));
+        ConsoleService::info(&format!("Hash => {:x?}", &hash));
 
         // https://eips.ethereum.org/EIPS/eip-1577
 
@@ -56,14 +58,23 @@ impl EthereumNameService {
 
         let cid = Cid::try_from(&hash[2..]).expect("Invalid Cid");
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Cid => {}", &cid.to_string()));
+
         Ok(cid)
     }
 }
 
-pub async fn get_beacon_from_name(
-    client: EthereumNameService,
-    name: String,
-    cb: Callback<Result<Cid, ()>>,
+pub fn get_ens_beacon_async(
+    ens: EthereumNameService,
+    ens_name: String,
+    callback: Callback<Result<Cid, ()>>,
 ) {
-    cb.emit(client.get_beacon_cid(name).await);
+    let closure = async move {
+        let result = ens.get_ipfs_content(&ens_name).await;
+
+        callback.emit(result);
+    };
+
+    spawn_local(closure);
 }
