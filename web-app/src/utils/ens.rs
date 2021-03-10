@@ -1,44 +1,69 @@
-use crate::utils::bindings::ens_get_content_hash;
+use std::convert::TryFrom;
+
+use wasm_bindgen::JsValue;
+
+use web3::transports::eip_1193::{Eip1193, Provider};
+use web3::Web3;
 
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use cid::multibase::Base;
-use cid::multihash::MultihashGeneric;
 use cid::Cid;
 
-pub async fn get_beacon_from_name(mut name: String, cb: Callback<Result<Cid, ()>>) {
-    name.insert_str(0, "defluencer.");
+#[derive(Clone)]
+pub struct EthereumNameService {
+    client: Web3<Eip1193>,
+}
 
-    name.push_str(".eth");
+impl EthereumNameService {
+    pub fn new() -> Result<Self, JsValue> {
+        let provider = Provider::default()?;
 
-    #[cfg(debug_assertions)]
-    ConsoleService::info(&format!("ENS get => {}", &name));
+        let transport = Eip1193::new(provider);
 
-    let js_value = match ens_get_content_hash(&name).await {
-        Ok(hash) => hash,
-        Err(e) => {
-            ConsoleService::error(&format!("{:#?}", e));
+        let client = Web3::new(transport);
 
-            cb.emit(Err(()));
-            return;
+        Ok(Self { client })
+    }
+
+    pub async fn get_beacon_cid(&self, name: String) -> Result<Cid, ()> {
+        let name = &format!("defluencer.{}.eth", name);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("ENS get => {}", name));
+
+        let hash = match self.client.ens().get_content_hash(name).await {
+            Ok(hash) => hash,
+            Err(e) => {
+                ConsoleService::error(&format!("{:#?}", e));
+                return Err(());
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Hash => {:#x?}", &hash));
+
+        // https://eips.ethereum.org/EIPS/eip-1577
+
+        if hash.first().is_none() {
+            return Err(());
         }
-    };
 
-    //btc58 encoded multihash
-    let encoded = match js_value.as_string() {
-        Some(string) => string,
-        None => {
-            cb.emit(Err(()));
-            return;
+        if &0xe3 != hash.first().unwrap() {
+            //Not IPFS
+            return Err(());
         }
-    };
 
-    let data = Base::decode(&Base::Base58Btc, encoded).expect("Can't decode");
+        let cid = Cid::try_from(&hash[2..]).expect("Invalid Cid");
 
-    let hash = MultihashGeneric::from_bytes(&data).expect("Not multihash");
+        Ok(cid)
+    }
+}
 
-    let cid = Cid::new_v1(0x71, hash);
-
-    cb.emit(Ok(cid));
+pub async fn get_beacon_from_name(
+    client: EthereumNameService,
+    name: String,
+    cb: Callback<Result<Cid, ()>>,
+) {
+    cb.emit(client.get_beacon_cid(name).await);
 }
