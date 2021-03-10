@@ -143,24 +143,24 @@ impl VideoAggregator {
 
         self.setup_node = Some(setup_node);
 
-        if let Some(cid) = self.mint_setup_node().await {
-            self.setup_link = Some(IPLDLink { link: cid });
-            self.setup_node = None;
-            self.init_map = HashMap::with_capacity(0);
-        }
+        self.try_mint_setup_node().await;
     }
 
     /// Mint SetupNode if it meets all requirements.
-    async fn mint_setup_node(&mut self) -> Option<Cid> {
+    async fn try_mint_setup_node(&mut self) {
         if self.init_map.is_empty() {
-            return None;
+            return;
         }
 
-        let setup_node = self.setup_node.as_mut()?;
+        if self.setup_node.is_none() {
+            return;
+        }
 
         if self.init_map.len() != self.setup_count {
-            return None;
+            return;
         }
+
+        let setup_node = self.setup_node.as_mut().unwrap();
 
         for quality in setup_node.qualities.iter() {
             let cid = self.init_map[quality];
@@ -170,13 +170,14 @@ impl VideoAggregator {
             setup_node.initialization_segments.push(link);
         }
 
-        match ipfs_dag_put_node_async(&self.ipfs, setup_node).await {
-            Ok(cid) => return Some(cid),
-            Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
-                return None;
-            }
-        }
+        // Panic because can't be recovered from anyway
+        let cid = ipfs_dag_put_node_async(&self.ipfs, setup_node)
+            .await
+            .expect("IPFS: SetupNode dag put failed");
+
+        self.setup_link = Some(IPLDLink { link: cid });
+        self.setup_node = None;
+        self.init_map = HashMap::with_capacity(0);
     }
 
     /// Update map of quality to cid for initialization segments then try to mint SetupNode.
@@ -191,11 +192,7 @@ impl VideoAggregator {
 
         self.init_map.insert(quality.to_owned(), cid);
 
-        if let Some(cid) = self.mint_setup_node().await {
-            self.setup_link = Some(IPLDLink { link: cid });
-            self.setup_node = None;
-            self.init_map = HashMap::with_capacity(0);
-        }
+        self.try_mint_setup_node().await;
     }
 
     /// Update or create VideoNode in queue then try to mint one.
@@ -226,6 +223,7 @@ impl VideoAggregator {
 
             node.setup = self.setup_link;
 
+            // Set previous field only for the next node to be minted
             if buffer_index == 0 {
                 node.previous = self.previous;
             }
@@ -245,6 +243,11 @@ impl VideoAggregator {
             };
 
             self.video_nodes.push_back(node);
+
+            // Mint SetupNode if not done already
+            if self.video_nodes.len() > 3 {
+                self.try_mint_setup_node().await;
+            }
         }
 
         if let Some(cid) = self.mint_video_node().await {
