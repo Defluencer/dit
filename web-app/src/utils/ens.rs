@@ -26,7 +26,7 @@ impl EthereumNameService {
         Ok(Self { client })
     }
 
-    pub async fn get_content_cid(&self, name: String) -> Result<Cid, ()> {
+    pub async fn get_beacon_cid(&self, name: String) -> Result<Cid, ()> {
         let name = &format!("defluencer.{}.eth", name);
 
         #[cfg(debug_assertions)]
@@ -41,11 +41,15 @@ impl EthereumNameService {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("hash => {:#x?}", &hash));
+        ConsoleService::info(&format!("Hash => {:#x?}", &hash));
 
         // https://eips.ethereum.org/EIPS/eip-1577
 
-        if &0xe3 != hash.get(0).expect("Empty Hash") {
+        if hash.first().is_none() {
+            return Err(());
+        }
+
+        if &0xe3 != hash.first().unwrap() {
             //Not IPFS
             return Err(());
         }
@@ -56,8 +60,10 @@ impl EthereumNameService {
     }
 }
 
-pub async fn get_beacon_from_name(name: String, cb: Callback<Result<Cid, ()>>) {
-    let client = EthereumNameService::new().unwrap();
-
-    cb.emit(client.get_content_cid(name).await);
+pub async fn get_beacon_from_name(
+    client: EthereumNameService,
+    name: String,
+    cb: Callback<Result<Cid, ()>>,
+) {
+    cb.emit(client.get_beacon_cid(name).await);
 }
