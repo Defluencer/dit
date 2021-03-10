@@ -79,11 +79,23 @@ impl VideoAggregator {
                         self.process_master_playlist(pl).await
                     }
                 }
-                VideoData::Segment((path, cid)) => self.split_segments(path, cid).await,
+                VideoData::Segment((path, cid)) => {
+                    #[cfg(debug_assertions)]
+                    println!("IPFS: add => {}", &cid.to_string());
+
+                    if path.extension().unwrap() == FMP4 {
+                        return self.media_seg(path, cid).await;
+                    }
+
+                    if path.extension().unwrap() == MP4 {
+                        return self.init_seg(path, cid).await;
+                    }
+                }
             }
         }
     }
 
+    /// Create or update SetupNode based on master playlist then try to mint it.
     async fn process_master_playlist(&mut self, pl: MasterPlaylist) {
         #[cfg(debug_assertions)]
         println!("{:#?}", pl);
@@ -95,10 +107,9 @@ impl VideoAggregator {
         let mut codecs = Vec::with_capacity(self.setup_count);
         let mut bandwidths = Vec::with_capacity(self.setup_count);
 
-        //TODO reorder vectors based on bandwidth
-        //would fix ordering constraint we have now
+        //TODO reorder vectors based on bandwidth would fix ordering constraint we have now.
 
-        //Assumes variants ordering is highest to lowest quality
+        //Assumes variants ordering is highest to lowest quality.
         for variant in pl.variants.into_iter().rev() {
             match variant.codecs {
                 Some(codec) => codecs.push(format!(r#"video/mp4; codecs="{}"#, codec)),
@@ -120,10 +131,6 @@ impl VideoAggregator {
                 .to_str()
                 .expect("Invalid Unicode");
 
-            /* if let Some(cid) = self.init_map.remove(quality) {
-                initialization_segments.push(IPLDLink { link: cid })
-            }; */
-
             qualities.push(quality.to_owned());
         }
 
@@ -136,22 +143,24 @@ impl VideoAggregator {
 
         self.setup_node = Some(setup_node);
 
-        self.mint_setup_node().await;
+        self.try_mint_setup_node().await;
     }
 
-    async fn mint_setup_node(&mut self) {
+    /// Mint SetupNode if it meets all requirements.
+    async fn try_mint_setup_node(&mut self) {
         if self.init_map.is_empty() {
             return;
         }
 
-        let setup_node = match self.setup_node.as_mut() {
-            Some(sn) => sn,
-            None => return,
-        };
+        if self.setup_node.is_none() {
+            return;
+        }
 
         if self.init_map.len() != self.setup_count {
             return;
         }
+
+        let setup_node = self.setup_node.as_mut().unwrap();
 
         for quality in setup_node.qualities.iter() {
             let cid = self.init_map[quality];
@@ -161,30 +170,17 @@ impl VideoAggregator {
             setup_node.initialization_segments.push(link);
         }
 
-        //Panic on error because live stream can't go on without setup node anyway.
+        // Panic because can't be recovered from anyway
         let cid = ipfs_dag_put_node_async(&self.ipfs, setup_node)
             .await
-            .expect("SetupNode Dag Put Failed");
+            .expect("IPFS: SetupNode dag put failed");
 
         self.setup_link = Some(IPLDLink { link: cid });
         self.setup_node = None;
         self.init_map = HashMap::with_capacity(0);
     }
 
-    async fn split_segments(&mut self, path: PathBuf, cid: Cid) {
-        #[cfg(debug_assertions)]
-        println!("IPFS: add => {}", &cid.to_string());
-
-        if path.extension().unwrap() == FMP4 {
-            return self.media_seg(path, cid).await;
-        }
-
-        if path.extension().unwrap() == MP4 {
-            return self.init_seg(path, cid).await;
-        }
-    }
-
-    /// Process initialization segments.
+    /// Update map of quality to cid for initialization segments then try to mint SetupNode.
     async fn init_seg(&mut self, path: PathBuf, cid: Cid) {
         let quality = path
             .parent()
@@ -196,10 +192,10 @@ impl VideoAggregator {
 
         self.init_map.insert(quality.to_owned(), cid);
 
-        self.mint_setup_node().await;
+        self.try_mint_setup_node().await;
     }
 
-    /// Process media segments.
+    /// Update or create VideoNode in queue then try to mint one.
     async fn media_seg(&mut self, path: PathBuf, cid: Cid) {
         let quality = path
             .parent()
@@ -209,6 +205,7 @@ impl VideoAggregator {
             .to_str()
             .expect("Invalid Unicode");
 
+        //absolute index from ffmpeg
         let index = path
             .file_stem()
             .expect("Not file stem")
@@ -217,15 +214,17 @@ impl VideoAggregator {
             .parse::<usize>()
             .expect("Not a number");
 
-        let buf_i = index - self.node_mint_count;
+        // relative index for in memory video nodes
+        let buffer_index = index - self.node_mint_count;
 
-        if let Some(node) = self.video_nodes.get_mut(buf_i) {
+        if let Some(node) = self.video_nodes.get_mut(buffer_index) {
             node.qualities
                 .insert(quality.to_owned(), IPLDLink { link: cid });
 
             node.setup = self.setup_link;
 
-            if buf_i == 0 {
+            // Set previous field only for the next node to be minted
+            if buffer_index == 0 {
                 node.previous = self.previous;
             }
         } else {
@@ -244,34 +243,46 @@ impl VideoAggregator {
             };
 
             self.video_nodes.push_back(node);
+
+            // Mint SetupNode if not done already
+            if self.video_nodes.len() > 3 {
+                self.try_mint_setup_node().await;
+            }
         }
 
-        self.mint_video_node().await;
+        if let Some(cid) = self.mint_video_node().await {
+            let msg = Archive::Video(cid);
+
+            if let Err(error) = self.archive_tx.send(msg).await {
+                eprintln!("Archive receiver hung up! Error: {}", error);
+            }
+
+            match self.ipfs.pubsub_pub(&self.topic, &cid.to_string()).await {
+                Ok(_) => println!("IPFS: GossipSub published => {}", &cid),
+                Err(e) => eprintln!("IPFS: pubsub pub failed {}", e),
+            }
+        }
     }
 
-    async fn mint_video_node(&mut self) {
-        let node = match self.video_nodes.front() {
-            Some(node) => node,
-            None => return,
-        };
+    /// Mint the first VideoNode in queue when it meets all requirements.
+    async fn mint_video_node(&mut self) -> Option<Cid> {
+        let node = self.video_nodes.front()?;
 
-        if node.setup.is_none() {
-            return;
-        }
+        node.setup?;
 
         if node.qualities.len() != self.setup_count {
-            return;
+            return None;
         }
 
         if node.previous.is_none() && self.node_mint_count > 0 {
-            return;
+            return None;
         }
 
         let cid = match ipfs_dag_put_node_async(&self.ipfs, node).await {
             Ok(res) => res,
             Err(e) => {
                 eprintln!("IPFS: dag put failed {}", e);
-                return;
+                return None;
             }
         };
 
@@ -279,15 +290,6 @@ impl VideoAggregator {
         self.node_mint_count += 1;
         self.previous = Some(IPLDLink { link: cid });
 
-        let msg = Archive::Video(cid);
-
-        if let Err(error) = self.archive_tx.send(msg).await {
-            eprintln!("Archive receiver hung up! Error: {}", error);
-        }
-
-        match self.ipfs.pubsub_pub(&self.topic, &cid.to_string()).await {
-            Ok(_) => println!("IPFS: GossipSub published => {}", &cid),
-            Err(e) => eprintln!("IPFS: pubsub pub failed {}", e),
-        }
+        Some(cid)
     }
 }

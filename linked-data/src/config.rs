@@ -10,6 +10,7 @@ pub struct Configuration {
     //pub mods: IPLDLink,
 }
 
+/// List of topics used for streaming, messaging, etc...
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Topics {
     pub live_video: String,

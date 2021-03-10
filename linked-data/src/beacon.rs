@@ -6,13 +6,16 @@ use serde::{Deserialize, Serialize};
 use cid::Cid;
 use multihash::Multihash;
 
-/// PubSub topics, Peer ID and IPNS link to video list
+/// Mostly static list of links to content.
 #[derive(Deserialize, Serialize)]
 pub struct Beacon {
     pub topics: Topics,
 
-    pub peer_id: String,    // base58btc encoded string
-    pub video_list: String, // ipns hash egg. "/ipns/<hash>"
+    /// Base58btc encoded string
+    pub peer_id: String,
+
+    /// IPNS path -> "/ipns/<hash>"
+    pub video_list: String,
 }
 
 /// List of all video metadata links
@@ -21,7 +24,7 @@ pub struct VideoList {
     pub metadata: Vec<IPLDLink>, // oldest to newest
 }
 
-/// Title, duration, image link, video link
+/// Data for video thumbnails and playback.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
     pub title: String,
