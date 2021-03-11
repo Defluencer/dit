@@ -1,8 +1,6 @@
 use crate::actors::archivist::Archive;
 
-use std::str;
-
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
 
 //use hyper::body::Bytes;
@@ -12,6 +10,7 @@ use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
 use linked_data::chat::{ChatIdentity, ChatMessage};
+use linked_data::config::ChatConfig;
 
 //use cid::Cid;
 
@@ -20,9 +19,9 @@ use linked_data::chat::{ChatIdentity, ChatMessage};
 pub struct ChatAggregator {
     ipfs: IpfsClient,
 
-    archive_tx: Sender<Archive>,
+    archive_tx: UnboundedSender<Archive>,
 
-    gossipsub_topic: String,
+    config: ChatConfig,
     //blacklist: Blacklist,
 
     //whitelist: Whitelist,
@@ -31,13 +30,13 @@ pub struct ChatAggregator {
 }
 
 impl ChatAggregator {
-    pub fn new(ipfs: IpfsClient, archive_tx: Sender<Archive>, gossipsub_topic: String) -> Self {
+    pub fn new(ipfs: IpfsClient, archive_tx: UnboundedSender<Archive>, config: ChatConfig) -> Self {
         Self {
             ipfs,
 
             archive_tx,
 
-            gossipsub_topic,
+            config,
             //blacklist,
 
             //whitelist,
@@ -47,9 +46,7 @@ impl ChatAggregator {
     }
 
     pub async fn start_receiving(&mut self) {
-        let topic = &self.gossipsub_topic;
-
-        let mut stream = self.ipfs.pubsub_sub(topic, true);
+        let mut stream = self.ipfs.pubsub_sub(&self.config.pubsub_topic, true);
 
         println!("Chat System Online");
 
@@ -62,12 +59,22 @@ impl ChatAggregator {
                 }
             }
         }
+
+        println!("Chat System Offline");
     }
 
     async fn process_msg(&mut self, msg: &PubsubSubResponse) {
-        let chat_message = match self.decode_message(msg) {
+        let data = match msg.data.as_ref() {
             Some(data) => data,
             None => return,
+        };
+
+        let chat_message = match serde_json::from_slice(data) {
+            Ok(data) => data,
+            Err(e) => {
+                eprintln!("Deserialization failed. {}", e);
+                return;
+            }
         };
 
         if !self.is_auth_signature(&chat_message) {
@@ -80,34 +87,9 @@ impl ChatAggregator {
 
         let msg = Archive::Chat(chat_message);
 
-        if let Err(error) = self.archive_tx.send(msg).await {
-            eprintln!("Archive receiver hung up {}", error);
+        if let Err(error) = self.archive_tx.send(msg) {
+            eprintln!("Archive receiver hung up. {}", error);
         }
-    }
-
-    /// Decode chat messages from Base64 then serialize to ChatMessage
-    fn decode_message(&self, response: &PubsubSubResponse) -> Option<ChatMessage> {
-        let decoded = response.data.as_ref()?;
-
-        //let decoded = Base::decode(&Base::Base64Pad, encoded).expect("Decoding message failed");
-
-        let msg_str = match str::from_utf8(decoded) {
-            Ok(data) => data,
-            Err(_) => {
-                eprintln!("Invalid UTF-8");
-                return None;
-            }
-        };
-
-        let chat_message = match serde_json::from_str(msg_str) {
-            Ok(data) => data,
-            Err(_) => {
-                eprintln!("Deserialization failed");
-                return None;
-            }
-        };
-
-        Some(chat_message)
     }
 
     /// Verify signature authenticity

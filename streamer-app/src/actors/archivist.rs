@@ -1,14 +1,13 @@
 use crate::utils::ipfs_dag_put_node_async;
 
 use std::collections::VecDeque;
-use std::convert::TryFrom;
-use std::io::Cursor;
 
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use ipfs_api::IpfsClient;
 
 use linked_data::chat::ChatMessage;
+use linked_data::config::ArchiveConfig;
 use linked_data::stream::{DayNode, HourNode, MinuteNode, SecondNode, StreamNode};
 use linked_data::IPLDLink;
 
@@ -23,7 +22,7 @@ pub enum Archive {
 pub struct Archivist {
     ipfs: IpfsClient,
 
-    archive_rx: Receiver<Archive>,
+    archive_rx: UnboundedReceiver<Archive>,
 
     buffer_cap: usize,
     video_chat_buffer: VecDeque<SecondNode>,
@@ -32,12 +31,16 @@ pub struct Archivist {
     hour_node: HourNode,
     day_node: DayNode,
 
-    segment_duration: usize,
+    config: ArchiveConfig,
 }
 
 impl Archivist {
-    pub fn new(ipfs: IpfsClient, archive_rx: Receiver<Archive>, segment_duration: usize) -> Self {
-        let buffer_cap = 60 / segment_duration; // 1 minutes
+    pub fn new(
+        ipfs: IpfsClient,
+        archive_rx: UnboundedReceiver<Archive>,
+        config: ArchiveConfig,
+    ) -> Self {
+        let buffer_cap = 60 / config.segment_duration; // 1 minutes
 
         Self {
             ipfs,
@@ -59,7 +62,7 @@ impl Archivist {
                 links_to_hours: Vec::with_capacity(24),
             },
 
-            segment_duration,
+            config,
         }
     }
 
@@ -73,6 +76,10 @@ impl Archivist {
                 Archive::Finalize => self.finalize().await,
             }
         }
+
+        println!("Archive System Offline");
+
+        //Could finalize here, will be called when channel closes.
     }
 
     /// Link chat message to SecondNodes.
@@ -82,10 +89,8 @@ impl Archivist {
                 continue;
             }
 
-            let json_string = serde_json::to_string(&msg).expect("Can't serialize chat msg");
-
-            let cid = match self.ipfs.dag_put(Cursor::new(json_string)).await {
-                Ok(response) => Cid::try_from(response.cid.cid_string).expect("Invalid Cid"),
+            let cid = match ipfs_dag_put_node_async(&self.ipfs, &msg).await {
+                Ok(cid) => cid,
                 Err(e) => {
                     eprintln!("IPFS: dag put failed {}", e);
                     return;
@@ -111,7 +116,10 @@ impl Archivist {
 
         self.video_chat_buffer.push_back(second_node);
 
-        if self.video_chat_buffer.len() < self.buffer_cap {
+        if self.config.archive_live_chat && self.video_chat_buffer.len() < self.buffer_cap {
+            #[cfg(debug_assertions)]
+            println!("Archivist: {} buffered nodes", self.video_chat_buffer.len());
+
             return;
         }
 
@@ -133,7 +141,10 @@ impl Archivist {
     /// Create DAG node containing a link to video segment and all chat messages.
     /// MinuteNode is then appended with the CID.
     async fn collect_second(&mut self) {
-        let node = self.video_chat_buffer.pop_front().unwrap();
+        let node = match self.video_chat_buffer.pop_front() {
+            Some(node) => node,
+            None => return,
+        };
 
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &node).await {
             Ok(cid) => cid,
@@ -146,11 +157,9 @@ impl Archivist {
         let link = IPLDLink { link: cid };
 
         //since duration > 1 sec
-        for _ in 0..self.segment_duration {
+        for _ in 0..self.config.segment_duration {
             self.minute_node.links_to_seconds.push(link);
         }
-
-        //self.minute_node.links_to_seconds.push(link);
     }
 
     /// Create DAG node containing 60 SecondNode links. HourNode is then appended with the CID.

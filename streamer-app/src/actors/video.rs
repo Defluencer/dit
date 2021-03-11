@@ -5,33 +5,33 @@ use crate::utils::ipfs_dag_put_node_async;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
 
 use ipfs_api::IpfsClient;
 
+use linked_data::config::VideoConfig;
 use linked_data::video::{SetupNode, VideoNode};
 use linked_data::IPLDLink;
 
 use cid::Cid;
 
 use m3u8_rs::playlist::MasterPlaylist;
-use m3u8_rs::playlist::Playlist;
 
 #[derive(Debug)]
 pub enum VideoData {
-    Playlist(Playlist),
+    Playlist(MasterPlaylist),
     Segment((PathBuf, Cid)),
 }
 
 pub struct VideoAggregator {
     ipfs: IpfsClient,
 
-    archive_tx: Sender<Archive>,
+    archive_tx: Option<UnboundedSender<Archive>>,
 
-    video_rx: Receiver<VideoData>,
+    video_rx: UnboundedReceiver<VideoData>,
 
-    topic: String,
+    config: VideoConfig,
 
     init_map: HashMap<String, Cid>,
     setup_count: usize,
@@ -46,9 +46,9 @@ pub struct VideoAggregator {
 impl VideoAggregator {
     pub fn new(
         ipfs: IpfsClient,
-        video_rx: Receiver<VideoData>,
-        archive_tx: Sender<Archive>,
-        topic: String,
+        video_rx: UnboundedReceiver<VideoData>,
+        archive_tx: Option<UnboundedSender<Archive>>,
+        config: VideoConfig,
     ) -> Self {
         Self {
             ipfs,
@@ -56,7 +56,7 @@ impl VideoAggregator {
             archive_tx,
             video_rx,
 
-            topic,
+            config,
 
             init_map: HashMap::with_capacity(4),
             setup_count: 0,
@@ -74,24 +74,21 @@ impl VideoAggregator {
 
         while let Some(msg) = self.video_rx.recv().await {
             match msg {
-                VideoData::Playlist(pl) => {
-                    if let Playlist::MasterPlaylist(pl) = pl {
-                        self.process_master_playlist(pl).await
-                    }
-                }
-                VideoData::Segment((path, cid)) => {
-                    #[cfg(debug_assertions)]
-                    println!("IPFS: add => {}", &cid.to_string());
-
-                    if path.extension().unwrap() == FMP4 {
-                        return self.media_seg(path, cid).await;
-                    }
-
-                    if path.extension().unwrap() == MP4 {
-                        return self.init_seg(path, cid).await;
-                    }
-                }
+                VideoData::Playlist(pl) => self.process_master_playlist(pl).await,
+                VideoData::Segment((path, cid)) => self.split_segments(path, cid).await,
             }
+        }
+
+        println!("Video System Offline");
+    }
+
+    async fn split_segments(&mut self, path: PathBuf, cid: Cid) {
+        if path.extension().unwrap() == FMP4 {
+            return self.media_seg(path, cid).await;
+        }
+
+        if path.extension().unwrap() == MP4 {
+            return self.init_seg(path, cid).await;
         }
     }
 
@@ -178,6 +175,10 @@ impl VideoAggregator {
         self.setup_link = Some(IPLDLink { link: cid });
         self.setup_node = None;
         self.init_map = HashMap::with_capacity(0);
+
+        println!("Setup Node Minted");
+
+        //TODO try to mint video node in buffer if any
     }
 
     /// Update map of quality to cid for initialization segments then try to mint SetupNode.
@@ -243,30 +244,33 @@ impl VideoAggregator {
             };
 
             self.video_nodes.push_back(node);
+        }
 
-            // Mint SetupNode if not done already
-            if self.video_nodes.len() > 3 {
-                self.try_mint_setup_node().await;
+        while let Some(cid) = self.mint_video_node().await {
+            if let Some(archive_tx) = self.archive_tx.as_ref() {
+                let msg = Archive::Video(cid);
+                if let Err(error) = archive_tx.send(msg) {
+                    eprintln!("Archive receiver hung up! Error: {}", error);
+                }
+            }
+
+            if let Some(topic) = self.config.pubsub_topic.as_ref() {
+                match self.ipfs.pubsub_pub(topic, &cid.to_string()).await {
+                    Ok(_) => println!("IPFS: GossipSub published => {}", &cid),
+                    Err(e) => eprintln!("IPFS: pubsub pub failed {}", e),
+                }
             }
         }
 
-        if let Some(cid) = self.mint_video_node().await {
-            let msg = Archive::Video(cid);
-
-            if let Err(error) = self.archive_tx.send(msg).await {
-                eprintln!("Archive receiver hung up! Error: {}", error);
-            }
-
-            match self.ipfs.pubsub_pub(&self.topic, &cid.to_string()).await {
-                Ok(_) => println!("IPFS: GossipSub published => {}", &cid),
-                Err(e) => eprintln!("IPFS: pubsub pub failed {}", e),
-            }
-        }
+        #[cfg(debug_assertions)]
+        println!("Video: {} buffered nodes", self.video_nodes.len());
     }
 
-    /// Mint the first VideoNode in queue when it meets all requirements.
+    /// Mint the first VideoNode in queue if it meets all requirements.
     async fn mint_video_node(&mut self) -> Option<Cid> {
-        let node = self.video_nodes.front()?;
+        let node = self.video_nodes.get_mut(0)?;
+
+        node.setup = self.setup_link;
 
         node.setup?;
 

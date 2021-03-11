@@ -2,19 +2,34 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Configuration {
-    pub gossipsub_topics: Topics,
     pub addresses: Addrs,
-    pub segment_duration: usize,
-    //pub blacklist: IPLDLink,
-    //pub whitelist: IPLDLink,
-    //pub mods: IPLDLink,
+    pub archive: Option<ArchiveConfig>,
+    pub video: VideoConfig,
+    pub chat: ChatConfig,
 }
 
-/// List of topics used for streaming, messaging, etc...
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Topics {
-    pub live_video: String,
-    pub live_chat: String,
+impl Default for Configuration {
+    fn default() -> Self {
+        Self {
+            addresses: Addrs {
+                app_addr: "127.0.0.1:2526".into(),
+                ffmpeg_addr: Some("127.0.0.1:2525".into()),
+            },
+
+            archive: Some(ArchiveConfig {
+                archive_live_chat: true,
+                segment_duration: 4,
+            }),
+
+            video: VideoConfig {
+                pubsub_topic: Some("defluencer_live_video".into()),
+            },
+
+            chat: ChatConfig {
+                pubsub_topic: "defluencer_live_chat".into(),
+            },
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -23,20 +38,21 @@ pub struct Addrs {
     pub ffmpeg_addr: Option<String>,
 }
 
-impl Default for Configuration {
-    fn default() -> Self {
-        Self {
-            gossipsub_topics: Topics {
-                live_video: "defluencer_live_video".into(),
-                live_chat: "defluencer_live_chat".into(),
-            },
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ArchiveConfig {
+    pub archive_live_chat: bool,
+    pub segment_duration: usize,
+}
 
-            addresses: Addrs {
-                app_addr: "127.0.0.1:2526".into(),
-                ffmpeg_addr: Some("127.0.0.1:2525".into()),
-            },
+#[derive(Serialize, Deserialize, Debug)]
+pub struct VideoConfig {
+    pub pubsub_topic: Option<String>,
+}
 
-            segment_duration: 4,
-        }
-    }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChatConfig {
+    pub pubsub_topic: String,
+    //pub blacklist: IPLDLink,
+    //pub whitelist: IPLDLink,
+    //pub mods: IPLDLink,
 }

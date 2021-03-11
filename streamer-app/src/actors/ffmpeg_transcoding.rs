@@ -97,4 +97,6 @@ pub async fn start_transcoding(ffmpeg_addr: String, stream_app_addr: String) {
     if let Err(e) = handle.wait().await {
         eprintln!("FFMPEG command failed to run. {}", e);
     }
+
+    println!("Transcoding System Offline");
 }

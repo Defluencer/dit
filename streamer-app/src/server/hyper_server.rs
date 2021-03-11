@@ -6,29 +6,31 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 
 use tokio::signal::ctrl_c;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
 
 use ipfs_api::IpfsClient;
 
-async fn shutdown_signal(archive_tx: Sender<Archive>) {
+async fn shutdown_signal(archive_tx: Option<UnboundedSender<Archive>>) {
     ctrl_c()
         .await
         .expect("Failed to install CTRL+C signal handler");
 
-    let msg = Archive::Finalize;
+    if let Some(archive_tx) = archive_tx {
+        let msg = Archive::Finalize;
 
-    if let Err(error) = archive_tx.send(msg).await {
-        eprintln!("Archive receiver hung up {}", error);
+        if let Err(error) = archive_tx.send(msg) {
+            eprintln!("Archive receiver hung up {}", error);
+        }
     }
 }
 
 pub async fn start_server(
     server_addr: String,
-    collector: Sender<VideoData>,
-    archive_tx: Sender<Archive>,
+    collector: UnboundedSender<VideoData>,
+    archive_tx: Option<UnboundedSender<Archive>>,
     ipfs: IpfsClient,
 ) {
     let server_addr = SocketAddr::from_str(&server_addr).expect("Invalid server address");
@@ -55,4 +57,6 @@ pub async fn start_server(
     if let Err(e) = graceful.await {
         eprintln!("Server error {}", e);
     }
+
+    println!("Ingess Server Offline");
 }
