@@ -198,7 +198,7 @@ impl Archivist {
 
     /// Create all remaining DAG nodes then pin and print the final stream CID.
     async fn finalize(&mut self) {
-        println!("Finalizing Stream...");
+        println!("Collecting Nodes...");
 
         while !self.video_chat_buffer.is_empty() {
             self.collect_second().await;
@@ -218,6 +218,11 @@ impl Archivist {
 
         if !self.hour_node.links_to_minutes.is_empty() {
             self.collect_hour().await;
+        }
+
+        if self.day_node.links_to_hours.is_empty() {
+            println!("0 Nodes Found");
+            return;
         }
 
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.day_node).await {
@@ -243,7 +248,7 @@ impl Archivist {
         println!("Pinning Nodes...");
 
         match self.ipfs.pin_add(&cid.to_string(), true).await {
-            Ok(_) => println!("IPFS: Pinned Stream CID => {}", &cid.to_string()),
+            Ok(_) => println!("Final Timecode-addressable Node => {}", &cid.to_string()),
             Err(e) => eprintln!("IPFS: pin add failed {}", e),
         }
     }

@@ -172,13 +172,11 @@ impl VideoAggregator {
             .await
             .expect("IPFS: SetupNode dag put failed");
 
+        println!("Setup Node Minted => {}", &cid.to_string());
+
         self.setup_link = Some(IPLDLink { link: cid });
         self.setup_node = None;
         self.init_map = HashMap::with_capacity(0);
-
-        println!("Setup Node Minted");
-
-        //TODO try to mint video node in buffer if any
     }
 
     /// Update map of quality to cid for initialization segments then try to mint SetupNode.
@@ -293,6 +291,8 @@ impl VideoAggregator {
         self.video_nodes.pop_front();
         self.node_mint_count += 1;
         self.previous = Some(IPLDLink { link: cid });
+
+        println!("Video Node Minted => {}", &cid.to_string());
 
         Some(cid)
     }

@@ -1,7 +1,11 @@
 #!/bin/bash
 # FFMPEG configured to output multi quality HLS
 # Variants ordering must be highest to lowest quality
-ffmpeg -i video.mp4 \
+
+echo -e "Where is the video file you would like to process?" 
+read file
+
+ffmpeg -i $file \
 -map v:0 -c:v:0 libx264 -preset: ultrafast -g:0 240 -sc_threshold: 0 -b:v:0 6000k -s:0 1920x1080 -sws_flags bilinear -r:0 60 \
 -map v:0 -c:v:1 libx264 -g:1 240 -b:v:1 4500k -s:1 1280x720 -r:1 60 \
 -map v:0 -c:v:2 libx264 -g:2 120 -b:v:2 3000k -s:2 1280x720 -r:2 30 \

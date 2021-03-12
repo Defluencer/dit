@@ -1707,7 +1707,6 @@ dependencies = [
  "ipfs-api",
  "linked-data",
  "m3u8-rs",
- "multibase 0.9.1",
  "serde",
  "serde_json",
  "tokio",
@@ -1896,9 +1895,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8a9bd1db7706f2373a190b0d067146caa39350c486f3d455b0e33b431f94c07"
+checksum = "41768be5b9f3489491825f56f01f25290aa1d3e7cc97e182d4d34360493ba6fa"
 dependencies = [
  "proc-macro2",
  "quote",

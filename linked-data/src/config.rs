@@ -2,19 +2,17 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Configuration {
-    pub addresses: Addrs,
+    pub input_socket_addrs: String,
     pub archive: Option<ArchiveConfig>,
     pub video: VideoConfig,
     pub chat: ChatConfig,
+    pub ffmpeg: Option<FFMPEGConfig>,
 }
 
 impl Default for Configuration {
     fn default() -> Self {
         Self {
-            addresses: Addrs {
-                app_addr: "127.0.0.1:2526".into(),
-                ffmpeg_addr: Some("127.0.0.1:2525".into()),
-            },
+            input_socket_addrs: "127.0.0.1:2526".into(),
 
             archive: Some(ArchiveConfig {
                 archive_live_chat: true,
@@ -28,6 +26,11 @@ impl Default for Configuration {
             chat: ChatConfig {
                 pubsub_topic: "defluencer_live_chat".into(),
             },
+
+            ffmpeg: Some(FFMPEGConfig {
+                output_socket_addrs: "localhost:2526".into(),
+                input_socket_addrs: Some("localhost:2525".into()),
+            }),
         }
     }
 }
@@ -55,4 +58,10 @@ pub struct ChatConfig {
     //pub blacklist: IPLDLink,
     //pub whitelist: IPLDLink,
     //pub mods: IPLDLink,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FFMPEGConfig {
+    pub output_socket_addrs: String,
+    pub input_socket_addrs: Option<String>,
 }
