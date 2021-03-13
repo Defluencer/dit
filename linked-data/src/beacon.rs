@@ -1,4 +1,3 @@
-use crate::config::Topics;
 use crate::{FakeCid, IPLDLink, DAG_CBOR, RAW};
 
 use serde::{Deserialize, Serialize};
@@ -16,6 +15,12 @@ pub struct Beacon {
 
     /// IPNS path -> "/ipns/<hash>"
     pub video_list: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Topics {
+    pub live_video: String,
+    pub live_chat: String,
 }
 
 /// List of all video metadata links

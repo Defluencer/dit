@@ -6,7 +6,7 @@ use std::path::Path;
 
 use futures_util::stream::TryStreamExt;
 
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::io::StreamReader;
 
 use hyper::header::{HeaderValue, LOCATION};
@@ -15,6 +15,8 @@ use hyper::{Body, Error, Method, Request, Response, StatusCode};
 use ipfs_api::IpfsClient;
 
 use cid::Cid;
+
+use m3u8_rs::playlist::Playlist;
 
 const M3U8: &str = "m3u8";
 pub const MP4: &str = "mp4";
@@ -35,7 +37,7 @@ const OPTIONS: ipfs_api::request::Add = ipfs_api::request::Add {
 
 pub async fn put_requests(
     req: Request<Body>,
-    collector: Sender<VideoData>,
+    collector: UnboundedSender<VideoData>,
     ipfs: IpfsClient,
 ) -> Result<Response<Body>, Error> {
     #[cfg(debug_assertions)]
@@ -72,9 +74,12 @@ pub async fn put_requests(
         Err(error) => return internal_error_response(res, &error),
     };
 
+    #[cfg(debug_assertions)]
+    println!("IPFS: add => {}", &cid.to_string());
+
     let msg = VideoData::Segment((path.to_path_buf(), cid));
 
-    if let Err(error) = collector.send(msg).await {
+    if let Err(error) = collector.send(msg) {
         return internal_error_response(res, &error);
     }
 
@@ -103,7 +108,7 @@ async fn manifest_response(
     mut res: Response<Body>,
     body: Body,
     path: &Path,
-    collector: Sender<VideoData>,
+    collector: UnboundedSender<VideoData>,
 ) -> Result<Response<Body>, Error> {
     let bytes = hyper::body::to_bytes(body).await?;
 
@@ -112,10 +117,12 @@ async fn manifest_response(
         Err(e) => return internal_error_response(res, &e),
     };
 
-    let msg = VideoData::Playlist(playlist);
+    if let Playlist::MasterPlaylist(playlist) = playlist {
+        let msg = VideoData::Playlist(playlist);
 
-    if let Err(error) = collector.send(msg).await {
-        return internal_error_response(res, &error);
+        if let Err(error) = collector.send(msg) {
+            return internal_error_response(res, &error);
+        }
     }
 
     *res.status_mut() = StatusCode::NO_CONTENT;

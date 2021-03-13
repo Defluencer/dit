@@ -3,11 +3,9 @@ The project aim is to provide; live streaming, live chat, moderation tools and v
 
 ## Project Status
 - Live Streaming: Mostly working.
-- VOD: Saved stream only.
-- Live Chat: In progress.
+- VOD: Saved stream & pre-recorded video.
+- Live Chat: Can send messages and archive them.
 - Moderation: In design.
-- Community: Some thoughts.
-- Ecosystem: Wild dreams!
 
 ## Details
 - [Web App](https://github.com/SionoiS/dit/blob/master/web-app/README.md)

@@ -1,76 +1,121 @@
-#![allow(unused_must_use)]
-
 mod actors;
 mod server;
 mod utils;
 
-use crate::actors::{start_transcoding, Archivist, ChatAggregator, VideoAggregator};
+use crate::actors::{Archivist, ChatAggregator, VideoAggregator};
 use crate::server::start_server;
 use crate::utils::get_config;
 
-use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::unbounded_channel;
 
 use ipfs_api::IpfsClient;
 
-use tokio::join;
+use linked_data::config::Configuration;
+
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(about)]
+#[structopt(rename_all = "kebab-case")]
+struct Opt {
+    /// Disable all archiving. Only affect live streaming.
+    #[structopt(long)]
+    no_archive: bool,
+
+    /// Disable chat archiving fonctionalities. Recommended when not streaming.
+    #[structopt(long)]
+    no_chat: bool,
+
+    /// Disable publish subscribe channel. Recommended when not streaming.
+    #[structopt(long)]
+    no_pubsub: bool,
+}
 
 #[tokio::main]
 async fn main() {
-    println!("Initialization...");
+    let opt = Opt::from_args();
+
+    if opt.no_archive && opt.no_pubsub {
+        eprintln!("Cannot Disable Archiving And PubSub! Aborting...");
+        return;
+    }
 
     let ipfs = IpfsClient::default();
 
+    match ipfs.id(None).await {
+        Ok(res) => println!("IPFS: Peer ID => {}", res.id),
+        Err(_) => {
+            eprintln!("IPFS must be started beforehand. Aborting...");
+            return;
+        }
+    }
+
+    println!("Initialization...");
+
     let config = get_config().await;
 
-    let (archive_tx, archive_rx) = channel(50);
-    let mut archivist = Archivist::new(ipfs.clone(), archive_rx, config.segment_duration);
-    let archive_handle = tokio::spawn(async move {
-        archivist.collect().await;
-    });
+    let Configuration {
+        input_socket_addr,
+        mut archive,
+        mut video,
+        chat,
+    } = config;
 
-    let (video_tx, video_rx) = channel(16);
-    let mut video = VideoAggregator::new(
-        ipfs.clone(),
-        video_rx,
-        archive_tx.clone(),
-        config.gossipsub_topics.live_video,
-    );
-    let video_handle = tokio::spawn(async move {
-        video.start_receiving().await;
-    });
+    let mut handles = Vec::with_capacity(4);
 
-    let mut chat = ChatAggregator::new(
-        ipfs.clone(),
-        archive_tx.clone(),
-        config.gossipsub_topics.live_chat,
-    );
-    let chat_handle = tokio::spawn(async move {
-        chat.start_receiving().await;
-    });
+    let topic = chat.pubsub_topic.clone();
 
-    let server_addr = config.addresses.app_addr.clone();
-    let server_addr_clone = config.addresses.app_addr.clone();
+    let archive_tx = {
+        if !opt.no_archive {
+            let (archive_tx, archive_rx) = unbounded_channel();
 
-    let server_handle = tokio::spawn(async move {
-        start_server(server_addr, video_tx, archive_tx, ipfs).await;
-    });
+            if !opt.no_chat {
+                let mut chat = ChatAggregator::new(ipfs.clone(), archive_tx.clone(), chat);
 
-    match config.addresses.ffmpeg_addr {
-        Some(ffmpeg_addr) => {
-            let ffmpeg_handle = tokio::spawn(async move {
-                start_transcoding(ffmpeg_addr, server_addr_clone).await;
+                let chat_handle = tokio::spawn(async move {
+                    chat.start().await;
+                });
+
+                handles.push(chat_handle);
+            }
+
+            archive.archive_live_chat = !opt.no_chat;
+
+            let mut archivist = Archivist::new(ipfs.clone(), archive_rx, archive);
+
+            let archive_handle = tokio::spawn(async move {
+                archivist.start().await;
             });
 
-            join!(
-                archive_handle,
-                chat_handle,
-                video_handle,
-                ffmpeg_handle,
-                server_handle
-            );
+            handles.push(archive_handle);
+
+            Some(archive_tx)
+        } else {
+            None
         }
-        None => {
-            join!(archive_handle, chat_handle, video_handle, server_handle);
+    };
+
+    let (video_tx, video_rx) = unbounded_channel();
+
+    video.pubsub_enable = !opt.no_pubsub;
+
+    let mut video = VideoAggregator::new(ipfs.clone(), video_rx, archive_tx.clone(), video);
+
+    let video_handle = tokio::spawn(async move {
+        video.start().await;
+    });
+
+    handles.push(video_handle);
+
+    let server_handle = tokio::spawn(async move {
+        start_server(input_socket_addr, video_tx, archive_tx, ipfs, topic).await;
+    });
+
+    handles.push(server_handle);
+
+    for handle in handles {
+        if let Err(e) = handle.await {
+            eprintln!("Main: {}", e);
         }
     }
 }
