@@ -8,9 +8,9 @@ The project aim is to provide; live streaming, live chat, moderation tools and v
 - Moderation: In design.
 
 ## Details
-- [Web App](https://github.com/SionoiS/dit/blob/master/web-app/README.md)
-- [Streamer App](https://github.com/SionoiS/dit/blob/master/streamer-app/README.md)
-- [Data](https://github.com/SionoiS/dit/blob/master/linked-data/README.md)
+- [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
+- [Streamer App](https://github.com/SionoiS/dit/blob/develop/streamer-app/README.md)
+- [Data](https://github.com/SionoiS/dit/blob/develop/linked-data/README.md)
 
 ## License
 Licensed under either of
