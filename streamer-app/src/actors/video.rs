@@ -69,7 +69,7 @@ impl VideoAggregator {
         }
     }
 
-    pub async fn start_receiving(&mut self) {
+    pub async fn start(&mut self) {
         println!("Video System Online");
 
         while let Some(msg) = self.video_rx.recv().await {
@@ -252,10 +252,11 @@ impl VideoAggregator {
                 }
             }
 
-            if let Some(topic) = self.config.pubsub_topic.as_ref() {
-                match self.ipfs.pubsub_pub(topic, &cid.to_string()).await {
-                    Ok(_) => println!("IPFS: GossipSub published => {}", &cid),
-                    Err(e) => eprintln!("IPFS: pubsub pub failed {}", e),
+            if self.config.pubsub_enable {
+                let topic = &self.config.pubsub_topic;
+
+                if let Err(e) = self.ipfs.pubsub_pub(topic, &cid.to_string()).await {
+                    eprintln!("IPFS: pubsub pub failed {}", e);
                 }
             }
         }

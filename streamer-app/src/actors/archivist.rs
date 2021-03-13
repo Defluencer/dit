@@ -6,7 +6,6 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use ipfs_api::IpfsClient;
 
-use linked_data::chat::ChatMessage;
 use linked_data::config::ArchiveConfig;
 use linked_data::stream::{DayNode, HourNode, MinuteNode, SecondNode, StreamNode};
 use linked_data::IPLDLink;
@@ -14,7 +13,7 @@ use linked_data::IPLDLink;
 use cid::Cid;
 
 pub enum Archive {
-    Chat(ChatMessage),
+    Chat(Cid, Cid),
     Video(Cid),
     Finalize,
 }
@@ -66,38 +65,28 @@ impl Archivist {
         }
     }
 
-    pub async fn collect(&mut self) {
+    pub async fn start(&mut self) {
         println!("Archive System Online");
 
         while let Some(event) = self.archive_rx.recv().await {
             match event {
-                Archive::Chat(msg) => self.archive_chat_message(msg).await,
+                Archive::Chat(time, msg) => self.archive_chat_message(time, msg).await,
                 Archive::Video(cid) => self.archive_video_segment(cid).await,
                 Archive::Finalize => self.finalize().await,
             }
         }
 
         println!("Archive System Offline");
-
-        //Could finalize here, will be called when channel closes.
     }
 
     /// Link chat message to SecondNodes.
-    async fn archive_chat_message(&mut self, msg: ChatMessage) {
+    async fn archive_chat_message(&mut self, timestamp: Cid, msg: Cid) {
         for node in self.video_chat_buffer.iter_mut() {
-            if node.link_to_video != msg.data.timestamp {
+            if node.link_to_video.link != timestamp {
                 continue;
             }
 
-            let cid = match ipfs_dag_put_node_async(&self.ipfs, &msg).await {
-                Ok(cid) => cid,
-                Err(e) => {
-                    eprintln!("IPFS: dag put failed {}", e);
-                    return;
-                }
-            };
-
-            let link = IPLDLink { link: cid };
+            let link = IPLDLink { link: msg };
 
             node.links_to_chat.push(link);
 
@@ -198,6 +187,8 @@ impl Archivist {
 
     /// Create all remaining DAG nodes then pin and print the final stream CID.
     async fn finalize(&mut self) {
+        self.archive_rx.close();
+
         println!("Collecting Nodes...");
 
         while !self.video_chat_buffer.is_empty() {

@@ -1,4 +1,5 @@
 use crate::actors::archivist::Archive;
+use crate::utils::ipfs_dag_put_node_async;
 
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
@@ -45,12 +46,17 @@ impl ChatAggregator {
         }
     }
 
-    pub async fn start_receiving(&mut self) {
+    pub async fn start(&mut self) {
         let mut stream = self.ipfs.pubsub_sub(&self.config.pubsub_topic, true);
 
         println!("Chat System Online");
 
         while let Some(result) = stream.next().await {
+            if self.archive_tx.is_closed() {
+                //Hacky way to shutdown
+                break;
+            }
+
             match result {
                 Ok(response) => self.process_msg(&response).await,
                 Err(error) => {
@@ -85,7 +91,15 @@ impl ChatAggregator {
             return;
         }
 
-        let msg = Archive::Chat(chat_message);
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, &chat_message).await {
+            Ok(cid) => cid,
+            Err(e) => {
+                eprintln!("IPFS: dag put failed {}", e);
+                return;
+            }
+        };
+
+        let msg = Archive::Chat(chat_message.data.timestamp.link, cid);
 
         if let Err(error) = self.archive_tx.send(msg) {
             eprintln!("Archive receiver hung up. {}", error);

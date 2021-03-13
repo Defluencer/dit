@@ -1,0 +1,12 @@
+{
+  "input_socket_addr": "127.0.0.1:2526",
+  "archive": {
+    "segment_duration": 4
+  },
+  "video": {
+    "pubsub_topic": "defluencer_live_video"
+  },
+  "chat": {
+    "pubsub_topic": "defluencer_live_chat"
+  }
+}
