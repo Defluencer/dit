@@ -13,8 +13,7 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url, Window};
 
 use yew::services::ConsoleService;
 
-use linked_data::beacon::VideoMetadata;
-use linked_data::video::{SetupNode, TempSetupNode};
+use linked_data::video::{SetupNode, TempSetupNode, VideoMetadata};
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;

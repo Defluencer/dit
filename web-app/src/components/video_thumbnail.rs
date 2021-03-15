@@ -6,7 +6,7 @@ use yew_router::components::RouterAnchor;
 
 use yewtil::NeqAssign;
 
-use linked_data::beacon::VideoMetadata;
+use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 

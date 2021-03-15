@@ -13,7 +13,8 @@ use web_sys::Storage;
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use linked_data::beacon::{Beacon, TempVideoList, TempVideoMetadata, VideoList, VideoMetadata};
+use linked_data::beacon::{Beacon, TempVideoList, VideoList};
+use linked_data::video::{TempVideoMetadata, VideoMetadata};
 
 use cid::Cid;
 

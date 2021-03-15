@@ -7,7 +7,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use ipfs_api::IpfsClient;
 
 use linked_data::config::ArchiveConfig;
-use linked_data::stream::{DayNode, HourNode, MinuteNode, SecondNode, StreamNode};
+use linked_data::video::{DayNode, HourNode, MinuteNode, SecondNode, TimecodeNode};
 use linked_data::IPLDLink;
 
 use cid::Cid;
@@ -224,7 +224,7 @@ impl Archivist {
             }
         };
 
-        let stream = StreamNode {
+        let stream = TimecodeNode {
             timecode: IPLDLink { link: cid },
         };
 

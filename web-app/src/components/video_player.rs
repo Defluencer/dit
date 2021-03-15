@@ -2,7 +2,7 @@ use crate::agents::VideoOnDemandManager;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use linked_data::beacon::VideoMetadata;
+use linked_data::video::VideoMetadata;
 
 pub struct VideoPlayer {
     manager: VideoOnDemandManager,

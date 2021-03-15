@@ -5,7 +5,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use linked_data::beacon::{TempVideoMetadata, VideoMetadata};
+use linked_data::video::{TempVideoMetadata, VideoMetadata};
 
 use cid::Cid;
 
