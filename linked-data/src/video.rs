@@ -11,7 +11,7 @@ use multihash::Multihash;
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
     pub title: String,
-    pub duration: f64,
+    pub duration: f64, // Must be less than actual video duratio, 0.1s less does it
     pub image: IPLDLink,
     pub video: IPLDLink, // TimecodeNode
 }

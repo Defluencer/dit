@@ -1,7 +1,6 @@
 use crate::actors::{Archivist, ChatAggregator, VideoAggregator};
 use crate::server::start_server;
 use crate::utils::config::get_config;
-use crate::Stream;
 
 use tokio::sync::mpsc::unbounded_channel;
 
@@ -9,7 +8,20 @@ use ipfs_api::IpfsClient;
 
 use linked_data::config::Configuration;
 
-pub async fn start_stream(stream: Stream) {
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+pub struct Stream {
+    /// Disable chat archiving fonctionalities.
+    #[structopt(long)]
+    no_chat: bool,
+
+    /// Disable all archiving.
+    #[structopt(long)]
+    no_archive: bool,
+}
+
+pub async fn stream_cli(stream: Stream) {
     let Stream {
         no_chat,
         no_archive,
