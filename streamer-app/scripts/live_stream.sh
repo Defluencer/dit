@@ -1,4 +1,4 @@
 #!/bin/bash
-# Streamer-app configured for pre-recorded videos.
+# Streamer-app configured for live streaming videos.
 
-streamer-app
+streamer-app stream

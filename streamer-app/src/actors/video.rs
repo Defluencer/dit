@@ -1,6 +1,6 @@
 use crate::actors::archivist::Archive;
 use crate::server::{FMP4, MP4};
-use crate::utils::ipfs_dag_put_node_async;
+use crate::utils::dag_nodes::ipfs_dag_put_node_async;
 
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
