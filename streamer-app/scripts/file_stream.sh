@@ -1,4 +1,4 @@
 #!/bin/bash
 # Streamer-app configured for pre-recorded videos.
 
-streamer-app --no-chat --no-pubsub
+streamer-app file

@@ -15,7 +15,7 @@ where
 {
     #[cfg(debug_assertions)]
     println!(
-        "Serialize => {}",
+        "Serde: Serialize => {}",
         serde_json::to_string_pretty(node).unwrap()
     );
 

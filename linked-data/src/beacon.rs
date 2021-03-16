@@ -15,7 +15,7 @@ pub struct Beacon {
     pub peer_id: String,
 
     /// IPNS path -> "/ipns/<hash>"
-    pub video_list: String,
+    pub video_list: String, //resolve to VideoList
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -25,9 +25,10 @@ pub struct Topics {
 }
 
 /// List of all video metadata links
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Default)]
 pub struct VideoList {
-    pub metadata: Vec<IPLDLink>, // oldest to newest video metadata
+    /// Oldest to newest videos metadata
+    pub metadata: Vec<IPLDLink>,
 }
 
 //Hack is needed to get from JsValue to Rust type via js http api
