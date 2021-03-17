@@ -1,3 +1,6 @@
+:: Windows batch file example.
+:: From BASH to BATCH; \ becomes ^, % becomes %% and add a pause at the end.
+
 ffmpeg -listen 1 -i rtmp://localhost:2525 -rtmp_live live -rtmp_buffer 8000 ^
 -map v:0 -c:v:0 libx264 -preset: ultrafast -tune: zerolatency -g:0 240 -sc_threshold: 0 -b:v:0 6000k -s:0 1920x1080 -sws_flags bilinear -r:0 60 ^
 -map v:0 -c:v:1 libx264 -g:1 240 -b:v:1 4500k -s:1 1280x720 -r:1 60 ^
