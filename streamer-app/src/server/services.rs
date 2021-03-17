@@ -141,7 +141,7 @@ fn internal_error_response(
     mut res: Response<Body>,
     error: &dyn Debug,
 ) -> Result<Response<Body>, Error> {
-    eprintln!("Service Error: {:#?}", error);
+    eprintln!("Service: {:#?}", error);
 
     *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
 

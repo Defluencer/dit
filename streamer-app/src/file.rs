@@ -1,7 +1,6 @@
 use crate::actors::{Archivist, VideoAggregator};
 use crate::server::start_server;
 use crate::utils::config::get_config;
-use crate::File;
 
 use tokio::sync::mpsc::unbounded_channel;
 
@@ -9,7 +8,12 @@ use ipfs_api::IpfsClient;
 
 use linked_data::config::Configuration;
 
-pub async fn start_file(_file: File) {
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+pub struct File {}
+
+pub async fn file_cli(_file: File) {
     let ipfs = IpfsClient::default();
 
     if ipfs.id(None).await.is_err() {

@@ -247,6 +247,7 @@ impl VideoAggregator {
         while let Some(cid) = self.mint_video_node().await {
             if let Some(archive_tx) = self.archive_tx.as_ref() {
                 let msg = Archive::Video(cid);
+
                 if let Err(error) = archive_tx.send(msg) {
                     eprintln!("Archive receiver hung up! Error: {}", error);
                 }

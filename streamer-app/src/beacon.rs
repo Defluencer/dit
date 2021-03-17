@@ -1,14 +1,32 @@
 use crate::utils::config::{get_config, set_config};
 use crate::utils::dag_nodes::ipfs_dag_put_node_async;
+use crate::video::update_video_list;
+use crate::DEFAULT_KEY;
 
 use ipfs_api::response::{KeyListResponse, KeyPair};
 use ipfs_api::IpfsClient;
 use ipfs_api::KeyType;
 
-use linked_data::beacon::{Beacon, Topics, VideoList};
+use linked_data::beacon::{Topics, VideoList};
 
-/// Create beacon with key and topics passed in args.
-pub async fn create_beacon(args: crate::Beacon) {
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+pub struct Beacon {
+    /// IPNS key name for video list resolution.
+    #[structopt(short, long, default_value = DEFAULT_KEY)]
+    key_name: String,
+
+    /// GossipSub topic for receiving chat messages.
+    #[structopt(short, long)]
+    chat_topic: String,
+
+    /// GossipSub topic for video broadcasting.
+    #[structopt(short, long)]
+    video_topic: String,
+}
+
+pub async fn beacon_cli(args: Beacon) {
     let ipfs = IpfsClient::default();
 
     let res = match ipfs.key_list().await {
@@ -41,31 +59,7 @@ pub async fn create_beacon(args: crate::Beacon) {
     println!("IPNS: key => {} {}", keypair.name, keypair.id);
 
     if new_key {
-        let cid = match ipfs_dag_put_node_async(&ipfs, &VideoList::default()).await {
-            Ok(cid) => cid,
-            Err(e) => {
-                eprintln!("IPFS: {}", e);
-                return;
-            }
-        };
-
-        if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
-            eprintln!("IPFS: {}", e);
-            return;
-        }
-
-        #[cfg(debug_assertions)]
-        println!("IPFS: pin add => {}", &cid.to_string());
-
-        println!("Publishing New IPNS Name...");
-
-        if let Err(e) = ipfs
-            .name_publish(&cid.to_string(), false, None, None, Some(&args.key_name))
-            .await
-        {
-            eprintln!("IPFS: {}", e);
-            return;
-        }
+        update_video_list(&ipfs, &args.key_name, &VideoList::default()).await;
     }
 
     let mut config = get_config().await;
@@ -93,7 +87,7 @@ pub async fn create_beacon(args: crate::Beacon) {
 
     keypair.id.insert_str(0, "/ipns/"); // add this in front to make a path
 
-    let beacon = Beacon {
+    let beacon = linked_data::beacon::Beacon {
         topics,
         peer_id,
         video_list: keypair.id,
@@ -115,7 +109,7 @@ pub async fn create_beacon(args: crate::Beacon) {
     println!("Beacon CID => {}", &cid.to_string());
 }
 
-fn search_keypairs(name: &str, res: KeyListResponse) -> Option<KeyPair> {
+pub fn search_keypairs(name: &str, res: KeyListResponse) -> Option<KeyPair> {
     for keypair in res.keys {
         if keypair.name == name {
             return Some(keypair);

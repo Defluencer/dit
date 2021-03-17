@@ -4,61 +4,40 @@ mod file;
 mod server;
 mod stream;
 mod utils;
+mod video;
 
-use crate::beacon::create_beacon;
-use crate::file::start_file;
-use crate::stream::start_stream;
+use crate::beacon::{beacon_cli, Beacon};
+use crate::file::{file_cli, File};
+use crate::stream::{stream_cli, Stream};
+use crate::video::{video_cli, Video};
 
 use structopt::StructOpt;
+
+const DEFAULT_KEY: &str = "videolist";
 
 #[derive(Debug, StructOpt)]
 #[structopt(about)]
 #[structopt(rename_all = "kebab-case")]
 enum CommandLineInterface {
-    /// Start live streaming daemon.
+    /// Start the live streaming daemon.
     Stream(Stream),
 
-    /// Start file streaming daemon.
+    /// Start the file streaming daemon.
     File(File),
 
-    /// Create content beacon.
+    /// Create a content beacon.
     Beacon(Beacon),
-}
 
-#[derive(Debug, StructOpt)]
-pub struct Stream {
-    /// Disable chat archiving fonctionalities.
-    #[structopt(long)]
-    no_chat: bool,
-
-    /// Disable all archiving.
-    #[structopt(long)]
-    no_archive: bool,
-}
-
-#[derive(Debug, StructOpt)]
-pub struct File {}
-
-#[derive(Debug, StructOpt)]
-pub struct Beacon {
-    /// GossipSub topic for receiving chat messages.
-    #[structopt(long)]
-    chat_topic: String,
-
-    /// GossipSub topic for video broadcasting.
-    #[structopt(long)]
-    video_topic: String,
-
-    /// IPNS key name for video list resolution.
-    #[structopt(long, default_value = "videolist")]
-    key_name: String,
+    /// Create, update and delete videos.
+    Video(Video),
 }
 
 #[tokio::main]
 async fn main() {
     match CommandLineInterface::from_args() {
-        CommandLineInterface::Stream(stream) => start_stream(stream).await,
-        CommandLineInterface::File(file) => start_file(file).await,
-        CommandLineInterface::Beacon(beacon) => create_beacon(beacon).await,
+        CommandLineInterface::Stream(stream) => stream_cli(stream).await,
+        CommandLineInterface::File(file) => file_cli(file).await,
+        CommandLineInterface::Beacon(beacon) => beacon_cli(beacon).await,
+        CommandLineInterface::Video(video) => video_cli(video).await,
     }
 }
