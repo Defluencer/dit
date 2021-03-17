@@ -1,9 +1,9 @@
 use crate::utils::config::{get_config, set_config};
 use crate::utils::dag_nodes::ipfs_dag_put_node_async;
-use crate::utils::keys::search_keypairs;
 use crate::video::update_video_list;
 use crate::DEFAULT_KEY;
 
+use ipfs_api::response::{KeyListResponse, KeyPair};
 use ipfs_api::IpfsClient;
 use ipfs_api::KeyType;
 
@@ -13,17 +13,17 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Beacon {
+    /// IPNS key name for video list resolution.
+    #[structopt(short, long, default_value = DEFAULT_KEY)]
+    key_name: String,
+
     /// GossipSub topic for receiving chat messages.
-    #[structopt(long)]
+    #[structopt(short, long)]
     chat_topic: String,
 
     /// GossipSub topic for video broadcasting.
-    #[structopt(long)]
+    #[structopt(short, long)]
     video_topic: String,
-
-    /// IPNS key name for video list resolution.
-    #[structopt(long, default_value = DEFAULT_KEY)]
-    key_name: String,
 }
 
 pub async fn beacon_cli(args: Beacon) {
@@ -107,4 +107,14 @@ pub async fn beacon_cli(args: Beacon) {
     }
 
     println!("Beacon CID => {}", &cid.to_string());
+}
+
+pub fn search_keypairs(name: &str, res: KeyListResponse) -> Option<KeyPair> {
+    for keypair in res.keys {
+        if keypair.name == name {
+            return Some(keypair);
+        }
+    }
+
+    None
 }

@@ -185,7 +185,7 @@ impl Archivist {
         self.day_node.links_to_hours.push(link);
     }
 
-    /// Create all remaining DAG nodes then pin and print the final stream CID.
+    /// Create all remaining DAG nodes then pin and print the final CID.
     async fn finalize(&mut self) {
         self.archive_rx.close();
 

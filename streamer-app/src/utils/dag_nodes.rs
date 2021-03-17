@@ -34,7 +34,7 @@ where
     Ok(cid)
 }
 
-/// Deserialize dag node from IPFS path. Return T.
+/// Deserialize dag node from IPFS path. Return dag node.
 pub async fn ipfs_dag_get_node_async<T>(ipfs: &IpfsClient, path: &str) -> Result<T, Error>
 where
     T: ?Sized + DeserializeOwned + Serialize,

@@ -19,16 +19,16 @@ const DEFAULT_KEY: &str = "videolist";
 #[structopt(about)]
 #[structopt(rename_all = "kebab-case")]
 enum CommandLineInterface {
-    /// Start live streaming daemon.
+    /// Start the live streaming daemon.
     Stream(Stream),
 
-    /// Start file streaming daemon.
+    /// Start the file streaming daemon.
     File(File),
 
-    /// Create content beacon.
+    /// Create a content beacon.
     Beacon(Beacon),
 
-    /// Create, update, delete, videos.
+    /// Create, update and delete videos.
     Video(Video),
 }
 

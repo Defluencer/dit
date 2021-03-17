@@ -12,7 +12,7 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Stream {
-    /// Disable chat archiving fonctionalities.
+    /// Disable chat archiving.
     #[structopt(long)]
     no_chat: bool,
 

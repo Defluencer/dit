@@ -1,5 +1,5 @@
+use crate::beacon::search_keypairs;
 use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async};
-use crate::utils::keys::search_keypairs;
 use crate::DEFAULT_KEY;
 
 use std::convert::TryFrom;
@@ -17,7 +17,7 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 pub struct Video {
     /// IPNS key name for video list resolution.
-    #[structopt(long, default_value = DEFAULT_KEY)]
+    #[structopt(short, long, default_value = DEFAULT_KEY)]
     key_name: String,
 
     #[structopt(subcommand)]
@@ -26,7 +26,7 @@ pub struct Video {
 
 #[derive(Debug, StructOpt)]
 enum Command {
-    /// Create new video metadata in video list.
+    /// Create a new video metadata.
     Add(Add),
 
     /// Update video metadata in video list.
@@ -38,7 +38,7 @@ enum Command {
 
 #[derive(Debug, StructOpt)]
 pub struct Add {
-    /// The new video title
+    /// The new video title.
     #[structopt(short, long)]
     title: String,
 
