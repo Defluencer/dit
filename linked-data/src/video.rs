@@ -8,6 +8,7 @@ use cid::Cid;
 use multihash::Multihash;
 
 /// Metadata for video thumbnails and playback.
+/// Should not be pinned recursively.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
     pub title: String,

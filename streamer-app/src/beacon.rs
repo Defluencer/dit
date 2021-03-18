@@ -39,20 +39,24 @@ pub async fn beacon_cli(args: Beacon) {
 
     let (new_key, mut keypair) = match search_keypairs(&args.key_name, res) {
         Some(kp) => (false, kp),
-        None => match ipfs
-            .key_gen(
-                &args.key_name,
-                KeyType::Ed25519,
-                64, /* Don't think this does anything... */
-            )
-            .await
-        {
-            Ok(res) => (true, res),
-            Err(e) => {
-                eprintln!("IPFS: {}", e);
-                return;
+        None => {
+            println!("Generating Key...");
+
+            match ipfs
+                .key_gen(
+                    &args.key_name,
+                    KeyType::Ed25519,
+                    64, /* Don't think this does anything... */
+                )
+                .await
+            {
+                Ok(res) => (true, res),
+                Err(e) => {
+                    eprintln!("IPFS: {}", e);
+                    return;
+                }
             }
-        },
+        }
     };
 
     #[cfg(debug_assertions)]
@@ -61,6 +65,8 @@ pub async fn beacon_cli(args: Beacon) {
     if new_key {
         update_video_list(&ipfs, &args.key_name, &VideoList::default()).await;
     }
+
+    println!("Creating Beacon...");
 
     let mut config = get_config().await;
 

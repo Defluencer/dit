@@ -124,6 +124,11 @@ async fn add_video(command: Add, key: String) {
         }
     };
 
+    if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
+        eprintln!("IPFS: {}", e);
+        return;
+    }
+
     video_list.metadata.push(IPLDLink { link: cid });
 
     update_video_list(&ipfs, &key, &video_list).await;
@@ -144,6 +149,11 @@ async fn update_video(command: Update, key: String) {
             return;
         }
     };
+
+    if let Err(e) = ipfs.pin_rm(&cid.to_string(), false).await {
+        eprintln!("IPFS: {}", e);
+        return;
+    }
 
     let mut metadata: VideoMetadata = match ipfs_dag_get_node_async(&ipfs, &cid.to_string()).await {
         Ok(node) => node,
@@ -177,6 +187,11 @@ async fn update_video(command: Update, key: String) {
         }
     };
 
+    if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
+        eprintln!("IPFS: {}", e);
+        return;
+    }
+
     video_list.metadata[command.index] = IPLDLink { link: cid };
 
     update_video_list(&ipfs, &key, &video_list).await;
@@ -190,7 +205,12 @@ async fn delete_video(command: Delete, key: String) {
         None => return,
     };
 
-    video_list.metadata.remove(command.index);
+    let cid = video_list.metadata.remove(command.index).link;
+
+    if let Err(e) = ipfs.pin_rm(&cid.to_string(), false).await {
+        eprintln!("IPFS: {}", e);
+        return;
+    }
 
     update_video_list(&ipfs, &key, &video_list).await;
 }
@@ -215,6 +235,8 @@ async fn get_video_list(ipfs: &IpfsClient, key: &str) -> Option<VideoList> {
 
     #[cfg(debug_assertions)]
     println!("IPNS: key => {} {}", &keypair.name, &keypair.id);
+
+    println!("Fetching Video List...");
 
     let cid = match ipfs.name_resolve(Some(&keypair.id), false, false).await {
         Ok(res) => Cid::try_from(res.path).expect("Invalid Cid"),
@@ -248,7 +270,7 @@ pub async fn update_video_list(ipfs: &IpfsClient, key: &str, video_list: &VideoL
         }
     };
 
-    if let Err(e) = ipfs.pin_add(&cid.to_string(), true).await {
+    if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
         eprintln!("IPFS: {}", e);
         return;
     }

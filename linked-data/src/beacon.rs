@@ -6,6 +6,7 @@ use cid::Cid;
 use multihash::Multihash;
 
 /// Mostly static list of links to content.
+/// Should not be pinned recursively.
 #[derive(Deserialize, Serialize)]
 pub struct Beacon {
     /// GossipSub topics for live streaming & chat.
@@ -25,6 +26,7 @@ pub struct Topics {
 }
 
 /// List of all video metadata links.
+/// Should not be pinned recursively.
 #[derive(Deserialize, Serialize, Default)]
 pub struct VideoList {
     /// Oldest to newest videos metadata.
