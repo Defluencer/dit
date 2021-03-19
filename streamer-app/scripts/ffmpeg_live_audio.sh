@@ -1,7 +1,12 @@
 #!/bin/bash
 # BASH script example.
+
 # FFMPEG configured to output live multi quality HLS with standalone audio track.
-# Variants ordering must be highest to lowest quality.
+
+# Variants ordering MUST be highest to lowest quality.
+
+# Tips: forcing key frame at interval make it easy to cut segment of exact length
+# and allow scene change detection.
 
 ffmpeg -listen 1 -i rtmp://localhost:2525 -rtmp_live live -rtmp_buffer 8000 \
 -filter_complex \
@@ -9,10 +14,10 @@ ffmpeg -listen 1 -i rtmp://localhost:2525 -rtmp_live live -rtmp_buffer 8000 \
 [in1]scale=w=1280:h=720,split=2[720p60][scaleout]; \
 [scaleout]fps=30[720p30]; \
 [in2]fps=30,scale=w=854:h=480[480p30]" \
--map '[1080p60]' -c:v:0 libx264 -preset: ultrafast -tune: zerolatency -g:0 240 -sc_threshold: 0 -b:v:0 6000k \
--map '[720p60]' -c:v:1 libx264 -g:1 240 -b:v:1 4500k \
--map '[720p30]' -c:v:2 libx264 -g:2 120 -b:v:2 3000k \
--map '[480p30]' -c:v:3 libx264 -g:3 120 -b:v:3 2000k \
+-map '[1080p60]' -c:v:0 libx264 -preset: ultrafast -tune: zerolatency -force_key_frames:0 "expr:if(isnan(prev_forced_n),1,eq(n,prev_forced_n+240))" -b:v:0 6000k \
+-map '[720p60]' -c:v:1 libx264 -force_key_frames:1 "expr:if(isnan(prev_forced_n),1,eq(n,prev_forced_n+240))" -b:v:1 4500k \
+-map '[720p30]' -c:v:2 libx264 -force_key_frames:2 "expr:if(isnan(prev_forced_n),1,eq(n,prev_forced_n+120))" -b:v:2 3000k \
+-map '[480p30]' -c:v:3 libx264 -force_key_frames:3 "expr:if(isnan(prev_forced_n),1,eq(n,prev_forced_n+120))" -b:v:3 2000k \
 -map a:0 -c:a:0 copy \
 -f hls -var_stream_map "v:0,name:1080p60 v:1,name:720p60 v:2,name:720p30 v:3,name:480p30 a:0,name:audio" \
 -hls_init_time 4 -hls_time 4 -hls_flags independent_segments -master_pl_name master.m3u8 \
