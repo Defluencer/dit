@@ -1,4 +1,4 @@
-use crate::actors::{Archivist, ChatAggregator, VideoAggregator};
+use crate::actors::{Archivist, ChatAggregator, SetupAggregator, VideoAggregator};
 use crate::server::start_server;
 use crate::utils::config::get_config;
 
@@ -49,6 +49,8 @@ pub async fn stream_cli(stream: Stream) {
 
     let topic = chat.pubsub_topic.clone();
 
+    let segment_length = archive.segment_duration;
+
     let archive_tx = {
         if !no_archive {
             let (archive_tx, archive_rx) = unbounded_channel();
@@ -91,8 +93,26 @@ pub async fn stream_cli(stream: Stream) {
 
     handles.push(video_handle);
 
+    let (setup_tx, setup_rx) = unbounded_channel();
+
+    let mut setup = SetupAggregator::new(ipfs.clone(), setup_rx, video_tx.clone(), segment_length);
+
+    let setup_handle = tokio::spawn(async move {
+        setup.start().await;
+    });
+
+    handles.push(setup_handle);
+
     let server_handle = tokio::spawn(async move {
-        start_server(input_socket_addr, video_tx, archive_tx, ipfs, topic).await;
+        start_server(
+            input_socket_addr,
+            video_tx,
+            setup_tx,
+            archive_tx,
+            ipfs,
+            topic,
+        )
+        .await;
     });
 
     handles.push(server_handle);

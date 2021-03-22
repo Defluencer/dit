@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use crate::components::{ChatWindow, LiveStreamPlayer, Navbar, VideoThumbnail};
+use crate::components::{ChatWindow, /* LiveStreamPlayer, */ Navbar, VideoThumbnail};
 use crate::utils::ens::{get_ens_beacon_async, EthereumNameService};
 use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
 use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
@@ -14,7 +14,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 
 use linked_data::beacon::{Beacon, TempVideoList, VideoList};
-use linked_data::video::{TempVideoMetadata, VideoMetadata};
+use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
@@ -109,7 +109,7 @@ impl Component for Defluencer {
                     <div class="defluencer_page">
                         <Navbar />
                         <div class="live_stream">
-                            <LiveStreamPlayer topic=beacon.topics.live_video.clone() streamer_peer_id=beacon.peer_id.clone() />
+                            //<LiveStreamPlayer topic=beacon.topics.live_video.clone() streamer_peer_id=beacon.peer_id.clone() />
                             <ChatWindow topic=beacon.topics.live_chat.clone() />
                         </div>
                         <div class="video_list">
@@ -184,13 +184,10 @@ impl Defluencer {
         if let Some(cid) = get_cid(&beacon.video_list, self.storage.as_ref()) {
             self.list_cid = Some(cid);
 
-            spawn_local(ipfs_dag_get_callback::<TempVideoList, _>(
-                cid,
-                self.link.callback(Msg::List),
-            ));
+            spawn_local(ipfs_dag_get_callback(cid, self.link.callback(Msg::List)));
         }
 
-        spawn_local(ipfs_resolve_and_get_callback::<TempVideoList, _>(
+        spawn_local(ipfs_resolve_and_get_callback(
             beacon.video_list.clone(),
             self.link.callback(Msg::List),
         ));
@@ -227,7 +224,7 @@ impl Defluencer {
         }
 
         for metadata in list.metadata.iter().rev() {
-            spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, _>(
+            spawn_local(ipfs_dag_get_callback(
                 metadata.link,
                 self.link.callback(Msg::Metadata),
             ))

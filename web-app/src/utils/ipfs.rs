@@ -29,10 +29,9 @@ pub async fn cat_and_buffer(path: String, source_buffer: SourceBuffer) {
     }
 }
 
-pub async fn ipfs_resolve_and_get_callback<T, U>(ipns: String, cb: Callback<(Cid, U)>)
+pub async fn ipfs_resolve_and_get_callback<T>(ipns: String, cb: Callback<(Cid, T)>)
 where
     T: for<'a> serde::Deserialize<'a>,
-    U: for<'a> From<T>,
 {
     let js_value = match ipfs_name_resolve(&ipns).await {
         Ok(result) => result,
@@ -57,7 +56,7 @@ where
         }
     };
 
-    let temp: T = match node.into_serde() {
+    let node: T = match node.into_serde() {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
@@ -65,15 +64,12 @@ where
         }
     };
 
-    let node = temp.into();
-
     cb.emit((cid, node));
 }
 
-pub async fn ipfs_dag_get_path_async<T, U>(cid: Cid, path: &str) -> Result<U, ()>
+pub async fn ipfs_dag_get_path_async<T>(cid: Cid, path: &str) -> Result<T, ()>
 where
     T: for<'a> serde::Deserialize<'a>,
-    U: for<'a> From<T>,
 {
     let node = match ipfs_dag_get_path(&cid.to_string(), path).await {
         Ok(result) => result,
@@ -83,7 +79,7 @@ where
         }
     };
 
-    let temp: T = match node.into_serde() {
+    let node: T = match node.into_serde() {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
@@ -91,13 +87,12 @@ where
         }
     };
 
-    Ok(temp.into())
+    Ok(node)
 }
 
-pub async fn ipfs_dag_get_callback<T, U>(cid: Cid, cb: Callback<(Cid, U)>)
+pub async fn ipfs_dag_get_callback<T>(cid: Cid, cb: Callback<(Cid, T)>)
 where
     T: for<'a> serde::Deserialize<'a>,
-    U: for<'a> From<T>,
 {
     let node = match ipfs_dag_get(&cid.to_string()).await {
         Ok(result) => result,
@@ -107,15 +102,13 @@ where
         }
     };
 
-    let temp: T = match node.into_serde() {
+    let node: T = match node.into_serde() {
         Ok(result) => result,
         Err(e) => {
             ConsoleService::error(&format!("{:#?}", e));
             return;
         }
     };
-
-    let node = temp.into();
 
     cb.emit((cid, node));
 }

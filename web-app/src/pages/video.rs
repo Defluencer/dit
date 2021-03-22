@@ -5,7 +5,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use linked_data::video::{TempVideoMetadata, VideoMetadata};
+use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
@@ -27,7 +27,7 @@ impl Component for Video {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, _>(
+        spawn_local(ipfs_dag_get_callback(
             props.metadata_cid,
             link.callback(Msg::Metadata),
         ));

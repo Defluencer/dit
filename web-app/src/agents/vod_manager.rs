@@ -13,7 +13,7 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url, Window};
 
 use yew::services::ConsoleService;
 
-use linked_data::video::{SetupNode, TempSetupNode, VideoMetadata};
+use linked_data::video::{SetupNode, VideoMetadata};
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -45,7 +45,7 @@ struct Video {
 }
 
 pub struct VideoOnDemandManager {
-    video_record: Video,
+    video_record: Arc<Video>,
 
     url: String,
 }
@@ -78,7 +78,31 @@ impl VideoOnDemandManager {
             handle: Arc::new(AtomicIsize::new(0)),
         };
 
-        Self { video_record, url }
+        Self {
+            video_record: Arc::new(video_record),
+            url,
+        }
+    }
+
+    /// Callback when MediaSource is linked to video element.
+    pub fn on_media_source_open(&mut self) {
+        let clone = self.video_record.clone();
+
+        let closure = move {
+            #[cfg(debug_assertions)]
+            ConsoleService::info("On Source Open");
+
+            //clone.add_source_buffer().await;
+            spawn_local(async {
+                //TODO
+            });
+        };
+
+        let callback = Closure::wrap(Box::new(closure) as Box<dyn FnMut()>);
+
+        self.video_record
+            .media_source
+            .set_onsourceopen(Some(callback.as_ref().unchecked_ref()));
     }
 
     /// Get video element, register callbacks and set source.
@@ -95,11 +119,11 @@ impl VideoOnDemandManager {
             .dyn_into()
             .expect("Not Media Element");
 
-        self.video_record.media_element = Some(media_element.clone());
+        //self.video_record.media_element = Some(media_element.clone());
 
-        on_media_source_open(self.video_record.clone(), &self.video_record.media_source);
+        //on_media_source_open(self.video_record.clone(), &self.video_record.media_source);
 
-        on_video_seeking(self.video_record.clone(), &media_element);
+        //on_video_seeking(self.video_record.clone(), &media_element);
 
         media_element.set_src(&self.url);
     }
@@ -120,27 +144,7 @@ impl Drop for VideoOnDemandManager {
     }
 }
 
-/// Callback when MediaSource is linked to video element.
-fn on_media_source_open(video_record: Video, media_source: &MediaSource) {
-    let closure = move || {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("On Source Open");
-
-        video_record.media_source.set_onsourceopen(None);
-
-        video_record
-            .media_source
-            .set_duration(video_record.metadata.duration);
-
-        let future = add_source_buffer(video_record.clone());
-
-        spawn_local(future);
-    };
-
-    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
-    media_source.set_onsourceopen(Some(callback.into_js_value().unchecked_ref()));
-}
-
+/*
 /// Update state machine.
 fn tick(video_record: Video) {
     let current_state = video_record.state.load(Ordering::Relaxed);
@@ -324,11 +328,10 @@ async fn add_source_buffer(video_record: Video) {
 
     let cid = video_record.metadata.video.link;
 
-    let setup_node =
-        match ipfs_dag_get_path_async::<TempSetupNode, SetupNode>(cid, SETUP_PATH).await {
-            Ok(result) => result,
-            Err(_) => return,
-        };
+    let setup_node = match ipfs_dag_get_path_async::<SetupNode>(cid, SETUP_PATH).await {
+        Ok(result) => result,
+        Err(_) => return,
+    };
 
     #[cfg(debug_assertions)]
     ConsoleService::info(&format!(
@@ -338,9 +341,12 @@ async fn add_source_buffer(video_record: Video) {
 
     let mut vec = Vec::with_capacity(4);
 
-    let first_codec = setup_node.codecs.first().expect("Can't get first codec");
+    let first_track = setup_node.tracks.first().expect("Can't get first codec");
 
-    let source_buffer = match video_record.media_source.add_source_buffer(first_codec) {
+    let source_buffer = match video_record
+        .media_source
+        .add_source_buffer(&first_track.codec)
+    {
         Ok(sb) => sb,
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
@@ -351,29 +357,17 @@ async fn add_source_buffer(video_record: Video) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Listing Tracks");
 
-    for (level, (codec, quality)) in setup_node
-        .codecs
-        .into_iter()
-        .zip(setup_node.qualities.into_iter())
-        .enumerate()
-    {
-        if !MediaSource::is_type_supported(&codec) {
-            ConsoleService::error(&format!("MIME Type {:?} unsupported", &codec));
+    for (level, track) in setup_node.tracks.iter().enumerate() {
+        if !MediaSource::is_type_supported(&track.codec) {
+            ConsoleService::error(&format!("MIME Type {:?} unsupported", &track.codec));
             return;
         }
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
             "Level {} Quality {} Codec {}",
-            level, quality, codec
+            level, track.quality, track.codec
         ));
-
-        let track = Track {
-            level,
-            quality,
-            codec,
-            source_buffer: source_buffer.clone(),
-        };
 
         vec.push(track);
     }
@@ -593,3 +587,4 @@ fn on_video_seeking(video_record: Video, media_element: &HtmlMediaElement) {
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
     media_element.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
 }
+ */
