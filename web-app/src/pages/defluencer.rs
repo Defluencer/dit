@@ -14,7 +14,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 
 use linked_data::beacon::{Beacon, TempVideoList, VideoList};
-use linked_data::video::VideoMetadata;
+use linked_data::video::{TempVideoMetadata, VideoMetadata};
 
 use cid::Cid;
 
@@ -41,8 +41,8 @@ pub struct Defluencer {
 pub enum Msg {
     Name(Result<Cid, ()>),
     Beacon((Cid, Beacon)),
-    List((Cid, VideoList)),
-    Metadata((Cid, VideoMetadata)),
+    List((Cid, TempVideoList)),
+    Metadata((Cid, TempVideoMetadata)),
 }
 
 #[derive(Properties, Clone)]
@@ -198,7 +198,9 @@ impl Defluencer {
     }
 
     /// Receive video list, save locally and try to get all metadata
-    fn video_list_update(&mut self, list_cid: Cid, list: VideoList) -> bool {
+    fn video_list_update(&mut self, list_cid: Cid, list: TempVideoList) -> bool {
+        let list: VideoList = list.into();
+
         if let Some(old_list_cid) = self.list_cid.as_ref() {
             if *old_list_cid == list_cid && self.video_list.is_some() {
                 return false;
@@ -238,7 +240,9 @@ impl Defluencer {
     }
 
     /// Receive video metadata then update thumbnails
-    fn video_metadata_update(&mut self, metadata_cid: Cid, metadata: VideoMetadata) -> bool {
+    fn video_metadata_update(&mut self, metadata_cid: Cid, metadata: TempVideoMetadata) -> bool {
+        let metadata = metadata.into();
+
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
             "Display Add => {} \n {}",

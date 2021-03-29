@@ -10,5 +10,5 @@ pub use chat_message::ChatMessageData;
 pub use chat_window::ChatWindow;
 //pub use live_stream_player::LiveStreamPlayer;
 pub use navbar::Navbar;
-pub use video_player::VideoPlayer;
+pub use video_player::{seconds_to_timecode, VideoPlayer};
 pub use video_thumbnail::VideoThumbnail;

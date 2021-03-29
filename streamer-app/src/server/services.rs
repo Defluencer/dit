@@ -20,7 +20,7 @@ use m3u8_rs::playlist::Playlist;
 
 const M3U8: &str = "m3u8";
 pub const MP4: &str = "mp4";
-pub const FMP4: &str = "fmp4";
+pub const M4S: &str = "m4s";
 
 const OPTIONS: ipfs_api::request::Add = ipfs_api::request::Add {
     trickle: None,
@@ -53,7 +53,7 @@ pub async fn put_requests(
     if parts.method != Method::PUT
         || path.extension() == None
         || (path.extension().unwrap() != M3U8
-            && path.extension().unwrap() != FMP4
+            && path.extension().unwrap() != M4S
             && path.extension().unwrap() != MP4)
     {
         return not_found_response(res);
@@ -78,7 +78,7 @@ pub async fn put_requests(
     #[cfg(debug_assertions)]
     println!("IPFS: add => {}", &cid.to_string());
 
-    if path.extension().unwrap() == FMP4 {
+    if path.extension().unwrap() == M4S {
         let msg = VideoData::Segment((path.to_path_buf(), cid));
 
         if let Err(error) = video_tx.send(msg) {

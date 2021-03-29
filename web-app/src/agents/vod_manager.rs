@@ -1,9 +1,7 @@
-use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
+/* use std::sync::Arc;
 
 use crate::utils::ema::ExponentialMovingAverage;
 use crate::utils::ipfs::{cat_and_buffer, ipfs_dag_get_path_async};
-use crate::utils::tracks::{seconds_to_timecode, Track, Tracks};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -13,7 +11,7 @@ use web_sys::{HtmlMediaElement, MediaSource, SourceBuffer, Url, Window};
 
 use yew::services::ConsoleService;
 
-use linked_data::video::{SetupNode, VideoMetadata};
+use linked_data::video::{SetupNode, Track, VideoMetadata};
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -27,7 +25,20 @@ const SETUP_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/";
 
 //TODO save setup node instead of Tracks
 
-#[derive(Clone)]
+enum MachineState {
+    Load,
+    Switch,
+    Flush,
+    Timeout,
+}
+
+struct MediaBuffer {
+    video: SourceBuffer,
+    audio: SourceBuffer,
+
+    tracks: Vec<Track>,
+}
+
 struct Video {
     metadata: VideoMetadata,
 
@@ -35,17 +46,18 @@ struct Video {
     media_element: Option<HtmlMediaElement>,
     media_source: MediaSource,
 
-    tracks: Tracks,
-    state: Arc<AtomicUsize>,
-    level: Arc<AtomicUsize>,
+    media_buffer: Option<MediaBuffer>,
+
+    state: MachineState,
+    level: usize,
 
     ema: ExponentialMovingAverage,
 
-    handle: Arc<AtomicIsize>,
+    handle: i32,
 }
 
 pub struct VideoOnDemandManager {
-    video_record: Arc<Video>,
+    video: Arc<Video>,
 
     url: String,
 }
@@ -62,56 +74,31 @@ impl VideoOnDemandManager {
         let url = Url::create_object_url_with_source(&media_source)
             .expect("Can't create url from source");
 
-        let video_record = Video {
+        let video = Video {
             metadata,
 
             window,
             media_element: None,
             media_source,
 
-            tracks: Arc::new(RwLock::new(Vec::with_capacity(4))),
-            state: Arc::new(AtomicUsize::new(0)),
-            level: Arc::new(AtomicUsize::new(0)),
+            media_buffer: None,
+
+            state: MachineState::Timeout,
+            level: 0,
 
             ema,
 
-            handle: Arc::new(AtomicIsize::new(0)),
+            handle: 0,
         };
 
-        Self {
-            video_record: Arc::new(video_record),
-            url,
-        }
-    }
+        let video = Arc::new(video);
 
-    /// Callback when MediaSource is linked to video element.
-    pub fn on_media_source_open(&mut self) {
-        let clone = self.video_record.clone();
-
-        let closure = move {
-            #[cfg(debug_assertions)]
-            ConsoleService::info("On Source Open");
-
-            //clone.add_source_buffer().await;
-            spawn_local(async {
-                //TODO
-            });
-        };
-
-        let callback = Closure::wrap(Box::new(closure) as Box<dyn FnMut()>);
-
-        self.video_record
-            .media_source
-            .set_onsourceopen(Some(callback.as_ref().unchecked_ref()));
+        Self { video, url }
     }
 
     /// Get video element, register callbacks and set source.
     pub fn link_video(&mut self) {
-        let document = self
-            .video_record
-            .window
-            .document()
-            .expect("Can't get document");
+        let document = self.video.window.document().expect("Can't get document");
 
         let media_element: HtmlMediaElement = document
             .get_element_by_id("video_player")
@@ -119,11 +106,11 @@ impl VideoOnDemandManager {
             .dyn_into()
             .expect("Not Media Element");
 
-        //self.video_record.media_element = Some(media_element.clone());
+        self.video.media_element = Some(media_element.clone());
 
-        //on_media_source_open(self.video_record.clone(), &self.video_record.media_source);
+        on_media_source_open(self.video.clone(), &self.video.media_source);
 
-        //on_video_seeking(self.video_record.clone(), &media_element);
+        on_video_seeking(self.video.clone(), &media_element);
 
         media_element.set_src(&self.url);
     }
@@ -134,38 +121,146 @@ impl Drop for VideoOnDemandManager {
         #[cfg(debug_assertions)]
         ConsoleService::info("Dropping VideoOnDemandManager");
 
-        let handle = self.video_record.handle.load(Ordering::Relaxed);
+        let handle = self.video.handle;
 
         if handle != 0 {
-            self.video_record
-                .window
-                .clear_interval_with_handle(handle as i32);
+            self.video.window.clear_interval_with_handle(handle);
         }
     }
 }
 
-/*
-/// Update state machine.
-fn tick(video_record: Video) {
-    let current_state = video_record.state.load(Ordering::Relaxed);
+/// Callback when MediaSource is linked to video element.
+fn on_media_source_open(video: Arc<Video>, media_source: &MediaSource) {
+    let closure = move || {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("On Source Open");
 
-    match current_state {
-        1 => load_media_segment(video_record),
-        2 => spawn_local(switch_quality(video_record)),
-        3 => flush_buffer(video_record),
-        4 => on_timeout(video_record),
-        5 => check_status(video_record),
-        6 => check_abr(video_record),
-        _ => {}
+        video.media_source.set_onsourceopen(None);
+
+        video.media_source.set_duration(video.metadata.duration);
+
+        let future = add_source_buffer(video.clone());
+
+        spawn_local(future);
+    };
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
+    media_source.set_onsourceopen(Some(callback.into_js_value().unchecked_ref()));
+}
+
+/// Get setup infos, create source buffer then load initialization segment.
+async fn add_source_buffer(video: Arc<Video>) {
+    #[cfg(debug_assertions)]
+    ConsoleService::info("Adding Source Buffer");
+
+    let cid = video.metadata.video.link;
+
+    let setup_node: SetupNode = match ipfs_dag_get_path_async(cid, SETUP_PATH).await {
+        Ok(result) => result,
+        Err(_) => return,
+    };
+
+    #[cfg(debug_assertions)]
+    ConsoleService::info(&format!(
+        "Setup Node \n {}",
+        &serde_json::to_string_pretty(&setup_node).expect("Can't print")
+    ));
+
+    #[cfg(debug_assertions)]
+    ConsoleService::info("Listing Tracks");
+
+    let mut audio_buffer = None;
+    let mut video_buffer = None;
+
+    for (level, track) in setup_node.tracks.iter().enumerate() {
+        if !MediaSource::is_type_supported(&track.codec) {
+            ConsoleService::error(&format!("MIME Type {:?} unsupported", &track.codec));
+            continue;
+        }
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!(
+            "Level {} Name {} Codec {} Bandwidth {}",
+            level, track.name, track.codec, track.bandwidth
+        ));
+
+        if audio_buffer.is_some() && video_buffer.is_some() {
+            continue;
+        }
+
+        let source_buffer = match video.media_source.add_source_buffer(&track.codec) {
+            Ok(sb) => sb,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
+
+        if track.name == "audio" {
+            audio_buffer = Some(source_buffer);
+        } else {
+            video_buffer = Some(source_buffer);
+        }
+    }
+
+    let path = setup_node.tracks[0].initialization_segment.link.to_string();
+
+    on_source_buffer_update_end(video, video_buffer.as_ref().unwrap());
+
+    let media_buffer = MediaBuffer {
+        tracks: setup_node.tracks,
+        audio: audio_buffer.unwrap(),
+        video: video_buffer.unwrap(),
+    };
+
+    video.media_buffer = Some(media_buffer);
+    video.state = MachineState::Load;
+
+    //cat_and_buffer(path, source_buffer.clone()).await;
+}
+
+/// Update state machine.
+fn tick(video: Arc<Video>) {
+    match video.state {
+        MachineState::Load => load_media_segment(video),
+        MachineState::Switch => spawn_local(switch_quality(video)),
+        MachineState::Flush => flush_buffer(video),
+        MachineState::Timeout => on_timeout(video),
+        /* 5 => check_status(video),
+        6 => check_abr(video),
+        _ => {} */
+    }
+}
+
+/// Wait 1 second then update state machine.
+fn on_timeout(video: Arc<Video>) {
+    let window = video.window.clone();
+    let hanlde = video.handle.clone();
+
+    let closure = move || {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("On Timeout");
+
+        tick(video.clone());
+    };
+
+    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
+
+    match window.set_timeout_with_callback_and_timeout_and_arguments_0(
+        callback.into_js_value().unchecked_ref(),
+        1000,
+    ) {
+        Ok(handle) => video.handle = handle,
+        Err(e) => ConsoleService::error(&format!("{:?}", e)),
     }
 }
 
 /// Recalculate download speed EMA then set quality level.
-fn check_abr(video_record: Video) {
-    let mut level = video_record.level.load(Ordering::Relaxed);
+fn check_abr(video: Arc<Video>) {
+    let mut level = video.level;
     let mut switch_level = false;
 
-    if let Some(moving_average) = video_record.ema.recalculate_average() {
+    if let Some(moving_average) = video.ema.recalculate_average() {
         match level {
             0 => {
                 if (moving_average + 500.0) < MEDIA_LENGTH_MS {
@@ -204,23 +299,23 @@ fn check_abr(video_record: Video) {
     }
 
     if switch_level {
-        video_record.level.store(level, Ordering::Relaxed);
-        spawn_local(switch_quality(video_record));
+        video.level = level;
+        spawn_local(switch_quality(video));
     } else {
-        check_status(video_record);
+        check_status(video);
     }
 }
 
 /// Check buffers and current time then trigger new action.
-fn check_status(video_record: Video) {
-    let level = video_record.level.load(Ordering::Relaxed);
+fn check_status(video: Arc<Video>) {
+    let level = video.level;
 
-    let source_buffer = match video_record.tracks.read() {
+    let source_buffer = match video.tracks.read() {
         Ok(tracks) => {
             if tracks.len() == 0 {
                 #[cfg(debug_assertions)]
                 ConsoleService::info("No Tracks");
-                on_timeout(video_record.clone());
+                on_timeout(video.clone());
                 return;
             }
 
@@ -228,7 +323,7 @@ fn check_status(video_record: Video) {
         }
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
-            on_timeout(video_record.clone());
+            on_timeout(video.clone());
             return;
         }
     };
@@ -238,7 +333,7 @@ fn check_status(video_record: Video) {
         Err(_) => {
             #[cfg(debug_assertions)]
             ConsoleService::info("Not Buffered");
-            on_timeout(video_record);
+            on_timeout(video);
             return;
         }
     };
@@ -264,12 +359,12 @@ fn check_status(video_record: Video) {
         ));
     }
 
-    let current_time = match video_record.media_element.as_ref() {
+    let current_time = match video.media_element.as_ref() {
         Some(media_element) => media_element.current_time(),
         None => {
             #[cfg(debug_assertions)]
             ConsoleService::info("No Media Element");
-            on_timeout(video_record);
+            on_timeout(video);
             return;
         }
     };
@@ -277,123 +372,32 @@ fn check_status(video_record: Video) {
     if current_time > buff_start + BACK_BUFFER_LENGTH {
         #[cfg(debug_assertions)]
         ConsoleService::info("Back Buffer Full");
-        flush_buffer(video_record);
+        flush_buffer(video);
         return;
     }
 
-    if buff_end >= video_record.metadata.duration {
+    if buff_end >= video.metadata.duration {
         #[cfg(debug_assertions)]
         ConsoleService::info("End Of Video");
-        on_timeout(video_record);
+        on_timeout(video);
         return;
     }
 
     if current_time + FORWARD_BUFFER_LENGTH < buff_end {
         #[cfg(debug_assertions)]
         ConsoleService::info("Forward Buffer Full");
-        on_timeout(video_record);
+        on_timeout(video);
         return;
     }
 
-    load_media_segment(video_record);
-}
-
-/// Wait 1 second then update state machine.
-fn on_timeout(video_record: Video) {
-    let window = video_record.window.clone();
-    let hanlde = video_record.handle.clone();
-
-    let closure = move || {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("On Timeout");
-
-        tick(video_record.clone());
-    };
-
-    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
-
-    match window.set_timeout_with_callback_and_timeout_and_arguments_0(
-        callback.into_js_value().unchecked_ref(),
-        1000,
-    ) {
-        Ok(handle) => hanlde.store(handle as isize, Ordering::Relaxed),
-        Err(e) => ConsoleService::error(&format!("{:?}", e)),
-    }
-}
-
-/// Get setup infos, create source buffer then load initialization segment.
-async fn add_source_buffer(video_record: Video) {
-    #[cfg(debug_assertions)]
-    ConsoleService::info("Adding Source Buffer");
-
-    let cid = video_record.metadata.video.link;
-
-    let setup_node = match ipfs_dag_get_path_async::<SetupNode>(cid, SETUP_PATH).await {
-        Ok(result) => result,
-        Err(_) => return,
-    };
-
-    #[cfg(debug_assertions)]
-    ConsoleService::info(&format!(
-        "Setup Node \n {}",
-        &serde_json::to_string_pretty(&setup_node).expect("Can't print")
-    ));
-
-    let mut vec = Vec::with_capacity(4);
-
-    let first_track = setup_node.tracks.first().expect("Can't get first codec");
-
-    let source_buffer = match video_record
-        .media_source
-        .add_source_buffer(&first_track.codec)
-    {
-        Ok(sb) => sb,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    };
-
-    #[cfg(debug_assertions)]
-    ConsoleService::info("Listing Tracks");
-
-    for (level, track) in setup_node.tracks.iter().enumerate() {
-        if !MediaSource::is_type_supported(&track.codec) {
-            ConsoleService::error(&format!("MIME Type {:?} unsupported", &track.codec));
-            return;
-        }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!(
-            "Level {} Quality {} Codec {}",
-            level, track.quality, track.codec
-        ));
-
-        vec.push(track);
-    }
-
-    match video_record.tracks.write() {
-        Ok(mut tracks) => *tracks = vec,
-        Err(e) => {
-            ConsoleService::error(&format!("{:?}", e));
-            return;
-        }
-    }
-
-    video_record.state.store(1, Ordering::Relaxed);
-
-    let path = setup_node.initialization_segments[0].link.to_string();
-
-    on_source_buffer_update_end(video_record, &source_buffer);
-
-    cat_and_buffer(path, source_buffer.clone()).await;
+    load_media_segment(video);
 }
 
 /// Get CID from timecode then fetch video data from ipfs
-fn load_media_segment(video_record: Video) {
-    let level = video_record.level.load(Ordering::Relaxed);
+fn load_media_segment(video: Arc<Video>) {
+    let level = video.level.load(Ordering::Relaxed);
 
-    let (quality, source_buffer) = match video_record.tracks.read() {
+    let (quality, source_buffer) = match video.tracks.read() {
         Ok(tracks) => (
             tracks[level].quality.clone(),
             tracks[level].source_buffer.clone(),
@@ -414,7 +418,7 @@ fn load_media_segment(video_record: Video) {
 
     //if buffer is empty load at current time
     if buff_end <= 0.0 {
-        let current_time = match video_record.media_element.as_ref() {
+        let current_time = match video.media_element.as_ref() {
             Some(media_element) => media_element.current_time(),
             None => {
                 #[cfg(debug_assertions)]
@@ -438,7 +442,7 @@ fn load_media_segment(video_record: Video) {
 
     let path = format!(
         "{}/time/hour/{}/minute/{}/second/{}/video/quality/{}",
-        video_record.metadata.video.link.to_string(),
+        video.metadata.video.link.to_string(),
         hours,
         minutes,
         seconds,
@@ -447,20 +451,20 @@ fn load_media_segment(video_record: Video) {
 
     let future = cat_and_buffer(path, source_buffer);
 
-    video_record.ema.start_timer();
-    video_record.state.store(6, Ordering::Relaxed);
+    video.ema.start_timer();
+    video.state.store(6, Ordering::Relaxed);
 
     spawn_local(future);
 }
 
 /// Switch source buffer codec then load initialization segment.
-async fn switch_quality(video_record: Video) {
+async fn switch_quality(video: Arc<Video>) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Switching Quality");
 
-    let level = video_record.level.load(Ordering::Relaxed);
+    let level = video.level.load(Ordering::Relaxed);
 
-    let (quality, codec, source_buffer) = match video_record.tracks.read() {
+    let (quality, codec, source_buffer) = match video.tracks.read() {
         Ok(tracks) => (
             tracks[level].quality.clone(),
             tracks[level].codec.clone(),
@@ -488,24 +492,24 @@ async fn switch_quality(video_record: Video) {
 
     let path = format!(
         "{}/time/hour/0/minute/0/second/0/video/setup/initseg/{}",
-        video_record.metadata.video.link.to_string(),
+        video.metadata.video.link.to_string(),
         level
     );
 
     cat_and_buffer(path, source_buffer.clone()).await;
 
     //state load segment
-    video_record.state.store(1, Ordering::Relaxed);
+    video.state.store(1, Ordering::Relaxed);
 }
 
 /// Flush everything or just back buffer.
-fn flush_buffer(video_record: Video) {
+fn flush_buffer(video: Arc<Video>) {
     #[cfg(debug_assertions)]
     ConsoleService::info("Flushing Buffer");
 
-    let level = video_record.level.load(Ordering::Relaxed);
+    let level = video.level.load(Ordering::Relaxed);
 
-    let source_buffer = match video_record.tracks.read() {
+    let source_buffer = match video.tracks.read() {
         Ok(tracks) => tracks[level].source_buffer.clone(),
         Err(e) => {
             ConsoleService::error(&format!("{:?}", e));
@@ -537,7 +541,7 @@ fn flush_buffer(video_record: Video) {
         }
     }
 
-    let current_time = match video_record.media_element.as_ref() {
+    let current_time = match video.media_element.as_ref() {
         Some(media_element) => media_element.current_time(),
         None => {
             #[cfg(debug_assertions)]
@@ -559,16 +563,16 @@ fn flush_buffer(video_record: Video) {
     }
 
     //state load segment
-    video_record.state.store(1, Ordering::Relaxed);
+    video.state.store(1, Ordering::Relaxed);
 }
 
 /// Callback when source buffer is done updating.
-fn on_source_buffer_update_end(video_record: Video, source_buffer: &SourceBuffer) {
+fn on_source_buffer_update_end(video: Arc<Video>, source_buffer: &SourceBuffer) {
     let closure = move || {
         #[cfg(debug_assertions)]
         ConsoleService::info("On Update End");
 
-        tick(video_record.clone());
+        tick(video.clone());
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
@@ -576,15 +580,30 @@ fn on_source_buffer_update_end(video_record: Video, source_buffer: &SourceBuffer
 }
 
 /// Callback when video element has seeked.
-fn on_video_seeking(video_record: Video, media_element: &HtmlMediaElement) {
+fn on_video_seeking(video: Arc<Video>, media_element: &HtmlMediaElement) {
     let closure = move || {
         #[cfg(debug_assertions)]
         ConsoleService::info("On Seeking");
 
-        video_record.state.store(3, Ordering::Relaxed);
+        video.state.store(3, Ordering::Relaxed);
     };
 
     let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn()>);
     media_element.set_onseeking(Some(callback.into_js_value().unchecked_ref()));
+}
+
+/// Translate total number of seconds to timecode.
+pub fn seconds_to_timecode(seconds: f64) -> (u8, u8, u8) {
+    let rem_seconds = seconds.round();
+
+    let hours = (rem_seconds / 3600.0) as u8;
+    let rem_seconds = rem_seconds.rem_euclid(3600.0);
+
+    let minutes = (rem_seconds / 60.0) as u8;
+    let rem_seconds = rem_seconds.rem_euclid(60.0);
+
+    let seconds = rem_seconds as u8;
+
+    (hours, minutes, seconds)
 }
  */

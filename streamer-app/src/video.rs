@@ -105,6 +105,8 @@ async fn add_video(command: Add, key: String) {
         None => return,
     };
 
+    //TODO calculate duration from timecode node
+
     let metadata = VideoMetadata {
         title: command.title,
         duration: command.duration,
@@ -124,10 +126,10 @@ async fn add_video(command: Add, key: String) {
         }
     };
 
-    if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
+    /* if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
         eprintln!("IPFS: {}", e);
         return;
-    }
+    } */
 
     video_list.metadata.push(IPLDLink { link: cid });
 
@@ -150,10 +152,10 @@ async fn update_video(command: Update, key: String) {
         }
     };
 
-    if let Err(e) = ipfs.pin_rm(&cid.to_string(), false).await {
+    /* if let Err(e) = ipfs.pin_rm(&cid.to_string(), false).await {
         eprintln!("IPFS: {}", e);
         return;
-    }
+    } */
 
     let mut metadata: VideoMetadata = match ipfs_dag_get_node_async(&ipfs, &cid.to_string()).await {
         Ok(node) => node,
@@ -187,10 +189,10 @@ async fn update_video(command: Update, key: String) {
         }
     };
 
-    if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
+    /* if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
         eprintln!("IPFS: {}", e);
         return;
-    }
+    } */
 
     video_list.metadata[command.index] = IPLDLink { link: cid };
 
@@ -205,12 +207,12 @@ async fn delete_video(command: Delete, key: String) {
         None => return,
     };
 
-    let cid = video_list.metadata.remove(command.index).link;
+    let _cid = video_list.metadata.remove(command.index).link;
 
-    if let Err(e) = ipfs.pin_rm(&cid.to_string(), false).await {
+    /* if let Err(e) = ipfs.pin_rm(&cid.to_string(), false).await {
         eprintln!("IPFS: {}", e);
         return;
-    }
+    } */
 
     update_video_list(&ipfs, &key, &video_list).await;
 }
@@ -246,7 +248,7 @@ async fn get_video_list(ipfs: &IpfsClient, key: &str) -> Option<VideoList> {
         }
     };
 
-    if let Err(e) = ipfs.pin_rm(&cid.to_string(), false).await {
+    if let Err(e) = ipfs.pin_rm(&cid.to_string(), true).await {
         eprintln!("IPFS: {}", e);
         return None;
     }
@@ -270,7 +272,7 @@ pub async fn update_video_list(ipfs: &IpfsClient, key: &str, video_list: &VideoL
         }
     };
 
-    if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
+    if let Err(e) = ipfs.pin_add(&cid.to_string(), true).await {
         eprintln!("IPFS: {}", e);
         return;
     }

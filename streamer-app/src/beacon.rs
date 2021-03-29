@@ -107,7 +107,7 @@ pub async fn beacon_cli(args: Beacon) {
         }
     };
 
-    if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
+    if let Err(e) = ipfs.pin_add(&cid.to_string(), true).await {
         eprintln!("IPFS: {}", e);
         return;
     }

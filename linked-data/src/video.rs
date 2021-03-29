@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-
 use crate::{FakeCid, IPLDLink, DAG_CBOR, RAW};
+
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -8,13 +8,13 @@ use cid::Cid;
 use multihash::Multihash;
 
 /// Metadata for video thumbnails and playback.
-/// Should not be pinned recursively.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
     pub title: String,
-    pub duration: f64, // Must be less than actual video duratio, 0.1s less does it
-    pub image: IPLDLink,
+    pub duration: f64, // Must be less than actual video duration, 0.1s less does it
+    pub image: IPLDLink, // Raw node of image
     pub video: IPLDLink, // TimecodeNode
+                       //creator identity whatever that may be
 }
 
 /// Root CID.
@@ -61,7 +61,7 @@ pub struct SecondNode {
     pub links_to_chat: Vec<IPLDLink>,
 }
 
-/// Links all variants, allowing selection of video quality. Also link to the previous video node.
+/// Links all stream variants, allowing selection of video quality. Also link to the previous video node.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct VideoNode {
     /// ../time/hour/0/minute/36/second/12/video/track/1080p60/..
@@ -77,31 +77,98 @@ pub struct VideoNode {
     pub previous: Option<IPLDLink>,
 }
 
-/// Codecs, qualities & initialization segments from lowest to highest quality.
+/// Contains initialization data for video stream.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SetupNode {
-    /// ../time/hour/0/minute/36/second/12/video/setup/length
-    #[serde(rename = "length")]
-    pub segment_length: usize,
-
-    /// ../time/hour/0/minute/36/second/12/video/setup/track/0/..
+    /// Tracks sorted from lowest to highest bitrate.
     #[serde(rename = "track")]
-    pub tracks: Vec<Track>,
+    pub tracks: Vec<Track>, // ../time/hour/0/minute/36/second/12/video/setup/track/0/..
 }
 
-/// Codecs, qualities & initialization segments from lowest to highest quality.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Track {
-    /// ../time/hour/0/minute/36/second/12/video/setup/track/2/quality
-    pub quality: String,
+    pub name: String,  // ../time/hour/0/minute/36/second/12/video/setup/track/2/name
+    pub codec: String, // ../time/hour/0/minute/36/second/12/video/setup/track/3/codec
 
-    /// ../time/hour/0/minute/36/second/12/video/setup/track/3/codec
+    #[serde(rename = "initseg")]
+    pub initialization_segment: IPLDLink, // ../time/hour/0/minute/36/second/12/video/setup/track/1/initseg
+
+    pub bandwidth: usize, // ../time/hour/0/minute/36/second/12/video/setup/track/4/bandwidth
+}
+
+//Hack is needed to get from JsValue to Rust type via js http api
+
+//TODO fix this hack
+//Maybe work only with cbor as binary might be easier for Js <-> WASM interop
+
+impl From<TempSetupNode> for SetupNode {
+    fn from(temp: TempSetupNode) -> Self {
+        let mut tracks = Vec::with_capacity(temp.tracks.len());
+
+        for track in temp.tracks.into_iter() {
+            let multihash = Multihash::from_bytes(&track.initialization_segment.hash.data)
+                .expect("Can't get multihash");
+
+            let link = IPLDLink {
+                link: Cid::new_v1(RAW, multihash),
+            };
+
+            tracks.push(Track {
+                name: track.name,
+                codec: track.codec,
+                initialization_segment: link,
+                bandwidth: track.bandwidth,
+            });
+        }
+
+        Self { tracks }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct TempSetupNode {
+    #[serde(rename = "track")]
+    pub tracks: Vec<TempTrack>,
+}
+
+#[derive(Deserialize)]
+pub struct TempTrack {
+    pub name: String,
     pub codec: String,
 
-    /// ../time/hour/0/minute/36/second/12/video/setup/track/2/initseg
     #[serde(rename = "initseg")]
-    pub initialization_segment: IPLDLink,
+    pub initialization_segment: FakeCid,
 
-    /// ../time/hour/0/minute/36/second/12/video/setup/track/3/bandwidth
     pub bandwidth: usize,
+}
+
+impl From<TempVideoMetadata> for VideoMetadata {
+    fn from(temp: TempVideoMetadata) -> Self {
+        let multihash = Multihash::from_bytes(&temp.image.hash.data).expect("Can't get multihash");
+
+        let cid = Cid::new_v1(RAW, multihash);
+
+        let image = IPLDLink { link: cid };
+
+        let multihash = Multihash::from_bytes(&temp.video.hash.data).expect("Can't get multihash");
+
+        let cid = Cid::new_v1(DAG_CBOR, multihash);
+
+        let video = IPLDLink { link: cid };
+
+        Self {
+            title: temp.title,
+            duration: temp.duration,
+            image,
+            video,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct TempVideoMetadata {
+    pub title: String,
+    pub duration: f64,
+    pub image: FakeCid,
+    pub video: FakeCid,
 }

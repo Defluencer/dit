@@ -5,7 +5,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use linked_data::video::VideoMetadata;
+use linked_data::video::{TempVideoMetadata, VideoMetadata};
 
 use cid::Cid;
 
@@ -14,7 +14,7 @@ pub struct Video {
 }
 
 pub enum Msg {
-    Metadata((Cid, VideoMetadata)),
+    Metadata((Cid, TempVideoMetadata)),
 }
 
 #[derive(Clone, Properties)]
@@ -64,8 +64,8 @@ impl Component for Video {
 }
 
 impl Video {
-    fn update_metadata(&mut self, metadata: VideoMetadata) -> bool {
-        self.metadata = Some(metadata);
+    fn update_metadata(&mut self, metadata: TempVideoMetadata) -> bool {
+        self.metadata = Some(metadata.into());
 
         true
     }

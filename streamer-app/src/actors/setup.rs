@@ -33,8 +33,7 @@ pub struct SetupAggregator {
     track_len: usize,
 
     map: HashMap<String, TrackData>,
-
-    segment_length: usize,
+    //segment_length: usize,
 }
 
 impl SetupAggregator {
@@ -42,7 +41,7 @@ impl SetupAggregator {
         ipfs: IpfsClient,
         service_rx: UnboundedReceiver<SetupData>,
         video_tx: UnboundedSender<VideoData>,
-        segment_length: usize,
+        //segment_length: usize,
     ) -> Self {
         Self {
             ipfs,
@@ -53,8 +52,7 @@ impl SetupAggregator {
             track_len: 0,
 
             map: HashMap::with_capacity(4),
-
-            segment_length,
+            //segment_length,
         }
     }
 
@@ -73,7 +71,7 @@ impl SetupAggregator {
 
     /// Update track with initialization segments then try to mint node.
     async fn init_seg(&mut self, path: PathBuf, cid: Cid) {
-        let quality = path
+        let name = path
             .parent()
             .expect("Orphan path!")
             .file_name()
@@ -83,10 +81,10 @@ impl SetupAggregator {
 
         let link = Some(IPLDLink { link: cid });
 
-        if let Some((_, _, init_seg)) = self.map.get_mut(quality) {
+        if let Some((_, _, init_seg)) = self.map.get_mut(name) {
             *init_seg = link;
         } else {
-            self.map.insert(quality.to_owned(), (None, None, link));
+            self.map.insert(name.to_owned(), (None, None, link));
         }
 
         self.try_mint_setup_node().await;
@@ -102,7 +100,7 @@ impl SetupAggregator {
         for variant in pl.variants.into_iter().rev() {
             let path = Path::new(&variant.uri);
 
-            let v_quality = path
+            let v_name = path
                 .parent()
                 .expect("Orphan path!")
                 .file_name()
@@ -112,7 +110,7 @@ impl SetupAggregator {
 
             let v_codec = match variant.codecs {
                 Some(codec) => {
-                    if v_quality == "audio" {
+                    if v_name == "audio" {
                         Some(format!(r#"audio/mp4; codecs="{}"#, codec))
                     } else {
                         Some(format!(r#"video/mp4; codecs="{}"#, codec))
@@ -123,12 +121,12 @@ impl SetupAggregator {
 
             let v_bandwidth = variant.bandwidth.parse::<usize>().ok();
 
-            if let Some((codec, bandwidth, _)) = self.map.get_mut(v_quality) {
+            if let Some((codec, bandwidth, _)) = self.map.get_mut(v_name) {
                 *codec = v_codec;
                 *bandwidth = v_bandwidth;
             } else {
                 self.map
-                    .insert(v_quality.to_owned(), (v_codec, v_bandwidth, None));
+                    .insert(v_name.to_owned(), (v_codec, v_bandwidth, None));
             }
         }
 
@@ -153,13 +151,13 @@ impl SetupAggregator {
 
         let mut tracks = Vec::with_capacity(self.track_len);
 
-        for (quality, (codec, bandwidth, init_seg)) in self.map.drain() {
+        for (name, (codec, bandwidth, init_seg)) in self.map.drain() {
             let codec = codec.unwrap();
             let bandwidth = bandwidth.unwrap();
             let initialization_segment = init_seg.unwrap();
 
             let track = Track {
-                quality,
+                name,
                 codec,
                 initialization_segment,
                 bandwidth,
@@ -171,7 +169,7 @@ impl SetupAggregator {
         tracks.sort_unstable_by_key(|track| track.bandwidth);
 
         let setup_node = SetupNode {
-            segment_length: self.segment_length,
+            //segment_length: self.segment_length,
             tracks,
         };
 

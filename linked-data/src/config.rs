@@ -18,7 +18,6 @@ impl Default for Configuration {
 
             archive: ArchiveConfig {
                 archive_live_chat: true,
-                segment_duration: 4,
             },
 
             video: VideoConfig {
@@ -38,7 +37,7 @@ pub struct ArchiveConfig {
     #[serde(skip)]
     pub archive_live_chat: bool, // get from argument not file
 
-    pub segment_duration: usize,
+                                 //pub segment_duration: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
