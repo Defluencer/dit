@@ -36,8 +36,6 @@ impl Default for Configuration {
 pub struct ArchiveConfig {
     #[serde(skip)]
     pub archive_live_chat: bool, // get from argument not file
-
-                                 //pub segment_duration: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

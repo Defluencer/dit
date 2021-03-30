@@ -60,9 +60,10 @@ pub async fn audio_video_cat(
     cb.emit((Some(audio_seg), video_seg));
 }
 
-pub async fn ipfs_resolve_and_get_callback<T>(ipns: String, cb: Callback<(Cid, T)>)
+pub async fn ipfs_resolve_and_get_callback<T, K>(ipns: String, cb: Callback<(Cid, K)>)
 where
-    T: for<'a> serde::Deserialize<'a>,
+    T: for<'a> serde::Deserialize<'a> + Into<K>,
+    K: for<'a> serde::Deserialize<'a>,
 {
     let js_value = match ipfs_name_resolve(&ipns).await {
         Ok(result) => result,
@@ -95,7 +96,7 @@ where
         }
     };
 
-    cb.emit((cid, node));
+    cb.emit((cid, node.into()));
 }
 
 /* pub async fn ipfs_dag_get_path_async<T>(cid: Cid, path: &str) -> Result<T, ()>
@@ -121,9 +122,10 @@ where
     Ok(node)
 } */
 
-pub async fn ipfs_dag_get_callback<T>(cid: Cid, cb: Callback<(Cid, T)>)
+pub async fn ipfs_dag_get_callback<T, K>(cid: Cid, cb: Callback<(Cid, K)>)
 where
-    T: for<'a> serde::Deserialize<'a>,
+    T: for<'a> serde::Deserialize<'a> + Into<K>,
+    K: for<'a> serde::Deserialize<'a>,
 {
     let node = match ipfs_dag_get(&cid.to_string()).await {
         Ok(result) => result,
@@ -141,7 +143,7 @@ where
         }
     };
 
-    cb.emit((cid, node));
+    cb.emit((cid, node.into()));
 }
 
 pub async fn ipfs_dag_get_path_callback<U, T, K>(cid: Cid, path: U, cb: Callback<K>)

@@ -14,7 +14,7 @@ pub struct Video {
 }
 
 pub enum Msg {
-    Metadata((Cid, TempVideoMetadata)),
+    Metadata((Cid, VideoMetadata)),
 }
 
 #[derive(Clone, Properties)]
@@ -27,7 +27,7 @@ impl Component for Video {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        spawn_local(ipfs_dag_get_callback(
+        spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, VideoMetadata>(
             props.metadata_cid,
             link.callback(Msg::Metadata),
         ));
@@ -50,8 +50,8 @@ impl Component for Video {
             <div class="video_page">
                 <Navbar />
                 {
-                    if let Some(md) = &self.metadata {
-                        html! { <VideoPlayer  metadata=md /> }
+                    if let Some(md) = self.metadata.as_ref() {
+                        html! { <VideoPlayer metadata=Some(md.clone()) topic=Option::<String>::None streamer_peer_id=Option::<String>::None /> }
                     } else {
                         html! { <div class="center_text"> {"Loading..."} </div> }
                     }
@@ -64,8 +64,8 @@ impl Component for Video {
 }
 
 impl Video {
-    fn update_metadata(&mut self, metadata: TempVideoMetadata) -> bool {
-        self.metadata = Some(metadata.into());
+    fn update_metadata(&mut self, metadata: VideoMetadata) -> bool {
+        self.metadata = Some(metadata);
 
         true
     }

@@ -37,7 +37,6 @@ pub async fn file_cli(_file: File) {
     let (archive_tx, archive_rx) = unbounded_channel();
 
     archive.archive_live_chat = false;
-    //let segment_length = archive.segment_duration;
 
     let mut archivist = Archivist::new(ipfs.clone(), archive_rx, archive);
 
@@ -61,11 +60,7 @@ pub async fn file_cli(_file: File) {
 
     let (setup_tx, setup_rx) = unbounded_channel();
 
-    let mut setup = SetupAggregator::new(
-        ipfs.clone(),
-        setup_rx,
-        video_tx.clone(), /* , segment_length */
-    );
+    let mut setup = SetupAggregator::new(ipfs.clone(), setup_rx, video_tx.clone());
 
     let setup_handle = tokio::spawn(async move {
         setup.start().await;

@@ -34,13 +34,6 @@ nav {
     align-items: center;
 }
 
-.live_stream_page {
-    width: 100%;
-    height: 95vh;
-    float: left;
-    display: block;
-}
-
 .video_player {
     width: 80%;
     height: auto;

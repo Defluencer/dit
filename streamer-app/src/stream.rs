@@ -49,8 +49,6 @@ pub async fn stream_cli(stream: Stream) {
 
     let topic = chat.pubsub_topic.clone();
 
-    //let segment_length = archive.segment_duration;
-
     let archive_tx = {
         if !no_archive {
             let (archive_tx, archive_rx) = unbounded_channel();
@@ -95,11 +93,7 @@ pub async fn stream_cli(stream: Stream) {
 
     let (setup_tx, setup_rx) = unbounded_channel();
 
-    let mut setup = SetupAggregator::new(
-        ipfs.clone(),
-        setup_rx,
-        video_tx.clone(), /* , segment_length */
-    );
+    let mut setup = SetupAggregator::new(ipfs.clone(), setup_rx, video_tx.clone());
 
     let setup_handle = tokio::spawn(async move {
         setup.start().await;

@@ -40,7 +40,7 @@ impl ExponentialMovingAverage {
         self.download_time = 0.0;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Last Download {}ms", time));
+        ConsoleService::info(&format!("Last Download {:.0}ms", time));
 
         let new_bitrate = bandwidth / time * 1000.0;
 
@@ -52,7 +52,7 @@ impl ExponentialMovingAverage {
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
-            "Average Download Speed {} kbps",
+            "Average Download Speed {:.0} kbps",
             self.moving_average / 1000.0
         ));
 

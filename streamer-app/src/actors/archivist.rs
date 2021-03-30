@@ -39,7 +39,7 @@ impl Archivist {
         archive_rx: UnboundedReceiver<Archive>,
         config: ArchiveConfig,
     ) -> Self {
-        let buffer_cap = 60 /* / config.segment_duration */; // 1 minutes
+        let buffer_cap = 60; // 1 minutes
 
         Self {
             ipfs,
@@ -146,11 +146,6 @@ impl Archivist {
         let link = IPLDLink { link: cid };
 
         self.minute_node.links_to_seconds.push(link);
-
-        /* //since duration > 1 sec
-        for _ in 0..self.config.segment_duration {
-            self.minute_node.links_to_seconds.push(link);
-        } */
     }
 
     /// Create DAG node containing 60 SecondNode links. HourNode is then appended with the CID.

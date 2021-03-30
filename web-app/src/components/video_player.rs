@@ -1,11 +1,10 @@
-use std::collections::{HashMap, VecDeque};
-use std::convert::TryFrom;
+use std::collections::VecDeque;
+use std::str;
+use std::str::FromStr;
 
 use crate::utils::bindings::{ipfs_subscribe, ipfs_unsubscribe};
 use crate::utils::ema::ExponentialMovingAverage;
-use crate::utils::ipfs::{
-    audio_video_cat, init_cat, ipfs_dag_get_callback, ipfs_dag_get_path_callback,
-};
+use crate::utils::ipfs::{audio_video_cat, init_cat, ipfs_dag_get_path_callback};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -18,14 +17,14 @@ use js_sys::Uint8Array;
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use linked_data::video::{SetupNode, TempSetupNode, Track, VideoMetadata, VideoNode};
+use linked_data::video::{SetupNode, TempSetupNode, Track, VideoMetadata};
 
 use cid::Cid;
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
 
-const SETUP_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup/";
+const SETUP_PATH: &str = "/time/hour/0/minute/0/second/0/video/setup";
 
 enum MachineState {
     Load,
@@ -47,11 +46,9 @@ struct LiveStream {
     topic: String,
     streamer_peer_id: String,
 
-    previous: Option<Cid>,
-    buffer: VecDeque<(Cid, VideoNode)>,
-    unordered_buffer: HashMap<Cid, VideoNode>,
+    buffer: VecDeque<Cid>,
 
-    pubsub_closure: Closure<dyn Fn(String, Vec<u8>)>,
+    _pubsub_closure: Closure<dyn Fn(String, Vec<u8>)>,
 }
 
 pub struct VideoPlayer {
@@ -79,6 +76,7 @@ pub struct VideoPlayer {
     handle: i32,
 }
 
+#[allow(clippy::large_enum_variant)] //TODO check if worth fixing
 pub enum Msg {
     SourceOpen,
     Seeking,
@@ -87,7 +85,6 @@ pub enum Msg {
     SetupNode(SetupNode),
     Append((Option<Uint8Array>, Uint8Array)),
     PubSub((String, Vec<u8>)),
-    VideoNode((Cid, VideoNode)),
 }
 
 #[derive(Clone, Properties)]
@@ -118,8 +115,13 @@ impl Component for VideoPlayer {
             .expect("Can't create url from source");
 
         let mut poster_link = String::from("ipfs://");
-        //TODO
-        //poster_link.push_str(&metadata.image.link.to_string());
+
+        if let Some(md) = metadata.as_ref() {
+            poster_link.push_str(&md.image.link.to_string());
+        } else {
+            //TODO default thumbnail image
+            poster_link.push_str("bafkreicovb5qdvrine4vidt77xahhvovahmekvsojbiqewp7ih7pzvnn7i");
+        }
 
         let cb = link.callback_once(|_| Msg::SourceOpen);
         let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
@@ -129,20 +131,18 @@ impl Component for VideoPlayer {
         let live_stream = match topic {
             Some(topic) => {
                 let cb = link.callback(Msg::PubSub);
-                let pubsub_closure =
+                let _pubsub_closure =
                     Closure::wrap(
                         Box::new(move |from: String, data: Vec<u8>| cb.emit((from, data)))
                             as Box<dyn Fn(String, Vec<u8>)>,
                     );
-                ipfs_subscribe(&topic, closure.as_ref().unchecked_ref());
+                ipfs_subscribe(&topic, _pubsub_closure.as_ref().unchecked_ref());
 
                 Some(LiveStream {
                     topic,
                     streamer_peer_id: streamer_peer_id.unwrap(),
-                    previous: None,
                     buffer: VecDeque::with_capacity(5),
-                    unordered_buffer: HashMap::with_capacity(5),
-                    pubsub_closure,
+                    _pubsub_closure,
                 })
             }
             None => None,
@@ -182,7 +182,6 @@ impl Component for VideoPlayer {
             Msg::SetupNode(node) => self.add_source_buffer(node),
             Msg::Append((aud_res, vid_res)) => self.append_buffers(aud_res, vid_res),
             Msg::PubSub((from, data)) => self.on_pubsub_update(from, data),
-            Msg::VideoNode((cid, node)) => self.buffer_video_node(cid, node),
         }
 
         false
@@ -209,10 +208,9 @@ impl Component for VideoPlayer {
                 .expect("Not Media Element");
 
             media_element.set_src(&self.object_url);
-            self.media_element = Some(media_element);
 
-            self.seeking_closure = match self.metadata {
-                Some(metadata) => {
+            self.seeking_closure = match self.metadata.as_ref() {
+                Some(_) => {
                     let cb = self.link.callback(|_| Msg::Seeking);
                     let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
                     media_element.set_onseeking(Some(closure.as_ref().unchecked_ref()));
@@ -221,12 +219,14 @@ impl Component for VideoPlayer {
                 }
                 None => None,
             };
+
+            self.media_element = Some(media_element);
         }
     }
 
     fn destroy(&mut self) {
         #[cfg(debug_assertions)]
-        ConsoleService::info("Dropping VideoPlayer");
+        ConsoleService::info("Dropping Video Player");
 
         if let Some(live) = self.live_stream.as_ref() {
             ipfs_unsubscribe(&live.topic);
@@ -247,7 +247,7 @@ impl VideoPlayer {
         self.media_source.set_onsourceopen(None);
         self.source_open_closure = None;
 
-        if let Some(metadata) = self.metadata {
+        if let Some(metadata) = self.metadata.as_ref() {
             self.media_source.set_duration(metadata.duration);
 
             let cid = metadata.video.link;
@@ -262,7 +262,7 @@ impl VideoPlayer {
 
     /// Callback when GossipSub receive an update.
     fn on_pubsub_update(&mut self, from: String, data: Vec<u8>) {
-        let live = self.live_stream.expect("Not Live Stream");
+        let live = self.live_stream.as_mut().unwrap();
 
         #[cfg(debug_assertions)]
         ConsoleService::info("PubSub Message");
@@ -276,8 +276,8 @@ impl VideoPlayer {
             return;
         }
 
-        let cid = match Cid::try_from(data) {
-            Ok(cid) => cid,
+        let data = match str::from_utf8(&data) {
+            Ok(data) => data,
             Err(e) => {
                 #[cfg(debug_assertions)]
                 ConsoleService::error(&format!("{:?}", e));
@@ -286,10 +286,18 @@ impl VideoPlayer {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Message => {}", cid));
+        ConsoleService::info(&format!("Message => {}", data));
 
-        let cb = self.link.callback(Msg::VideoNode);
-        spawn_local(ipfs_dag_get_callback(cid, cb));
+        let cid = match Cid::from_str(data) {
+            Ok(cid) => cid,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
+
+        live.buffer.push_back(cid);
 
         if self.media_buffers.is_none() {
             let cb = self.link.callback_once(Msg::SetupNode);
@@ -297,8 +305,6 @@ impl VideoPlayer {
             spawn_local(ipfs_dag_get_path_callback::<_, TempSetupNode, SetupNode>(
                 cid, "/setup/", cb,
             ));
-
-            return;
         }
     }
 
@@ -318,7 +324,7 @@ impl VideoPlayer {
         self.state = MachineState::Flush;
     }
 
-    /// Has waited 1 second, update state machine now.
+    /// Callback when 1 second has passed.
     fn on_timeout(&mut self) {
         #[cfg(debug_assertions)]
         ConsoleService::info("On Timeout");
@@ -362,47 +368,6 @@ impl VideoPlayer {
         }
 
         self.timeout_closure = Some(closure);
-    }
-
-    fn buffer_video_node(&mut self, cid: Cid, node: VideoNode) {
-        let live = self.live_stream.unwrap();
-
-        if live.buffer.is_empty() && node.previous.map(|l| l.link) == live.previous {
-            live.buffer.push_back((cid, node));
-            return self.check_order();
-        } else if node.previous.map(|l| l.link) == live.buffer.back().map(|(cid, _)| *cid) {
-            live.buffer.push_back((cid, node));
-            return self.check_order();
-        }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Out of Order Node");
-
-        live.unordered_buffer.insert(cid, node);
-
-        let cid = node.previous.map(|l| l.link).unwrap();
-        let cb = self.link.callback(Msg::VideoNode);
-
-        spawn_local(ipfs_dag_get_callback(cid, cb));
-    }
-
-    /// Check recursively if unordered nodes match buffer order.
-    fn check_order(&mut self) {
-        let live = self.live_stream.unwrap();
-
-        let cid = match live.buffer.back().map(|(cid, _)| cid) {
-            Some(cid) => cid,
-            None => return,
-        };
-
-        if let Some(node) = live.unordered_buffer.remove(cid) {
-            #[cfg(debug_assertions)]
-            ConsoleService::info("Node Reordered");
-
-            live.buffer.push_back((*cid, node));
-
-            return self.check_order();
-        }
     }
 
     /// Create source buffer then load initialization segment.
@@ -495,19 +460,19 @@ impl VideoPlayer {
     }
 
     /// Load either live or VOD segment.
-    fn load_segment(&self) {
+    fn load_segment(&mut self) {
         if self.metadata.is_some() {
-            return self.load_media_segment();
+            return self.load_vod_segment();
         }
 
-        self.load_live_segment();
+        self.load_live_segment()
     }
 
     /// Try get cid from live buffer then fetch video data from ipfs.
     fn load_live_segment(&mut self) {
-        let live = self.live_stream.unwrap();
+        let live = self.live_stream.as_mut().unwrap();
 
-        let (cid, node) = match live.buffer.pop_front() {
+        let cid = match live.buffer.pop_front() {
             Some(cid) => cid,
             None => return self.set_timeout(),
         };
@@ -515,12 +480,10 @@ impl VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info("Loading Live Media Segments");
 
-        live.previous = Some(cid);
+        let track_name = &self.media_buffers.as_ref().unwrap().tracks[self.level].name;
 
-        let track_name = self.media_buffers.unwrap().tracks[self.level].name;
-
-        let audio_path = node.tracks["audio"].link.to_string();
-        let video_path = node.tracks[&track_name].link.to_string();
+        let audio_path = format!("{}/track/audio", cid.to_string());
+        let video_path = format!("{}/track/{}", cid.to_string(), track_name);
 
         let cb = self.link.callback(Msg::Append);
 
@@ -531,9 +494,9 @@ impl VideoPlayer {
     }
 
     /// Get CID from timecode then fetch video data from ipfs.
-    fn load_media_segment(&self) {
-        let metadata = self.metadata.unwrap();
-        let buffers = self.media_buffers.unwrap();
+    fn load_vod_segment(&mut self) {
+        let metadata = self.metadata.as_ref().unwrap();
+        let buffers = self.media_buffers.as_ref().unwrap();
 
         let track_name = &buffers.tracks[self.level].name;
 
@@ -607,7 +570,7 @@ impl VideoPlayer {
 
     /// Recalculate download speed then set quality level.
     fn check_abr(&mut self) {
-        let buffers = self.media_buffers.unwrap();
+        let buffers = self.media_buffers.as_ref().unwrap();
 
         let bandwidth = buffers.tracks[self.level].bandwidth as f64;
 
@@ -640,7 +603,7 @@ impl VideoPlayer {
 
     /// Check buffers and current time then trigger new action.
     fn check_status(&mut self) {
-        let buffers = self.media_buffers.unwrap();
+        let buffers = self.media_buffers.as_ref().unwrap();
 
         let time_ranges = match buffers.video.buffered() {
             Ok(tm) => tm,
@@ -681,13 +644,25 @@ impl VideoPlayer {
             }
         };
 
+        if current_time < buff_start {
+            let new_time = buff_start + ((buff_end - buff_start) / 2.0);
+
+            #[cfg(debug_assertions)]
+            ConsoleService::info(&format!("Forward To {}s", new_time));
+
+            self.media_element
+                .as_ref()
+                .unwrap()
+                .set_current_time(new_time);
+        }
+
         if current_time > buff_start + BACK_BUFFER_LENGTH {
             #[cfg(debug_assertions)]
             ConsoleService::info("Back Buffer Full");
             return self.flush_buffer();
         }
 
-        if self.metadata.is_some() && buff_end >= self.metadata.unwrap().duration {
+        if self.metadata.is_some() && buff_end >= self.metadata.as_ref().unwrap().duration {
             #[cfg(debug_assertions)]
             ConsoleService::info("End Of Video");
             return;
@@ -707,7 +682,7 @@ impl VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info("Flushing Buffer");
 
-        let buffers = self.media_buffers.unwrap();
+        let buffers = self.media_buffers.as_ref().unwrap();
 
         let time_ranges = match buffers.video.buffered() {
             Ok(tm) => tm,
@@ -723,14 +698,12 @@ impl VideoPlayer {
         let mut buff_start = 0.0;
         let mut buff_end = 0.0;
 
-        for i in 0..count {
-            if let Ok(start) = time_ranges.start(i) {
-                buff_start = start;
-            }
+        if let Ok(start) = time_ranges.start(0) {
+            buff_start = start;
+        }
 
-            if let Ok(end) = time_ranges.end(i) {
-                buff_end = end;
-            }
+        if let Ok(end) = time_ranges.end(count - 1) {
+            buff_end = end;
         }
 
         let current_time = match self.media_element.as_ref() {
@@ -767,7 +740,7 @@ impl VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info("Switching Quality");
 
-        let buffers = self.media_buffers.unwrap();
+        let buffers = self.media_buffers.as_ref().unwrap();
 
         let track = match buffers.tracks.get(self.level) {
             Some(track) => track,

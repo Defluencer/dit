@@ -33,7 +33,6 @@ pub struct SetupAggregator {
     track_len: usize,
 
     map: HashMap<String, TrackData>,
-    //segment_length: usize,
 }
 
 impl SetupAggregator {
@@ -41,7 +40,6 @@ impl SetupAggregator {
         ipfs: IpfsClient,
         service_rx: UnboundedReceiver<SetupData>,
         video_tx: UnboundedSender<VideoData>,
-        //segment_length: usize,
     ) -> Self {
         Self {
             ipfs,
@@ -52,7 +50,6 @@ impl SetupAggregator {
             track_len: 0,
 
             map: HashMap::with_capacity(4),
-            //segment_length,
         }
     }
 
@@ -168,10 +165,7 @@ impl SetupAggregator {
 
         tracks.sort_unstable_by_key(|track| track.bandwidth);
 
-        let setup_node = SetupNode {
-            //segment_length: self.segment_length,
-            tracks,
-        };
+        let setup_node = SetupNode { tracks };
 
         let cid = ipfs_dag_put_node_async(&self.ipfs, &setup_node)
             .await

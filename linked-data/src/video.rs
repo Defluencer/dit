@@ -101,6 +101,23 @@ pub struct Track {
 //TODO fix this hack
 //Maybe work only with cbor as binary might be easier for Js <-> WASM interop
 
+#[derive(Deserialize)]
+pub struct TempTrack {
+    pub name: String,
+    pub codec: String,
+
+    #[serde(rename = "initseg")]
+    pub initialization_segment: FakeCid,
+
+    pub bandwidth: usize,
+}
+
+#[derive(Deserialize)]
+pub struct TempSetupNode {
+    #[serde(rename = "track")]
+    pub tracks: Vec<TempTrack>,
+}
+
 impl From<TempSetupNode> for SetupNode {
     fn from(temp: TempSetupNode) -> Self {
         let mut tracks = Vec::with_capacity(temp.tracks.len());
@@ -126,20 +143,11 @@ impl From<TempSetupNode> for SetupNode {
 }
 
 #[derive(Deserialize)]
-pub struct TempSetupNode {
-    #[serde(rename = "track")]
-    pub tracks: Vec<TempTrack>,
-}
-
-#[derive(Deserialize)]
-pub struct TempTrack {
-    pub name: String,
-    pub codec: String,
-
-    #[serde(rename = "initseg")]
-    pub initialization_segment: FakeCid,
-
-    pub bandwidth: usize,
+pub struct TempVideoMetadata {
+    pub title: String,
+    pub duration: f64,
+    pub image: FakeCid,
+    pub video: FakeCid,
 }
 
 impl From<TempVideoMetadata> for VideoMetadata {
@@ -166,9 +174,57 @@ impl From<TempVideoMetadata> for VideoMetadata {
 }
 
 #[derive(Deserialize)]
-pub struct TempVideoMetadata {
-    pub title: String,
-    pub duration: f64,
-    pub image: FakeCid,
-    pub video: FakeCid,
+pub struct TempVideoNode {
+    #[serde(rename = "track")]
+    pub tracks: HashMap<String, FakeCid>,
+
+    #[serde(rename = "setup")]
+    pub setup: Option<FakeCid>,
+
+    #[serde(rename = "previous")]
+    pub previous: Option<FakeCid>,
+}
+
+impl From<TempVideoNode> for VideoNode {
+    fn from(temp: TempVideoNode) -> Self {
+        let mut tracks = HashMap::with_capacity(temp.tracks.len());
+
+        for (name, fcid) in temp.tracks.into_iter() {
+            let multihash = Multihash::from_bytes(&fcid.hash.data).expect("Can't get multihash");
+
+            let cid = Cid::new_v1(DAG_CBOR, multihash);
+
+            tracks.insert(name, IPLDLink { link: cid });
+        }
+
+        let setup = match temp.setup.as_ref() {
+            Some(data) => {
+                let multihash =
+                    Multihash::from_bytes(&data.hash.data).expect("Can't get multihash");
+
+                let cid = Cid::new_v1(DAG_CBOR, multihash);
+
+                Some(IPLDLink { link: cid })
+            }
+            None => None,
+        };
+
+        let previous = match temp.previous.as_ref() {
+            Some(data) => {
+                let multihash =
+                    Multihash::from_bytes(&data.hash.data).expect("Can't get multihash");
+
+                let cid = Cid::new_v1(DAG_CBOR, multihash);
+
+                Some(IPLDLink { link: cid })
+            }
+            None => None,
+        };
+
+        Self {
+            tracks,
+            setup,
+            previous,
+        }
+    }
 }

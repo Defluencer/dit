@@ -1,8 +1,9 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
+use std::str;
 
-use crate::agents::LiveChatManager;
 use crate::components::{ChatMessage, ChatMessageData};
+use crate::utils::bindings::{ipfs_publish, ipfs_subscribe, ipfs_unsubscribe};
 
 use web_sys::{HtmlTextAreaElement, KeyboardEvent, Window};
 
@@ -11,28 +12,27 @@ use wasm_bindgen::JsCast;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
-use yew::{Callback, InputData};
+use yew::InputData;
 
 pub struct ChatWindow {
     link: ComponentLink<Self>,
 
-    temp_msg: Option<String>,
-
-    chat_messages: VecDeque<ChatMessageData>,
-
-    next_id: usize,
-
-    manager: LiveChatManager,
-
+    topic: String,
+    _pubsub_closure: Closure<dyn Fn(String, Vec<u8>)>,
     window: Window,
 
+    temp_msg: Option<String>,
+    chat_messages: VecDeque<ChatMessageData>,
+    next_id: usize,
+
     text_area: Option<HtmlTextAreaElement>,
+    text_closure: Option<Closure<dyn Fn(KeyboardEvent)>>,
 }
 
 pub enum Msg {
-    Received((String, String)),
     Sent,
     Input(String),
+    PubSub((String, Vec<u8>)),
 }
 
 #[derive(Properties, Clone)]
@@ -47,24 +47,34 @@ impl Component for ChatWindow {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let window = web_sys::window().expect("Can't get window");
 
-        let cb = link.callback(Msg::Received);
+        let topic = props.topic;
 
-        let manager = LiveChatManager::new(props.topic, cb);
+        let cb = link.callback(Msg::PubSub);
+        let _pubsub_closure =
+            Closure::wrap(
+                Box::new(move |from: String, data: Vec<u8>| cb.emit((from, data)))
+                    as Box<dyn Fn(String, Vec<u8>)>,
+            );
+        ipfs_subscribe(&topic, _pubsub_closure.as_ref().unchecked_ref());
 
         Self {
             link,
+            topic,
+            _pubsub_closure,
+            window,
+
             temp_msg: None,
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
-            manager,
+
             text_area: None,
-            window,
+            text_closure: None,
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Received(message) => self.msg_received(message),
+            Msg::PubSub((from, data)) => self.on_pubsub_update(from, data),
             Msg::Input(msg) => self.input(msg),
             Msg::Sent => self.send_message(),
         }
@@ -106,20 +116,55 @@ impl Component for ChatWindow {
                 .dyn_into()
                 .expect("Not Text Area Element");
 
-            on_enter(&text_area, self.link.callback(|()| Msg::Sent));
+            let cb = self.link.callback(|()| Msg::Sent);
+
+            let closure = Closure::wrap(Box::new(move |event: KeyboardEvent| {
+                if event.key() == "Enter" {
+                    cb.emit(());
+                }
+            }) as Box<dyn Fn(KeyboardEvent)>);
+
+            text_area
+                .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+                .expect("Invalid Listener");
 
             self.text_area = Some(text_area);
+            self.text_closure = Some(closure);
         }
+    }
+
+    fn destroy(&mut self) {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Dropping Live Chat");
+
+        ipfs_unsubscribe(&self.topic);
     }
 }
 
 impl ChatWindow {
-    fn msg_received(&mut self, message: (String, String)) -> bool {
-        let (sender, content) = message;
+    /// Callback when GossipSub receive an update.
+    fn on_pubsub_update(&mut self, from: String, data: Vec<u8>) -> bool {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("PubSub Message");
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Sender => {}", from));
+
+        let content = match str::from_utf8(&data) {
+            Ok(data) => data,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Message => {}", content));
 
         let message_data = ChatMessageData {
             id: self.next_id,
-            sender_name: Rc::from(sender),
+            sender_name: Rc::from(from),
             message: Rc::from(content),
         };
 
@@ -150,7 +195,7 @@ impl ChatWindow {
 
     fn send_message(&mut self) -> bool {
         if let Some(msg) = self.temp_msg.as_ref() {
-            self.manager.send_chat(msg);
+            ipfs_publish(&self.topic, msg);
 
             if let Some(text_area) = self.text_area.as_ref() {
                 text_area.set_value("");
@@ -160,21 +205,5 @@ impl ChatWindow {
         }
 
         false
-    }
-}
-
-fn on_enter(text_area: &HtmlTextAreaElement, cb: Callback<()>) {
-    let closure = move |event: KeyboardEvent| {
-        if event.key() == "Enter" {
-            cb.emit(());
-        }
-    };
-
-    let callback = Closure::wrap(Box::new(closure) as Box<dyn Fn(KeyboardEvent)>);
-
-    if let Err(e) = text_area
-        .add_event_listener_with_callback("keydown", callback.into_js_value().unchecked_ref())
-    {
-        ConsoleService::error(&format!("{:?}", e));
     }
 }
