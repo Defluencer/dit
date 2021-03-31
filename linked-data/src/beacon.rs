@@ -1,33 +1,36 @@
-use crate::config::Topics;
-use crate::{FakeCid, IPLDLink, DAG_CBOR, RAW};
+use crate::{FakeCid, IPLDLink, DAG_CBOR};
 
 use serde::{Deserialize, Serialize};
 
 use cid::Cid;
 use multihash::Multihash;
 
-/// PubSub topics, Peer ID and IPNS link to video list
+/// Mostly static list of links to content.
+/// Should not be pinned recursively.
 #[derive(Deserialize, Serialize)]
 pub struct Beacon {
+    /// GossipSub topics for live streaming & chat.
     pub topics: Topics,
 
-    pub peer_id: String,    // base58btc encoded string
-    pub video_list: String, // ipns hash egg. "/ipns/<hash>"
+    /// Base58btc encoded string.
+    pub peer_id: String,
+
+    /// IPNS path -> "/ipns/<hash>"
+    pub video_list: String, //resolve to VideoList
 }
 
-/// List of all video metadata links
-#[derive(Deserialize, Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Topics {
+    pub live_video: String,
+    pub live_chat: String,
+}
+
+/// List of all video metadata links.
+/// Should not be pinned recursively.
+#[derive(Deserialize, Serialize, Default)]
 pub struct VideoList {
-    pub metadata: Vec<IPLDLink>, // oldest to newest
-}
-
-/// Title, duration, image link, video link
-#[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
-pub struct VideoMetadata {
-    pub title: String,
-    pub duration: f64,
-    pub image: IPLDLink,
-    pub video: IPLDLink,
+    /// Oldest to newest videos metadata.
+    pub metadata: Vec<IPLDLink>,
 }
 
 //Hack is needed to get from JsValue to Rust type via js http api
@@ -52,38 +55,7 @@ impl From<TempVideoList> for VideoList {
     }
 }
 
-impl From<TempVideoMetadata> for VideoMetadata {
-    fn from(temp: TempVideoMetadata) -> Self {
-        let multihash = Multihash::from_bytes(&temp.image.hash.data).expect("Can't get multihash");
-
-        let cid = Cid::new_v1(RAW, multihash);
-
-        let image = IPLDLink { link: cid };
-
-        let multihash = Multihash::from_bytes(&temp.video.hash.data).expect("Can't get multihash");
-
-        let cid = Cid::new_v1(DAG_CBOR, multihash);
-
-        let video = IPLDLink { link: cid };
-
-        Self {
-            title: temp.title,
-            duration: temp.duration,
-            image,
-            video,
-        }
-    }
-}
-
 #[derive(Deserialize)]
 pub struct TempVideoList {
     pub metadata: Vec<FakeCid>,
-}
-
-#[derive(Deserialize)]
-pub struct TempVideoMetadata {
-    pub title: String,
-    pub duration: f64,
-    pub image: FakeCid,
-    pub video: FakeCid,
 }

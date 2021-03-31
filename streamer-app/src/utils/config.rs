@@ -10,18 +10,23 @@ pub async fn get_config() -> Configuration {
         Err(_) => {
             let config = Configuration::default();
 
-            println!("No configuration file detected. Default {:#?}", config);
-
-            match serde_json::to_vec_pretty(&config) {
-                Ok(data) => {
-                    if fs::write("config.json", data).await.is_err() {
-                        eprintln!("Cannot write config to disk");
-                    }
-                }
-                Err(e) => eprintln!("{:#?}", e),
-            }
+            set_config(&config).await;
 
             config
         }
+    }
+}
+
+pub async fn set_config(config: &Configuration) {
+    let data = match serde_json::to_vec_pretty(config) {
+        Ok(data) => data,
+        Err(e) => {
+            eprintln!("{:#?}", e);
+            return;
+        }
+    };
+
+    if let Err(e) = fs::write("config.json", data).await {
+        eprintln!("{:#?}", e);
     }
 }

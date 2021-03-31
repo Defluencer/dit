@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use crate::components::{ChatWindow, LiveStreamPlayer, Navbar, VideoThumbnail};
-use crate::utils::ens::get_beacon_from_name;
+use crate::components::{ChatWindow, Navbar, VideoPlayer, VideoThumbnail};
+use crate::utils::ens::{get_ens_beacon_async, EthereumNameService};
 use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
-use crate::utils::local_storage::{
-    get_local_beacon, get_local_list, get_local_storage, set_local_beacon, set_local_list,
-};
+use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -15,7 +13,8 @@ use web_sys::Storage;
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use linked_data::beacon::{Beacon, VideoList, VideoMetadata};
+use linked_data::beacon::{Beacon, VideoList};
+use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
@@ -78,12 +77,11 @@ impl Component for Defluencer {
                 Some(cid)
             }
             Err(_) => {
-                spawn_local(get_beacon_from_name(
-                    ens_name.clone(),
-                    link.callback(Msg::Name),
-                ));
+                let ens = EthereumNameService::new().expect("Can't get window.ethereum");
 
-                get_local_beacon(&ens_name, storage.as_ref())
+                get_ens_beacon_async(ens, ens_name.clone(), link.callback(Msg::Name));
+
+                get_cid(&ens_name, storage.as_ref())
             }
         };
 
@@ -122,7 +120,7 @@ impl Component for Defluencer {
                     <div class="defluencer_page">
                         <Navbar />
                         <div class="live_stream">
-                            <LiveStreamPlayer topic=beacon.topics.live_video.clone() streamer_peer_id=beacon.peer_id.clone() />
+                            <VideoPlayer metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
                             <ChatWindow topic=beacon.topics.live_chat.clone() />
                         </div>
                         <div class="video_list">
@@ -198,7 +196,7 @@ impl Defluencer {
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
-        if let Some(cid) = get_local_list(&beacon.video_list, self.storage.as_ref()) {
+        if let Some(cid) = get_cid(&beacon.video_list, self.storage.as_ref()) {
             self.list_cid = Some(cid);
 
             spawn_local(ipfs_dag_get_callback(
@@ -238,11 +236,11 @@ impl Defluencer {
         if let Some(old_list_cid) = self.list_cid.as_ref() {
             if *old_list_cid != list_cid {
                 self.list_cid = Some(list_cid);
-                set_local_list(&beacon.video_list, &list_cid, self.storage.as_ref());
+                set_cid(&beacon.video_list, &list_cid, self.storage.as_ref());
             }
         } else {
             self.list_cid = Some(list_cid);
-            set_local_list(&beacon.video_list, &list_cid, self.storage.as_ref());
+            set_cid(&beacon.video_list, &list_cid, self.storage.as_ref());
         }
 
         for metadata in list.metadata.iter().rev() {

@@ -55,8 +55,8 @@ impl Component for Video {
             <div class="video_page">
                 <Navbar />
                 {
-                    if let Some(md) = &self.metadata {
-                        html! { <VideoPlayer  metadata=md /> }
+                    if let Some(md) = self.metadata.as_ref() {
+                        html! { <VideoPlayer metadata=Some(md.clone()) topic=Option::<String>::None streamer_peer_id=Option::<String>::None /> }
                     } else {
                         html! { <div class="center_text"> {"Loading..."} </div> }
                     }

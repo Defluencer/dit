@@ -1,76 +1,43 @@
-#![allow(unused_must_use)]
-
 mod actors;
+mod beacon;
+mod file;
 mod server;
+mod stream;
 mod utils;
+mod video;
 
-use crate::actors::{start_transcoding, Archivist, ChatAggregator, VideoAggregator};
-use crate::server::start_server;
-use crate::utils::get_config;
+use crate::beacon::{beacon_cli, Beacon};
+use crate::file::{file_cli, File};
+use crate::stream::{stream_cli, Stream};
+use crate::video::{video_cli, Video};
 
-use tokio::sync::mpsc::channel;
+use structopt::StructOpt;
 
-use ipfs_api::IpfsClient;
+const DEFAULT_KEY: &str = "videolist";
 
-use tokio::join;
+#[derive(Debug, StructOpt)]
+#[structopt(about)]
+#[structopt(rename_all = "kebab-case")]
+enum CommandLineInterface {
+    /// Start the live streaming daemon.
+    Stream(Stream),
+
+    /// Start the file streaming daemon.
+    File(File),
+
+    /// Create a content beacon.
+    Beacon(Beacon),
+
+    /// Create, update and delete videos.
+    Video(Video),
+}
 
 #[tokio::main]
 async fn main() {
-    println!("Initialization...");
-
-    let ipfs = IpfsClient::default();
-
-    let config = get_config().await;
-
-    let (archive_tx, archive_rx) = channel(50);
-    let mut archivist = Archivist::new(ipfs.clone(), archive_rx, config.segment_duration);
-    let archive_handle = tokio::spawn(async move {
-        archivist.collect().await;
-    });
-
-    let (video_tx, video_rx) = channel(16);
-    let mut video = VideoAggregator::new(
-        ipfs.clone(),
-        video_rx,
-        archive_tx.clone(),
-        config.gossipsub_topics.live_video,
-    );
-    let video_handle = tokio::spawn(async move {
-        video.start_receiving().await;
-    });
-
-    let mut chat = ChatAggregator::new(
-        ipfs.clone(),
-        archive_tx.clone(),
-        config.gossipsub_topics.live_chat,
-    );
-    let chat_handle = tokio::spawn(async move {
-        chat.start_receiving().await;
-    });
-
-    let server_addr = config.addresses.app_addr.clone();
-    let server_addr_clone = config.addresses.app_addr.clone();
-
-    let server_handle = tokio::spawn(async move {
-        start_server(server_addr, video_tx, archive_tx, ipfs).await;
-    });
-
-    match config.addresses.ffmpeg_addr {
-        Some(ffmpeg_addr) => {
-            let ffmpeg_handle = tokio::spawn(async move {
-                start_transcoding(ffmpeg_addr, server_addr_clone).await;
-            });
-
-            join!(
-                archive_handle,
-                chat_handle,
-                video_handle,
-                ffmpeg_handle,
-                server_handle
-            );
-        }
-        None => {
-            join!(archive_handle, chat_handle, video_handle, server_handle);
-        }
+    match CommandLineInterface::from_args() {
+        CommandLineInterface::Stream(stream) => stream_cli(stream).await,
+        CommandLineInterface::File(file) => file_cli(file).await,
+        CommandLineInterface::Beacon(beacon) => beacon_cli(beacon).await,
+        CommandLineInterface::Video(video) => video_cli(video).await,
     }
 }

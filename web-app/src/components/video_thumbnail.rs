@@ -1,12 +1,12 @@
 use crate::app::AppRoute;
-use crate::utils::tracks::seconds_to_timecode;
+use crate::components::seconds_to_timecode;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew_router::components::RouterAnchor;
 
 use yewtil::NeqAssign;
 
-use linked_data::beacon::VideoMetadata;
+use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 

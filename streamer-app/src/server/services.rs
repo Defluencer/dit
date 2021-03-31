@@ -1,4 +1,4 @@
-use crate::actors::VideoData;
+use crate::actors::{SetupData, VideoData};
 
 use std::convert::TryFrom;
 use std::fmt::Debug;
@@ -6,7 +6,7 @@ use std::path::Path;
 
 use futures_util::stream::TryStreamExt;
 
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::io::StreamReader;
 
 use hyper::header::{HeaderValue, LOCATION};
@@ -16,9 +16,11 @@ use ipfs_api::IpfsClient;
 
 use cid::Cid;
 
+use m3u8_rs::playlist::Playlist;
+
 const M3U8: &str = "m3u8";
 pub const MP4: &str = "mp4";
-pub const FMP4: &str = "fmp4";
+pub const M4S: &str = "m4s";
 
 const OPTIONS: ipfs_api::request::Add = ipfs_api::request::Add {
     trickle: None,
@@ -35,7 +37,8 @@ const OPTIONS: ipfs_api::request::Add = ipfs_api::request::Add {
 
 pub async fn put_requests(
     req: Request<Body>,
-    collector: Sender<VideoData>,
+    video_tx: UnboundedSender<VideoData>,
+    setup_tx: UnboundedSender<SetupData>,
     ipfs: IpfsClient,
 ) -> Result<Response<Body>, Error> {
     #[cfg(debug_assertions)]
@@ -50,14 +53,14 @@ pub async fn put_requests(
     if parts.method != Method::PUT
         || path.extension() == None
         || (path.extension().unwrap() != M3U8
-            && path.extension().unwrap() != FMP4
+            && path.extension().unwrap() != M4S
             && path.extension().unwrap() != MP4)
     {
         return not_found_response(res);
     }
 
     if path.extension().unwrap() == M3U8 {
-        return manifest_response(res, body, &path, collector).await;
+        return manifest_response(res, body, &path, setup_tx).await;
     }
 
     //Change error type
@@ -72,10 +75,21 @@ pub async fn put_requests(
         Err(error) => return internal_error_response(res, &error),
     };
 
-    let msg = VideoData::Segment((path.to_path_buf(), cid));
+    #[cfg(debug_assertions)]
+    println!("IPFS: add => {}", &cid.to_string());
 
-    if let Err(error) = collector.send(msg).await {
-        return internal_error_response(res, &error);
+    if path.extension().unwrap() == M4S {
+        let msg = VideoData::Segment((path.to_path_buf(), cid));
+
+        if let Err(error) = video_tx.send(msg) {
+            return internal_error_response(res, &error);
+        }
+    } else if path.extension().unwrap() == MP4 {
+        let msg = SetupData::Segment((path.to_path_buf(), cid));
+
+        if let Err(error) = setup_tx.send(msg) {
+            return internal_error_response(res, &error);
+        }
     }
 
     *res.status_mut() = StatusCode::CREATED;
@@ -103,7 +117,7 @@ async fn manifest_response(
     mut res: Response<Body>,
     body: Body,
     path: &Path,
-    collector: Sender<VideoData>,
+    setup_tx: UnboundedSender<SetupData>,
 ) -> Result<Response<Body>, Error> {
     let bytes = hyper::body::to_bytes(body).await?;
 
@@ -112,10 +126,12 @@ async fn manifest_response(
         Err(e) => return internal_error_response(res, &e),
     };
 
-    let msg = VideoData::Playlist(playlist);
+    if let Playlist::MasterPlaylist(playlist) = playlist {
+        let msg = SetupData::Playlist(playlist);
 
-    if let Err(error) = collector.send(msg).await {
-        return internal_error_response(res, &error);
+        if let Err(error) = setup_tx.send(msg) {
+            return internal_error_response(res, &error);
+        }
     }
 
     *res.status_mut() = StatusCode::NO_CONTENT;
@@ -134,7 +150,7 @@ fn internal_error_response(
     mut res: Response<Body>,
     error: &dyn Debug,
 ) -> Result<Response<Body>, Error> {
-    eprintln!("Service Error: {:#?}", error);
+    eprintln!("Service: {:#?}", error);
 
     *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
 

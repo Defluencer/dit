@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct ChatIdentity {
     #[serde(rename = "key")]
     pub public_key: String,
+    //TODO find new way to identity
 }
 
 /// Chat message optionaly signed with some form of private key
