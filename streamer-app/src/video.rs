@@ -4,10 +4,11 @@ use crate::DEFAULT_KEY;
 
 use std::convert::TryFrom;
 
+use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
 
 use linked_data::beacon::VideoList;
-use linked_data::video::VideoMetadata;
+use linked_data::video::{DayNode, HourNode, MinuteNode, VideoMetadata};
 use linked_data::IPLDLink;
 
 use cid::Cid;
@@ -42,12 +43,6 @@ pub struct Add {
     #[structopt(short, long)]
     title: String,
 
-    /// The new video duration.
-    /// Must be less than actual video duration, -0.1s is fine.
-    /// Should be fixed in future versions.
-    #[structopt(short, long)]
-    duration: f64,
-
     /// The new video thumbnail image CID.
     #[structopt(short, long)]
     image: Cid,
@@ -67,12 +62,6 @@ pub struct Update {
     #[structopt(short, long)]
     title: Option<String>,
 
-    /// The new video duration.
-    /// Must be less than actual video duration, -0.1s is fine.
-    /// Should be fixed in future versions.
-    #[structopt(short, long)]
-    duration: Option<f64>,
-
     /// The new video thumbnail image CID.
     #[structopt(short, long)]
     image: Option<Cid>,
@@ -90,26 +79,27 @@ pub struct Delete {
 }
 
 pub async fn video_cli(cli: Video) {
-    match cli.cmd {
+    let res = match cli.cmd {
         Command::Add(add) => add_video(add, cli.key_name).await,
         Command::Update(update) => update_video(update, cli.key_name).await,
         Command::Delete(delete) => delete_video(delete, cli.key_name).await,
+    };
+
+    if let Err(e) = res {
+        eprintln!("IPFS: {}", e);
     }
 }
 
-async fn add_video(command: Add, key: String) {
+async fn add_video(command: Add, key: String) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let mut video_list = match get_video_list(&ipfs, &key).await {
-        Some(vl) => vl,
-        None => return,
-    };
+    let mut video_list = get_video_list(&ipfs, &key).await?;
 
-    //TODO calculate duration from timecode node
+    let duration = get_video_duration(&ipfs, command.video).await?;
 
     let metadata = VideoMetadata {
         title: command.title,
-        duration: command.duration,
+        duration,
         image: IPLDLink {
             link: command.image,
         },
@@ -118,49 +108,29 @@ async fn add_video(command: Add, key: String) {
         },
     };
 
-    let cid = match ipfs_dag_put_node_async(&ipfs, &metadata).await {
-        Ok(cid) => cid,
-        Err(e) => {
-            eprintln!("IPFS: {}", e);
-            return;
-        }
-    };
+    let cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
 
     video_list.metadata.push(IPLDLink { link: cid });
 
-    update_video_list(&ipfs, &key, &video_list).await;
+    update_video_list(&ipfs, &key, &video_list).await?;
+
+    Ok(())
 }
 
-async fn update_video(command: Update, key: String) {
+async fn update_video(command: Update, key: String) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let mut video_list = match get_video_list(&ipfs, &key).await {
-        Some(vl) => vl,
-        None => return,
-    };
+    let mut video_list = get_video_list(&ipfs, &key).await?;
 
     let cid = match video_list.metadata.get(command.index) {
         Some(mt) => mt.link,
-        None => {
-            eprintln!("Video not found");
-            return;
-        }
+        None => return Err(Error::Uncategorized("Video Index Not Found".into())),
     };
 
-    let mut metadata: VideoMetadata = match ipfs_dag_get_node_async(&ipfs, &cid.to_string()).await {
-        Ok(node) => node,
-        Err(e) => {
-            eprintln!("IPFS: {}", e);
-            return;
-        }
-    };
+    let mut metadata: VideoMetadata = ipfs_dag_get_node_async(&ipfs, &cid.to_string()).await?;
 
     if let Some(titl) = command.title {
         metadata.title = titl;
-    }
-
-    if let Some(dur) = command.duration {
-        metadata.duration = dur;
     }
 
     if let Some(img) = command.image {
@@ -171,48 +141,34 @@ async fn update_video(command: Update, key: String) {
         metadata.video = IPLDLink { link: vid };
     }
 
-    let cid = match ipfs_dag_put_node_async(&ipfs, &metadata).await {
-        Ok(cid) => cid,
-        Err(e) => {
-            eprintln!("IPFS: {}", e);
-            return;
-        }
-    };
+    let cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
 
     video_list.metadata[command.index] = IPLDLink { link: cid };
 
-    update_video_list(&ipfs, &key, &video_list).await;
+    update_video_list(&ipfs, &key, &video_list).await?;
+
+    Ok(())
 }
 
-async fn delete_video(command: Delete, key: String) {
+async fn delete_video(command: Delete, key: String) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let mut video_list = match get_video_list(&ipfs, &key).await {
-        Some(vl) => vl,
-        None => return,
-    };
+    let mut video_list = get_video_list(&ipfs, &key).await?;
 
     let _cid = video_list.metadata.remove(command.index).link;
 
-    update_video_list(&ipfs, &key, &video_list).await;
+    update_video_list(&ipfs, &key, &video_list).await?;
+
+    Ok(())
 }
 
 /// Get video list associated with IPNS key, unpin it then return it.
-async fn get_video_list(ipfs: &IpfsClient, key: &str) -> Option<VideoList> {
-    let res = match ipfs.key_list().await {
-        Ok(res) => res,
-        Err(e) => {
-            eprintln!("IPFS: {}", e);
-            return None;
-        }
-    };
+async fn get_video_list(ipfs: &IpfsClient, key: &str) -> Result<VideoList, Error> {
+    let res = ipfs.key_list().await?;
 
     let keypair = match search_keypairs(key, res) {
         Some(kp) => kp,
-        None => {
-            eprintln!("Key not found");
-            return None;
-        }
+        None => return Err(Error::Uncategorized("Key Not Found".into())),
     };
 
     #[cfg(debug_assertions)]
@@ -220,52 +176,60 @@ async fn get_video_list(ipfs: &IpfsClient, key: &str) -> Option<VideoList> {
 
     println!("Fetching Video List...");
 
-    let cid = match ipfs.name_resolve(Some(&keypair.id), false, false).await {
-        Ok(res) => Cid::try_from(res.path).expect("Invalid Cid"),
-        Err(e) => {
-            eprintln!("IPFS: {}", e);
-            return None;
-        }
-    };
+    let res = ipfs.name_resolve(Some(&keypair.id), false, false).await?;
 
-    if let Err(e) = ipfs.pin_rm(&cid.to_string(), true).await {
-        eprintln!("IPFS: {}", e);
-        return None;
-    }
+    let cid = Cid::try_from(res.path).expect("Invalid Cid");
 
-    match ipfs_dag_get_node_async(ipfs, &cid.to_string()).await {
-        Ok(node) => Some(node),
-        Err(e) => {
-            eprintln!("IPFS: {}", e);
-            return None;
-        }
-    }
+    ipfs.pin_rm(&cid.to_string(), true).await?;
+
+    let node = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
+
+    Ok(node)
 }
 
 /// Serialize the new video list, pin it then publish it under this IPNS key.
-pub async fn update_video_list(ipfs: &IpfsClient, key: &str, video_list: &VideoList) {
-    let cid = match ipfs_dag_put_node_async(ipfs, video_list).await {
-        Ok(cid) => cid,
-        Err(e) => {
-            eprintln!("IPFS: {}", e);
-            return;
-        }
-    };
+pub async fn update_video_list(
+    ipfs: &IpfsClient,
+    key: &str,
+    video_list: &VideoList,
+) -> Result<(), Error> {
+    let cid = ipfs_dag_put_node_async(ipfs, video_list).await?;
 
-    if let Err(e) = ipfs.pin_add(&cid.to_string(), true).await {
-        eprintln!("IPFS: {}", e);
-        return;
-    }
+    ipfs.pin_add(&cid.to_string(), true).await?;
 
     println!("Updating Video List...");
 
-    if let Err(e) = ipfs
-        .name_publish(&cid.to_string(), false, None, None, Some(key))
-        .await
-    {
-        eprintln!("IPFS: {}", e);
-        return;
-    }
+    ipfs.name_publish(&cid.to_string(), false, None, None, Some(key))
+        .await?;
 
     println!("Video List CID => {}", &cid.to_string());
+
+    Ok(())
+}
+
+async fn get_video_duration(ipfs: &IpfsClient, video: Cid) -> Result<f64, Error> {
+    let path = format!("{}/time", video.to_string());
+
+    let days: DayNode = ipfs_dag_get_node_async(&ipfs, &path).await?;
+
+    let mut duration = 0.0;
+
+    for (i, ipld) in days.links_to_hours.iter().enumerate().rev().take(1) {
+        duration += (i * 3600) as f64; // 3600 second in 1 hour
+
+        let hours: HourNode = ipfs_dag_get_node_async(&ipfs, &ipld.link.to_string()).await?;
+
+        for (i, ipld) in hours.links_to_minutes.iter().enumerate().rev().take(1) {
+            duration += (i * 60) as f64; // 60 second in 1 minute
+
+            let minutes: MinuteNode =
+                ipfs_dag_get_node_async(&ipfs, &ipld.link.to_string()).await?;
+
+            for (i, _) in minutes.links_to_seconds.iter().enumerate().rev().take(1) {
+                duration += i as f64;
+            }
+        }
+    }
+
+    Ok(duration)
 }

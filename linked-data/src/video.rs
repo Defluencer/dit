@@ -7,14 +7,14 @@ use serde::{Deserialize, Serialize};
 use cid::Cid;
 use multihash::Multihash;
 
-/// Metadata for video thumbnails and playback.
+/// Metadata for video thumbnail and playback.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
     pub title: String,
-    pub duration: f64, // Must be less than actual video duration, 0.1s less does it
+    pub duration: f64,
     pub image: IPLDLink, // Raw node of image
     pub video: IPLDLink, // TimecodeNode
-                       //creator identity whatever that may be
+                         //TODO creator identity whatever that may be
 }
 
 /// Root CID.
