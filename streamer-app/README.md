@@ -2,11 +2,11 @@
 IPFS daemon must be running first. Command: ```ipfs daemon --enable-pubsub-experiment --enable-namesys-pubsub```
 
 ## Beacon
-A content beacon make your content discoverable. You must create one it's the first step.
+A content beacon make your content discoverable and updateable. 
 - Command: ```streamer-app beacon --help``` for more info.
 
 ## Videos
-Video metadata can be created, updated and deleted using commands.
+Video metadata can be created, updated and deleted using commands. Must create a beacon beforehand.
 - Command: ```streamer-app video --help``` for more info.
 
 ## Availability
@@ -46,9 +46,7 @@ config.json will be created automatically or can be created manually.
 ```
 {
   "input_socket_addr": "127.0.0.1:2526",
-  "archive": {
-    "segment_duration": 4
-  },
+  "archive": {},
   "video": {
     "pubsub_topic": "defluencer_live_video"
   },
@@ -58,5 +56,15 @@ config.json will be created automatically or can be created manually.
 }
 ```
 - Input socket address is the IP and Port the app will listen for FFMPEG on.
-- Segment duration is how long one media segment last in seconds. Also called Keyframe Interval.
 - Topics are used for live stream and chat. Choose some unique names.
+
+## FFMPEG
+- Output must be HLS.
+- Must use fragmented mp4. (fmp4)
+- Media segments length must be 1 second.
+- Each track and folder must be named like so. "TRACK_NAME/SEGMENT_INDEX.m4s". egg ```1080p60/24.m4s```
+- Audio track must standalone and be named "audio".
+- Must produce a master playlist containing all tracks.
+
+Due to a bug in FFMPEG, original videos cannot be in .mkv containers, missing metadata will cause missing tracks in HLS master playlist.
+

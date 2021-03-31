@@ -1,4 +1,4 @@
-use crate::actors::{Archive, VideoData};
+use crate::actors::{Archive, SetupData, VideoData};
 use crate::server::services::put_requests;
 
 use std::convert::Infallible;
@@ -37,7 +37,8 @@ async fn shutdown_signal(
 
 pub async fn start_server(
     server_addr: SocketAddr,
-    collector: UnboundedSender<VideoData>,
+    video_tx: UnboundedSender<VideoData>,
+    setup_tx: UnboundedSender<SetupData>,
     archive_tx: Option<UnboundedSender<Archive>>,
     ipfs: IpfsClient,
     topic: String,
@@ -46,11 +47,12 @@ pub async fn start_server(
 
     let service = make_service_fn(move |_| {
         let ipfs = ipfs.clone();
-        let collector = collector.clone();
+        let video_tx = video_tx.clone();
+        let setup_tx = setup_tx.clone();
 
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                put_requests(req, collector.clone(), ipfs.clone())
+                put_requests(req, video_tx.clone(), setup_tx.clone(), ipfs.clone())
             }))
         }
     });

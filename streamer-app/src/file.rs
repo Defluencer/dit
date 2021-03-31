@@ -1,4 +1,4 @@
-use crate::actors::{Archivist, VideoAggregator};
+use crate::actors::{Archivist, SetupAggregator, VideoAggregator};
 use crate::server::start_server;
 use crate::utils::config::get_config;
 
@@ -58,10 +58,21 @@ pub async fn file_cli(_file: File) {
 
     handles.push(video_handle);
 
+    let (setup_tx, setup_rx) = unbounded_channel();
+
+    let mut setup = SetupAggregator::new(ipfs.clone(), setup_rx, video_tx.clone());
+
+    let setup_handle = tokio::spawn(async move {
+        setup.start().await;
+    });
+
+    handles.push(setup_handle);
+
     let server_handle = tokio::spawn(async move {
         start_server(
             input_socket_addr,
             video_tx,
+            setup_tx,
             Some(archive_tx),
             ipfs,
             chat.pubsub_topic,

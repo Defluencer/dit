@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use crate::components::{ChatWindow, LiveStreamPlayer, Navbar, VideoThumbnail};
+use crate::components::{ChatWindow, Navbar, VideoPlayer, VideoThumbnail};
 use crate::utils::ens::{get_ens_beacon_async, EthereumNameService};
 use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
 use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
@@ -62,7 +62,10 @@ impl Component for Defluencer {
 
         let beacon_cid = match Cid::from_str(&ens_name) {
             Ok(cid) => {
-                spawn_local(ipfs_dag_get_callback(cid, link.callback(Msg::Beacon)));
+                spawn_local(ipfs_dag_get_callback::<Beacon, Beacon>(
+                    cid,
+                    link.callback(Msg::Beacon),
+                ));
 
                 Some(cid)
             }
@@ -109,7 +112,7 @@ impl Component for Defluencer {
                     <div class="defluencer_page">
                         <Navbar />
                         <div class="live_stream">
-                            <LiveStreamPlayer topic=beacon.topics.live_video.clone() streamer_peer_id=beacon.peer_id.clone() />
+                            <VideoPlayer metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
                             <ChatWindow topic=beacon.topics.live_chat.clone() />
                         </div>
                         <div class="video_list">
@@ -158,7 +161,10 @@ impl Defluencer {
             }
         };
 
-        spawn_local(ipfs_dag_get_callback(cid, self.link.callback(Msg::Beacon)));
+        spawn_local(ipfs_dag_get_callback::<Beacon, Beacon>(
+            cid,
+            self.link.callback(Msg::Beacon),
+        ));
 
         if let Some(beacon_cid) = self.beacon_cid.as_ref() {
             if *beacon_cid == cid {
@@ -184,13 +190,13 @@ impl Defluencer {
         if let Some(cid) = get_cid(&beacon.video_list, self.storage.as_ref()) {
             self.list_cid = Some(cid);
 
-            spawn_local(ipfs_dag_get_callback::<TempVideoList, _>(
+            spawn_local(ipfs_dag_get_callback::<TempVideoList, VideoList>(
                 cid,
                 self.link.callback(Msg::List),
             ));
         }
 
-        spawn_local(ipfs_resolve_and_get_callback::<TempVideoList, _>(
+        spawn_local(ipfs_resolve_and_get_callback::<TempVideoList, VideoList>(
             beacon.video_list.clone(),
             self.link.callback(Msg::List),
         ));
@@ -227,7 +233,7 @@ impl Defluencer {
         }
 
         for metadata in list.metadata.iter().rev() {
-            spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, _>(
+            spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, VideoMetadata>(
                 metadata.link,
                 self.link.callback(Msg::Metadata),
             ))
