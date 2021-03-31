@@ -3,7 +3,6 @@ use std::rc::Rc;
 use std::str;
 
 use crate::components::{ChatMessage, ChatMessageData};
-use crate::utils::bindings::{ipfs_publish, ipfs_subscribe, ipfs_unsubscribe};
 
 use web_sys::{HtmlTextAreaElement, KeyboardEvent, Window};
 

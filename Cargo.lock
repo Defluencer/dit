@@ -634,22 +634,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "generator"
-version = "0.6.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9fed24fd1e18827652b4d55652899a1e9da8e54d91624dc3437a5bc3a9f9a9c"
-dependencies = [
- "cc",
- "libc",
- "log",
- "rustversion",
- "winapi",
-]
-
-[[package]]
-=======
->>>>>>> develop
 name = "generic-array"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2231,6 +2215,8 @@ version = "0.1.0"
 dependencies = [
  "cid",
  "futures",
+ "futures-util",
+ "ipfs-api",
  "js-sys",
  "linked-data",
  "serde",
