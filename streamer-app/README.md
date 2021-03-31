@@ -2,11 +2,11 @@
 IPFS daemon must be running first. Command: ```ipfs daemon --enable-pubsub-experiment --enable-namesys-pubsub```
 
 ## Beacon
-A content beacon make your content discoverable.
+A content beacon make your content discoverable and updateable. 
 - Command: ```streamer-app beacon --help``` for more info.
 
 ## Videos
-Video metadata can be created, updated and deleted using commands.
+Video metadata can be created, updated and deleted using commands. Must create a beacon beforehand.
 - Command: ```streamer-app video --help``` for more info.
 
 ## Availability
@@ -60,8 +60,11 @@ config.json will be created automatically or can be created manually.
 
 ## FFMPEG
 - Output must be HLS.
-- Media segments length must be 1 second.
-- Each track must be named and structured like this "TRACK_NAME/SEGMENT_INDEX". egg ```1080p60/24.m4s```
 - Must use fragmented mp4. (fmp4)
-- Must produce a master playlist containing all tracks.
+- Media segments length must be 1 second.
+- Each track and folder must be named like so. "TRACK_NAME/SEGMENT_INDEX.m4s". egg ```1080p60/24.m4s```
 - Audio track must standalone and be named "audio".
+- Must produce a master playlist containing all tracks.
+
+Due to a bug in FFMPEG, original videos cannot be in .mkv containers, missing metadata will cause missing tracks in HLS master playlist.
+
