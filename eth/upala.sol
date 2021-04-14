@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.3;
 
+import "eth/signatures.sol";
+
 contract UpalaGroup {
     address private owner;
 
@@ -11,6 +13,10 @@ contract UpalaGroup {
     mapping(address => bool) public memberships;
 
     mapping(uint256 => bool) private usedNonces;
+
+    uint256 public gracePeriodEnd;
+
+    //TODO events???
 
     constructor() payable {
         owner = msg.sender;
@@ -71,47 +77,18 @@ contract UpalaGroup {
         payable(msg.sender).transfer(score);
     }
 
-    //https://docs.soliditylang.org/en/v0.8.3/solidity-by-example.html#creating-and-verifying-signatures
+    //  <-- Management Functions Below -->
 
-    function recoverSigner(bytes32 message, bytes memory sig)
-        internal
-        pure
-        returns (address)
-    {
-        (uint8 v, bytes32 r, bytes32 s) = splitSignature(sig);
+    /// Allow the owner to change the score and trigger 1 hour grace period to protect bots from front-running attack.
+    function changeScore(uint256 new_score) public {
+        require(msg.sender == owner, "Must be the owner");
+        require(
+            block.timestamp >= gracePeriodEnd,
+            "Cannot update during grace period"
+        );
+        require(new_score > fee, "Score Must be higher than Fee");
 
-        return ecrecover(message, v, r, s);
-    }
-
-    /// signature methods.
-    function splitSignature(bytes memory sig)
-        internal
-        pure
-        returns (
-            uint8 v,
-            bytes32 r,
-            bytes32 s
-        )
-    {
-        require(sig.length == 65);
-
-        assembly {
-            // first 32 bytes, after the length prefix.
-            r := mload(add(sig, 32))
-            // second 32 bytes.
-            s := mload(add(sig, 64))
-            // final byte (first byte of the next 32 bytes).
-            v := byte(0, mload(add(sig, 96)))
-        }
-
-        return (v, r, s);
-    }
-
-    /// builds a prefixed hash to mimic the behavior of eth_sign.
-    function prefixed(bytes32 hash) internal pure returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)
-            );
+        gracePeriodEnd = block.timestamp + 3600; // ~ 1 hour
+        score = new_score;
     }
 }
