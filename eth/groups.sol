@@ -47,7 +47,7 @@ contract UpalaGroups {
     }
 
     /// The caller address will be added as a member if the nonce & signature is valid, must also pay entree fee.
-    function addMember(
+    function joinGroup(
         uint256 groupId,
         uint256 nonce,
         bytes memory signature
@@ -123,6 +123,7 @@ contract UpalaGroups {
         payable(msg.sender).transfer(amount);
     }
 
+    ///The caller can leave his group, getting the value of fee transfered to his address.
     function leaveGroup(uint256 groupId) public {
         Group storage group = groups[groupId];
 
@@ -167,7 +168,7 @@ contract UpalaGroups {
         emit ScoreChanged(groupId, newScore, group.gracePeriodEnd);
     }
 
-    ///Allow the onwer to change the entree fee and trigger grace period.
+    ///Allow the owner to change the entree fee and trigger grace period.
     function changeFee(uint256 groupId, uint256 newFee) public {
         Group storage group = groups[groupId];
 
@@ -184,5 +185,20 @@ contract UpalaGroups {
         group.fee = newFee;
 
         emit FeeChanged(groupId, newFee, group.gracePeriodEnd);
+    }
+
+    /// Allow the owner to add a member to the group, must pay entree fee.
+    function addMember(uint256 groupId, address newMember) public payable {
+        Group storage group = groups[groupId];
+
+        require(msg.sender == group.owner, "Must be the owner");
+        require(
+            block.timestamp > group.gracePeriodEnd,
+            "Cannot update during grace period"
+        );
+        require(!group.memberships[newMember], "Must not be a member");
+        require(msg.value == group.fee, "Must pay exact fee.");
+
+        group.memberships[msg.sender] = true;
     }
 }
