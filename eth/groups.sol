@@ -3,7 +3,7 @@ pragma solidity ^0.8.3;
 
 import "eth/signatures.sol";
 
-contract UpalaGroup {
+contract UpalaGroups {
     uint256 private nextId;
 
     struct Group {
