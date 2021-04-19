@@ -28,24 +28,6 @@ contract UpalaGroups {
     );
     event FeeChanged(uint256 groupId, uint256 newFee, uint256 gracePeriodEnd);
 
-    function createGroup(uint256 startFee) public payable returns (uint256) {
-        require(startFee < msg.value, "Fee must be lower than score");
-
-        uint256 groupId = nextId;
-        nextId++;
-
-        Group storage newGroup = groups[groupId];
-
-        //Should the owner be a member???
-
-        newGroup.owner = msg.sender;
-        newGroup.balance = msg.value;
-        newGroup.score = msg.value;
-        newGroup.fee = startFee;
-
-        return groupId;
-    }
-
     /// The caller address will be added as a member if the nonce & signature is valid, must also pay entree fee.
     function joinGroup(
         uint256 groupId,
@@ -145,6 +127,24 @@ contract UpalaGroups {
 
     //  <-- Management Functions Below -->
 
+    function createGroup(uint256 startFee) public payable returns (uint256) {
+        require(startFee < msg.value, "Fee must be lower than score");
+
+        uint256 groupId = nextId;
+        nextId++;
+
+        Group storage newGroup = groups[groupId];
+
+        //Should the owner be a member???
+
+        newGroup.owner = msg.sender;
+        newGroup.balance = msg.value;
+        newGroup.score = msg.value;
+        newGroup.fee = startFee;
+
+        return groupId;
+    }
+
     /// Allow the owner to change the score and trigger grace period.
     function changeScore(uint256 groupId, uint256 newScore) public {
         Group storage group = groups[groupId];
@@ -200,5 +200,8 @@ contract UpalaGroups {
         require(msg.value == group.fee, "Must pay exact fee.");
 
         group.memberships[msg.sender] = true;
+        userGroups[msg.sender].push(groupId);
+
+        group.balance += msg.value;
     }
 }
