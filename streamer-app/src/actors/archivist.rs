@@ -6,14 +6,13 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use ipfs_api::IpfsClient;
 
-use linked_data::config::ArchiveConfig;
 use linked_data::video::{DayNode, HourNode, MinuteNode, SecondNode, TimecodeNode};
 use linked_data::IPLDLink;
 
 use cid::Cid;
 
 pub enum Archive {
-    Chat(Cid, Cid),
+    Chat(Cid),
     Video(Cid),
     Finalize,
 }
@@ -23,31 +22,21 @@ pub struct Archivist {
 
     archive_rx: UnboundedReceiver<Archive>,
 
-    buffer_cap: usize,
     video_chat_buffer: VecDeque<SecondNode>,
 
     minute_node: MinuteNode,
     hour_node: HourNode,
     day_node: DayNode,
-
-    config: ArchiveConfig,
 }
 
 impl Archivist {
-    pub fn new(
-        ipfs: IpfsClient,
-        archive_rx: UnboundedReceiver<Archive>,
-        config: ArchiveConfig,
-    ) -> Self {
-        let buffer_cap = 60; // 1 minutes
-
+    pub fn new(ipfs: IpfsClient, archive_rx: UnboundedReceiver<Archive>) -> Self {
         Self {
             ipfs,
 
             archive_rx,
 
-            buffer_cap,
-            video_chat_buffer: VecDeque::with_capacity(buffer_cap),
+            video_chat_buffer: VecDeque::with_capacity(10),
 
             minute_node: MinuteNode {
                 links_to_seconds: Vec::with_capacity(60),
@@ -60,8 +49,6 @@ impl Archivist {
             day_node: DayNode {
                 links_to_hours: Vec::with_capacity(24),
             },
-
-            config,
         }
     }
 
@@ -70,7 +57,7 @@ impl Archivist {
 
         while let Some(event) = self.archive_rx.recv().await {
             match event {
-                Archive::Chat(time, msg) => self.archive_chat_message(time, msg).await,
+                Archive::Chat(cid) => self.archive_chat_message(cid).await,
                 Archive::Video(cid) => self.archive_video_segment(cid).await,
                 Archive::Finalize => self.finalize().await,
             }
@@ -80,18 +67,15 @@ impl Archivist {
     }
 
     /// Link chat message to SecondNodes.
-    async fn archive_chat_message(&mut self, timestamp: Cid, msg: Cid) {
-        for node in self.video_chat_buffer.iter_mut() {
-            if node.link_to_video.link != timestamp {
-                continue;
-            }
+    async fn archive_chat_message(&mut self, msg: Cid) {
+        let node = match self.video_chat_buffer.front_mut() {
+            Some(node) => node,
+            None => return,
+        };
 
-            let link = IPLDLink { link: msg };
+        let link = IPLDLink { link: msg };
 
-            node.links_to_chat.push(link);
-
-            break;
-        }
+        node.links_to_chat.push(link);
     }
 
     /// Buffers SecondNodes, waiting for chat messages to be linked.
@@ -104,13 +88,6 @@ impl Archivist {
         };
 
         self.video_chat_buffer.push_back(second_node);
-
-        if self.config.archive_live_chat && self.video_chat_buffer.len() < self.buffer_cap {
-            #[cfg(debug_assertions)]
-            println!("Archivist: {} buffered nodes", self.video_chat_buffer.len());
-
-            return;
-        }
 
         self.collect_second().await;
 

@@ -1,6 +1,7 @@
 pub mod beacon;
 pub mod chat;
 pub mod config;
+pub mod moderation;
 pub mod video;
 
 use std::convert::TryFrom;

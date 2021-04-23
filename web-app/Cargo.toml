@@ -6,6 +6,7 @@ edition = "2018"
 licence = "MIT OR Apache-2.0"
 
 [dependencies]
+blockies = "0.3.0"
 cid = "0.6"
 futures = "0.3.13"
 js-sys = "0.3"

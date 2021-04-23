@@ -65,7 +65,7 @@ pub async fn stream_cli(stream: Stream) {
 
             archive.archive_live_chat = !no_chat;
 
-            let mut archivist = Archivist::new(ipfs.clone(), archive_rx, archive);
+            let mut archivist = Archivist::new(ipfs.clone(), archive_rx);
 
             let archive_handle = tokio::spawn(async move {
                 archivist.start().await;

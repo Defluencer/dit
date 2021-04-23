@@ -55,6 +55,7 @@ impl Component for ChatWindow {
                 Box::new(move |from: String, data: Vec<u8>| cb.emit((from, data)))
                     as Box<dyn Fn(String, Vec<u8>)>,
             );
+
         ipfs_subscribe(&topic, _pubsub_closure.as_ref().unchecked_ref());
 
         Self {
@@ -150,23 +151,25 @@ impl ChatWindow {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
 
-        let content = match str::from_utf8(&data) {
+        //TODO deserialize to rust type
+
+        /* let content = match str::from_utf8(&data) {
             Ok(data) => data,
             Err(e) => {
                 #[cfg(debug_assertions)]
                 ConsoleService::error(&format!("{:?}", e));
                 return false;
             }
-        };
+        }; */
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Message => {}", content));
+        /* #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Message => {}", content)); */
 
-        let message_data = ChatMessageData {
+        /* let message_data = ChatMessageData {
             id: self.next_id,
             sender_name: Rc::from(from),
             message: Rc::from(content),
-        };
+        }; */
 
         self.chat_messages.push_back(message_data);
 
@@ -195,6 +198,8 @@ impl ChatWindow {
 
     fn send_message(&mut self) -> bool {
         if let Some(msg) = self.temp_msg.as_ref() {
+            //TODO serialize
+
             ipfs_publish(&self.topic, msg);
 
             if let Some(text_area) = self.text_area.as_ref() {

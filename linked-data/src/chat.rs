@@ -1,47 +1,37 @@
-use std::collections::HashSet;
-
 use crate::IPLDLink;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
-pub struct ChatIdentity {
-    #[serde(rename = "key")]
-    pub public_key: String,
-    //TODO find new way to identity
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ChatMessage {
+    Signed(SignedMessage),
+    Unsigned(UnsignedMessage),
 }
 
-/// Chat message optionaly signed with some form of private key
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ChatMessage {
-    pub identity: ChatIdentity,
+pub struct Content {
+    pub peer_id: String,
 
-    pub signature: String,
-
-    pub data: ChatContent,
-}
-
-/// User name, message and a link to VideoNode as timestamp
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChatContent {
     pub name: String,
+}
 
+/// Crypto-signed message origin.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SignedMessage {
+    /// Ethereum address
+    pub address: [u8; 20],
+
+    pub data: Content,
+
+    /// Content crypto-signed with this address.
+    pub signature: Vec<u8>,
+}
+
+/// Unsigned chat message with origin.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UnsignedMessage {
     pub message: String,
 
-    pub timestamp: IPLDLink,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Blacklist {
-    pub blacklist: HashSet<ChatIdentity>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Whitelist {
-    pub whitelist: HashSet<ChatIdentity>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Moderators {
-    pub mods: HashSet<ChatIdentity>,
+    /// Link to signed message.
+    pub origin: IPLDLink,
 }

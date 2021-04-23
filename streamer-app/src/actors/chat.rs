@@ -1,5 +1,7 @@
 use crate::actors::archivist::Archive;
-use crate::utils::dag_nodes::ipfs_dag_put_node_async;
+use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async};
+
+use std::collections::HashMap;
 
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
@@ -10,12 +12,10 @@ use tokio_stream::StreamExt;
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
-use linked_data::chat::{ChatIdentity, ChatMessage};
+use linked_data::chat::{ChatMessage, SignedMessage, UnsignedMessage};
 use linked_data::config::ChatConfig;
 
-//use cid::Cid;
-
-//TODO check if BrightID can be integrated
+use cid::Cid;
 
 pub struct ChatAggregator {
     ipfs: IpfsClient,
@@ -23,6 +23,8 @@ pub struct ChatAggregator {
     archive_tx: UnboundedSender<Archive>,
 
     config: ChatConfig,
+
+    trusted: HashMap<String, Cid>,
     //blacklist: Blacklist,
 
     //whitelist: Whitelist,
@@ -38,6 +40,8 @@ impl ChatAggregator {
             archive_tx,
 
             config,
+
+            trusted: HashMap::with_capacity(100),
             //blacklist,
 
             //whitelist,
@@ -70,12 +74,17 @@ impl ChatAggregator {
     }
 
     async fn process_msg(&mut self, msg: &PubsubSubResponse) {
+        let from = match msg.from.as_ref() {
+            Some(from) => from,
+            None => return,
+        };
+
         let data = match msg.data.as_ref() {
             Some(data) => data,
             None => return,
         };
 
-        let chat_message = match serde_json::from_slice(data) {
+        let chat_message: ChatMessage = match serde_json::from_slice(data) {
             Ok(data) => data,
             Err(e) => {
                 eprintln!("Deserialization failed. {}", e);
@@ -83,15 +92,26 @@ impl ChatAggregator {
             }
         };
 
-        if !self.is_auth_signature(&chat_message) {
+        if !self.is_allowed(from, &chat_message) {
             return;
         }
 
-        if !self.is_allowed(&chat_message.identity) {
+        match chat_message {
+            ChatMessage::Signed(signed) => self.process_signed_msg(from, signed).await,
+            ChatMessage::Unsigned(unsigned) => self.process_unsigned_msg(from, unsigned).await,
+        }
+    }
+
+    async fn process_signed_msg(&mut self, from: &str, msg: SignedMessage) {
+        if from != msg.data.peer_id {
             return;
         }
 
-        let cid = match ipfs_dag_put_node_async(&self.ipfs, &chat_message).await {
+        if !self.is_auth_signature(&msg) {
+            return;
+        }
+
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, &msg).await {
             Ok(cid) => cid,
             Err(e) => {
                 eprintln!("IPFS: dag put failed {}", e);
@@ -99,7 +119,38 @@ impl ChatAggregator {
             }
         };
 
-        let msg = Archive::Chat(chat_message.data.timestamp.link, cid);
+        self.trusted.insert(from.to_owned(), cid);
+
+        self.send_to_archive(cid);
+    }
+
+    async fn process_unsigned_msg(&mut self, from: &str, msg: UnsignedMessage) {
+        if Some(&msg.origin.link) != self.trusted.get(from) {
+            let msg: SignedMessage =
+                match ipfs_dag_get_node_async(&self.ipfs, &msg.origin.link.to_string()).await {
+                    Ok(msg) => msg,
+                    Err(e) => {
+                        eprintln!("IPFS: dag get failed {}", e);
+                        return;
+                    }
+                };
+
+            return self.process_signed_msg(from, msg).await;
+        }
+
+        let cid = match ipfs_dag_put_node_async(&self.ipfs, &msg).await {
+            Ok(cid) => cid,
+            Err(e) => {
+                eprintln!("IPFS: dag put failed {}", e);
+                return;
+            }
+        };
+
+        self.send_to_archive(cid);
+    }
+
+    fn send_to_archive(&self, cid: Cid) {
+        let msg = Archive::Chat(cid);
 
         if let Err(error) = self.archive_tx.send(msg) {
             eprintln!("Archive receiver hung up. {}", error);
@@ -107,13 +158,13 @@ impl ChatAggregator {
     }
 
     /// Verify signature authenticity
-    fn is_auth_signature(&self, _msg: &ChatMessage) -> bool {
+    fn is_auth_signature(&self, _msg: &SignedMessage) -> bool {
         //TODO verify signature
         true
     }
 
     /// Verify identity against white & black lists
-    fn is_allowed(&self, _identity: &ChatIdentity) -> bool {
+    fn is_allowed(&self, _from: &str, _identity: &ChatMessage) -> bool {
         //TODO verify white & black list
         true
         //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)

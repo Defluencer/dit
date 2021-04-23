@@ -6,7 +6,6 @@ use cid::Cid;
 use multihash::Multihash;
 
 /// Mostly static list of links to content.
-/// Should not be pinned recursively.
 #[derive(Deserialize, Serialize)]
 pub struct Beacon {
     /// GossipSub topics for live streaming & chat.
@@ -15,8 +14,11 @@ pub struct Beacon {
     /// Base58btc encoded string.
     pub peer_id: String,
 
-    /// IPNS path -> "/ipns/<hash>"
-    pub video_list: String, //resolve to VideoList
+    // IPNS paths -> "/ipns/<hash>"
+    pub video_list: Option<String>, //resolve to VideoList
+    pub chat_mods: Option<String>,  //resolve to Moderators
+    pub chat_block: Option<String>, //resolve to Blacklist
+    pub chat_allow: Option<String>, //resolve to Whitelist
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -26,7 +28,6 @@ pub struct Topics {
 }
 
 /// List of all video metadata links.
-/// Should not be pinned recursively.
 #[derive(Deserialize, Serialize, Default)]
 pub struct VideoList {
     /// Oldest to newest videos metadata.
