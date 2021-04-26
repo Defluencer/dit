@@ -993,6 +993,19 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-core"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a47c4c3ac843f9a4238943f97620619033dadef4b378cd1e8addd170de396b3"
+dependencies = [
+ "futures",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
+name = "jsonrpc-core"
 version = "17.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07569945133257ff557eb37b015497104cea61a2c9edaf126c1cbd6e8332397f"
@@ -1043,6 +1056,7 @@ dependencies = [
  "multihash",
  "serde",
  "serde_json",
+ "web3 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1699,6 +1713,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
+name = "secp256k1"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "733b114f058f260c0af7591434eef4272ae1a8ec2751766d3cb89c6df8d5e450"
+dependencies = [
+ "secp256k1-sys",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67e4b6455ee49f5901c8985b88f98fb0a0e1d90a6661f5a03f4888bd987dad29"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2315,7 +2347,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "web3",
+ "web3 0.15.0 (git+https://github.com/sionois/rust-web3?branch=ens)",
  "yew",
  "yew-router",
  "yewtil",
@@ -2334,6 +2366,30 @@ dependencies = [
 [[package]]
 name = "web3"
 version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4080a844bbb41437f0d432138f0a7543780a40b43345b76dc0338c59bdfd1336"
+dependencies = [
+ "arrayvec",
+ "derive_more",
+ "ethabi",
+ "ethereum-types",
+ "futures",
+ "futures-timer",
+ "hex",
+ "jsonrpc-core 16.0.0",
+ "log",
+ "parking_lot",
+ "pin-project",
+ "rlp",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "web3"
+version = "0.15.0"
 source = "git+https://github.com/sionois/rust-web3?branch=ens#2b7d1cdd9a1efaa3a14ef107ec7eae362f18d1cb"
 dependencies = [
  "arrayvec",
@@ -2346,7 +2402,7 @@ dependencies = [
  "hex",
  "idna",
  "js-sys",
- "jsonrpc-core",
+ "jsonrpc-core 17.0.0",
  "log",
  "parking_lot",
  "pin-project",

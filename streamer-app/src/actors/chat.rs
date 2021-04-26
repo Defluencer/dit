@@ -107,7 +107,7 @@ impl ChatAggregator {
             return;
         }
 
-        if !self.is_auth_signature(&msg) {
+        if !msg.verify() {
             return;
         }
 
@@ -121,7 +121,11 @@ impl ChatAggregator {
 
         self.trusted.insert(from.to_owned(), cid);
 
-        self.send_to_archive(cid);
+        let msg = Archive::Chat(cid);
+
+        if let Err(error) = self.archive_tx.send(msg) {
+            eprintln!("Archive receiver hung up. {}", error);
+        }
     }
 
     async fn process_unsigned_msg(&mut self, from: &str, msg: UnsignedMessage) {
@@ -146,21 +150,11 @@ impl ChatAggregator {
             }
         };
 
-        self.send_to_archive(cid);
-    }
-
-    fn send_to_archive(&self, cid: Cid) {
         let msg = Archive::Chat(cid);
 
         if let Err(error) = self.archive_tx.send(msg) {
             eprintln!("Archive receiver hung up. {}", error);
         }
-    }
-
-    /// Verify signature authenticity
-    fn is_auth_signature(&self, _msg: &SignedMessage) -> bool {
-        //TODO verify signature
-        true
     }
 
     /// Verify identity against white & black lists

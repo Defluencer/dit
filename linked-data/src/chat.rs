@@ -35,3 +35,34 @@ pub struct UnsignedMessage {
     /// Link to signed message.
     pub origin: IPLDLink,
 }
+
+use web3::signing::{keccak256, recover};
+
+impl SignedMessage {
+    pub fn verify(&self) -> bool {
+        if self.signature.len() != 65 {
+            return false;
+        }
+
+        let message = match serde_json::to_vec(&self.data) {
+            Ok(data) => data,
+            Err(_) => return false,
+        };
+
+        let mut eth_message =
+            format!("\x19Ethereum Signed Message:\n{}", message.len()).into_bytes();
+        eth_message.extend_from_slice(&message);
+
+        let hash = keccak256(&eth_message);
+
+        //https://docs.rs/web3/0.15.0/web3/signing/fn.recover.html
+        //The actual signature is the first 64 bytes.
+        //The last byte is the recovery id.
+        let res = match recover(&hash, &self.signature[0..64], self.signature[64] as i32) {
+            Ok(data) => data,
+            Err(_) => return false,
+        };
+
+        res.to_fixed_bytes() == self.address
+    }
+}
