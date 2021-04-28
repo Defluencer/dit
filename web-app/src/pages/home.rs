@@ -8,7 +8,7 @@ impl Component for Home {
     type Message = ();
     type Properties = ();
 
-    fn create(_props: Self::Properties, _: ComponentLink<Self>) -> Self {
+    fn create(props: Self::Properties, _: ComponentLink<Self>) -> Self {
         Self {}
     }
 

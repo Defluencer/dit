@@ -1,4 +1,5 @@
 use crate::pages::{Defluencer, Home, Settings, Video};
+use crate::utils::web3::Web3Service;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew_router::prelude::{Route, Router, Switch};
@@ -26,14 +27,18 @@ impl AppRoute {
     }
 }
 
-pub struct App {}
+pub struct App {
+    web3: Web3Service,
+}
 
 impl Component for App {
     type Message = ();
     type Properties = ();
 
     fn create(_props: Self::Properties, _: ComponentLink<Self>) -> Self {
-        Self {}
+        let web3 = Web3Service::new().unwrap();
+
+        Self { web3 }
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
@@ -45,6 +50,8 @@ impl Component for App {
     }
 
     fn view(&self) -> Html {
+        let web3 = self.web3;
+
         html! {
             <>
                 <Router<AppRoute>
@@ -52,7 +59,7 @@ impl Component for App {
                         match switch {
                             AppRoute::Video(cid) => html! { <Video metadata_cid=cid /> },
                             AppRoute::Settings => html! { <Settings /> },
-                            AppRoute::Defluencer(name) => html! { <Defluencer ens_name=name /> },
+                            AppRoute::Defluencer(name) => html! { <Defluencer web3=web3.clone() ens_name=name /> },
                             AppRoute::Home => html! { <Home /> },
                         }
                     })

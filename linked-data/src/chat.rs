@@ -3,12 +3,6 @@ use crate::IPLDLink;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum ChatMessage {
-    Signed(SignedMessage),
-    Unsigned(UnsignedMessage),
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct Content {
     pub peer_id: String,
 
@@ -44,10 +38,7 @@ impl SignedMessage {
             return false;
         }
 
-        let message = match serde_json::to_vec(&self.data) {
-            Ok(data) => data,
-            Err(_) => return false,
-        };
+        let message = serde_json::to_vec(&self.data).expect("Cannot Serialize");
 
         let mut eth_message =
             format!("\x19Ethereum Signed Message:\n{}", message.len()).into_bytes();

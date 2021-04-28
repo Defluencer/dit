@@ -15,10 +15,10 @@ pub struct Beacon {
     pub peer_id: String,
 
     // IPNS paths -> "/ipns/<hash>"
-    pub video_list: Option<String>, //resolve to VideoList
-    pub chat_mods: Option<String>,  //resolve to Moderators
-    pub chat_block: Option<String>, //resolve to Blacklist
-    pub chat_allow: Option<String>, //resolve to Whitelist
+    pub video_list: String, //resolve to VideoList
+                            //pub chat_mods: Option<String>,  //resolve to Moderators
+                            //pub chat_block: Option<String>, //resolve to Blacklist
+                            //pub chat_allow: Option<String>, //resolve to Whitelist
 }
 
 #[derive(Serialize, Deserialize, Debug)]

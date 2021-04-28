@@ -5,13 +5,13 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yewtil::NeqAssign;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ChatMessageData {
+pub struct MessageData {
     pub id: usize,
     pub sender_name: Rc<str>,
     pub message: Rc<str>,
 }
 
-impl ChatMessageData {
+impl MessageData {
     fn render(&self) -> Html {
         html! {
             <div class="chat_message">
@@ -24,11 +24,11 @@ impl ChatMessageData {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Properties)]
-pub struct ChatMessage {
-    pub message_data: ChatMessageData,
+pub struct UIMessage {
+    pub message_data: MessageData,
 }
 
-impl Component for ChatMessage {
+impl Component for UIMessage {
     type Message = ();
     type Properties = Self;
 

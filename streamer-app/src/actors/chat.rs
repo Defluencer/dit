@@ -12,8 +12,9 @@ use tokio_stream::StreamExt;
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
-use linked_data::chat::{ChatMessage, SignedMessage, UnsignedMessage};
+use linked_data::chat::{SignedMessage, UnsignedMessage};
 use linked_data::config::ChatConfig;
+use linked_data::moderation::{Blacklist, Moderators, Whitelist};
 
 use cid::Cid;
 
@@ -84,7 +85,7 @@ impl ChatAggregator {
             None => return,
         };
 
-        let chat_message: ChatMessage = match serde_json::from_slice(data) {
+        let msg: UnsignedMessage = match serde_json::from_slice(data) {
             Ok(data) => data,
             Err(e) => {
                 eprintln!("Deserialization failed. {}", e);
@@ -92,56 +93,35 @@ impl ChatAggregator {
             }
         };
 
-        if !self.is_allowed(from, &chat_message) {
+        //TODO filter with lists
+
+        if Some(&msg.origin.link) == self.trusted.get(from) {
+            return self.mint_and_archive(msg).await;
+        }
+
+        let sign_msg: SignedMessage =
+            match ipfs_dag_get_node_async(&self.ipfs, &msg.origin.link.to_string()).await {
+                Ok(msg) => msg,
+                Err(e) => {
+                    eprintln!("IPFS: dag get failed {}", e);
+                    return;
+                }
+            };
+
+        if from != &sign_msg.data.peer_id {
             return;
         }
 
-        match chat_message {
-            ChatMessage::Signed(signed) => self.process_signed_msg(from, signed).await,
-            ChatMessage::Unsigned(unsigned) => self.process_unsigned_msg(from, unsigned).await,
+        if !sign_msg.verify() {
+            return;
         }
+
+        self.trusted.insert(from.to_owned(), msg.origin.link);
+
+        self.mint_and_archive(msg).await;
     }
 
-    async fn process_signed_msg(&mut self, from: &str, msg: SignedMessage) {
-        if from != msg.data.peer_id {
-            return;
-        }
-
-        if !msg.verify() {
-            return;
-        }
-
-        let cid = match ipfs_dag_put_node_async(&self.ipfs, &msg).await {
-            Ok(cid) => cid,
-            Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
-                return;
-            }
-        };
-
-        self.trusted.insert(from.to_owned(), cid);
-
-        let msg = Archive::Chat(cid);
-
-        if let Err(error) = self.archive_tx.send(msg) {
-            eprintln!("Archive receiver hung up. {}", error);
-        }
-    }
-
-    async fn process_unsigned_msg(&mut self, from: &str, msg: UnsignedMessage) {
-        if Some(&msg.origin.link) != self.trusted.get(from) {
-            let msg: SignedMessage =
-                match ipfs_dag_get_node_async(&self.ipfs, &msg.origin.link.to_string()).await {
-                    Ok(msg) => msg,
-                    Err(e) => {
-                        eprintln!("IPFS: dag get failed {}", e);
-                        return;
-                    }
-                };
-
-            return self.process_signed_msg(from, msg).await;
-        }
-
+    async fn mint_and_archive(&mut self, msg: UnsignedMessage) {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &msg).await {
             Ok(cid) => cid,
             Err(e) => {
@@ -158,7 +138,7 @@ impl ChatAggregator {
     }
 
     /// Verify identity against white & black lists
-    fn is_allowed(&self, _from: &str, _identity: &ChatMessage) -> bool {
+    fn is_allowed(&self, _from: &str, _identity: &UnsignedMessage) -> bool {
         //TODO verify white & black list
         true
         //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)

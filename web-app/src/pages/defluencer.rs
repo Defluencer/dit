@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::components::{ChatWindow, Navbar, VideoPlayer, VideoThumbnail};
-use crate::utils::ens::{get_ens_beacon_async, EthereumNameService};
 use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
 use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
+use crate::utils::web3::Web3Service;
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -22,6 +22,7 @@ use cid::Cid;
 pub struct Defluencer {
     link: ComponentLink<Self>,
 
+    web3: Web3Service,
     ens_name: String,
 
     storage: Option<Storage>,
@@ -39,7 +40,7 @@ pub struct Defluencer {
 }
 
 pub enum Msg {
-    Name(Result<Cid, ()>),
+    Name(Result<Cid, web3::contract::Error>),
     Beacon((Cid, Beacon)),
     List((Cid, VideoList)),
     Metadata((Cid, VideoMetadata)),
@@ -47,7 +48,8 @@ pub enum Msg {
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub ens_name: String,
+    pub web3: Web3Service, // From app.
+    pub ens_name: String,  // From router. Beacon Cid or ENS name.
 }
 
 impl Component for Defluencer {
@@ -55,6 +57,7 @@ impl Component for Defluencer {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let web3 = props.web3;
         let ens_name = props.ens_name;
 
         let window = web_sys::window().expect("Can't get window");
@@ -64,15 +67,15 @@ impl Component for Defluencer {
             Ok(cid) => {
                 spawn_local(ipfs_dag_get_callback::<Beacon, Beacon>(
                     cid,
-                    link.callback(Msg::Beacon),
+                    link.callback_once(Msg::Beacon),
                 ));
 
                 Some(cid)
             }
             Err(_) => {
-                let ens = EthereumNameService::new().expect("Can't get window.ethereum");
+                let cb = link.callback_once(Msg::Name);
 
-                get_ens_beacon_async(ens, ens_name.clone(), link.callback(Msg::Name));
+                spawn_local(async move { cb.emit(web3.get_ipfs_content(&ens_name).await) });
 
                 get_cid(&ens_name, storage.as_ref())
             }
@@ -80,6 +83,7 @@ impl Component for Defluencer {
 
         Self {
             link,
+            web3,
             ens_name,
             searching: true,
             beacon_cid,
@@ -152,7 +156,7 @@ impl Component for Defluencer {
 
 impl Defluencer {
     /// Receive beacon Cid from ENS then get beacon node
-    fn name_update(&mut self, result: Result<Cid, ()>) -> bool {
+    fn name_update(&mut self, result: Result<Cid, web3::contract::Error>) -> bool {
         let cid = match result {
             Ok(cid) => cid,
             Err(_) => {
