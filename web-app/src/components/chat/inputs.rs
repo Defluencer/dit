@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::str;
 
-use crate::utils::bindings::ipfs_publish;
+use crate::utils::ipfs::IpfsService;
 use crate::utils::local_storage::{get_cid, get_local_storage, set_cid};
 use crate::utils::web3::Web3Service;
 
@@ -35,6 +35,7 @@ enum State {
 pub struct Inputs {
     link: ComponentLink<Self>,
 
+    ipfs: IpfsService,
     topic: Rc<str>,
 
     state: State,
@@ -67,6 +68,7 @@ pub enum Msg {
 
 #[derive(Properties, Clone)]
 pub struct Props {
+    pub ipfs: IpfsService,
     pub web3: Web3Service,
     pub topic: Rc<str>,
 }
@@ -76,8 +78,7 @@ impl Component for Inputs {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let web3 = props.web3;
-        let topic = props.topic;
+        let Props { ipfs, web3, topic } = props;
 
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
@@ -89,6 +90,8 @@ impl Component for Inputs {
 
         Self {
             link,
+
+            ipfs,
             topic,
 
             state,
@@ -225,7 +228,7 @@ impl Inputs {
 
         self.temp_msg = None;
 
-        ipfs_publish(&self.topic, &msg);
+        //TODO ipfs_publish(&self.topic, &msg);
 
         false
     }
@@ -317,9 +320,9 @@ impl Inputs {
 
         //TODO add to IPFS
 
-        set_cid(SIGN_MSG_KEY, &cid, self.storage.as_ref());
+        /* set_cid(SIGN_MSG_KEY, &cid, self.storage.as_ref());
 
-        self.state = State::Chatting;
+        self.state = State::Chatting; */
 
         true
     }

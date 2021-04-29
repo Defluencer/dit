@@ -1,5 +1,5 @@
 use crate::components::{Navbar, VideoPlayer};
-use crate::utils::ipfs::IPFSService;
+use crate::utils::ipfs::IpfsService;
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -10,6 +10,7 @@ use linked_data::video::VideoMetadata;
 use cid::Cid;
 
 pub struct Video {
+    ipfs: IpfsService,
     metadata: Option<VideoMetadata>,
 }
 
@@ -19,7 +20,7 @@ pub enum Msg {
 
 #[derive(Clone, Properties)]
 pub struct Props {
-    pub ipfs: IPFSService,
+    pub ipfs: IpfsService,
     pub metadata_cid: Cid,
 }
 
@@ -31,12 +32,16 @@ impl Component for Video {
         let Props { ipfs, metadata_cid } = props;
 
         let cb = link.callback(Msg::Metadata);
+        let client = ipfs.clone();
 
         spawn_local(
             async move { cb.emit(ipfs.dag_get(metadata_cid, Option::<String>::None).await) },
         );
 
-        Self { metadata: None }
+        Self {
+            ipfs,
+            metadata: None,
+        }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -55,7 +60,7 @@ impl Component for Video {
                 <Navbar />
                 {
                     if let Some(md) = self.metadata.as_ref() {
-                        html! { <VideoPlayer metadata=Some(md.clone()) topic=Option::<String>::None streamer_peer_id=Option::<String>::None /> }
+                        html! { <VideoPlayer ipfs=self.ipfs.clone() metadata=Some(md.clone()) topic=Option::<String>::None streamer_peer_id=Option::<String>::None /> }
                     } else {
                         html! { <div class="center_text"> {"Loading..."} </div> }
                     }

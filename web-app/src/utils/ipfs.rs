@@ -16,7 +16,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use yew::services::ConsoleService;
-use yew::Callback;
 
 use cid::Cid;
 
@@ -25,11 +24,11 @@ use http::Uri;
 const DEFAULT_URI: &str = "http://localhost:5001/api/v0";
 
 #[derive(Clone)]
-pub struct IPFSService {
+pub struct IpfsService {
     client: IpfsClient,
 }
 
-impl IPFSService {
+impl IpfsService {
     pub fn new() -> Self {
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
@@ -83,11 +82,7 @@ impl IPFSService {
         Ok((audio_data, video_data))
     }
 
-    pub async fn resolve_and_dag_get<U, T>(
-        &self,
-        ipns: U,
-        cb: Callback<(Cid, T)>,
-    ) -> Result<(Cid, T), Error>
+    pub async fn resolve_and_dag_get<U, T>(&self, ipns: U) -> Result<(Cid, T), Error>
     where
         U: Into<Cow<'static, str>>,
         T: ?Sized + DeserializeOwned,

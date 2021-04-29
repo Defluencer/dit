@@ -3,16 +3,12 @@ use std::rc::Rc;
 use std::str;
 
 use crate::components::chat::message::{MessageData, UIMessage};
-use crate::utils::bindings::{ipfs_dag_get, ipfs_subscribe, ipfs_unsubscribe};
+use crate::utils::ipfs::IpfsService;
 
 use wasm_bindgen_futures::spawn_local;
 
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
-
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
-use yew::Callback;
 
 use cid::Cid;
 
@@ -21,8 +17,8 @@ use linked_data::chat::{SignedMessage, UnsignedMessage};
 pub struct Display {
     link: ComponentLink<Self>,
 
+    ipfs: IpfsService,
     topic: Rc<str>,
-    _pubsub_closure: Closure<dyn Fn(String, Vec<u8>)>,
 
     trusted_identities: HashMap<Cid, (String, String)>,
 
@@ -32,11 +28,12 @@ pub struct Display {
 
 pub enum Msg {
     PubSub((String, Vec<u8>)),
-    Origin((String, UnsignedMessage, SignedMessage)),
+    Origin(Result<SignedMessage, ipfs_api::response::Error>),
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
+    pub ipfs: IpfsService,
     pub topic: Rc<str>,
 }
 
@@ -45,21 +42,15 @@ impl Component for Display {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let topic = props.topic;
+        let Props { ipfs, topic } = props;
 
-        let cb = link.callback(Msg::PubSub);
-        let _pubsub_closure =
-            Closure::wrap(
-                Box::new(move |from: String, data: Vec<u8>| cb.emit((from, data)))
-                    as Box<dyn Fn(String, Vec<u8>)>,
-            );
-
-        ipfs_subscribe(&topic, _pubsub_closure.as_ref().unchecked_ref());
+        //TODO ipfs_subscribe(&topic, _pubsub_closure.as_ref().unchecked_ref());
 
         Self {
             link,
+
+            ipfs,
             topic,
-            _pubsub_closure,
             trusted_identities: HashMap::with_capacity(100),
 
             chat_messages: VecDeque::with_capacity(20),
@@ -70,7 +61,7 @@ impl Component for Display {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::PubSub((from, data)) => self.on_pubsub_update(from, data),
-            Msg::Origin((from, msg, sign_msg)) => self.on_signed_msg(from, msg, sign_msg),
+            Msg::Origin(result) => self.on_signed_msg(result),
         }
     }
 
@@ -94,7 +85,7 @@ impl Component for Display {
         #[cfg(debug_assertions)]
         ConsoleService::info("Dropping Live Chat");
 
-        ipfs_unsubscribe(&self.topic);
+        //TODO ipfs_unsubscribe(&self.topic);
     }
 }
 
@@ -128,7 +119,10 @@ impl Display {
         }
 
         let cb = self.link.callback_once(Msg::Origin);
-        spawn_local(get_sign_msg_async(from, msg, cb));
+        let client = self.ipfs.clone();
+        let cid = msg.origin.link;
+
+        spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
 
         false
     }
@@ -161,14 +155,22 @@ impl Display {
     /// Callback when IPFS get signed message dag node.
     fn on_signed_msg(
         &mut self,
-        from: String,
-        msg: UnsignedMessage,
-        sign_msg: SignedMessage,
+        response: Result<SignedMessage, ipfs_api::response::Error>,
     ) -> bool {
+        let sign_msg = match response {
+            Ok(m) => m,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Signed Message => {:#?}", sign_msg));
+        false
+        //TODO
 
-        if from != sign_msg.data.peer_id {
+        /* if from != sign_msg.data.peer_id {
             return false;
         }
 
@@ -179,30 +181,6 @@ impl Display {
         self.trusted_identities
             .insert(msg.origin.link, (from, sign_msg.data.name.clone()));
 
-        self.display_msg(&sign_msg.data.name, &msg.message)
+        self.display_msg(&sign_msg.data.name, &msg.message) */
     }
-}
-
-async fn get_sign_msg_async(
-    from: String,
-    msg: UnsignedMessage,
-    cb: Callback<(String, UnsignedMessage, SignedMessage)>,
-) {
-    let node = match ipfs_dag_get(&msg.origin.link.to_string()).await {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:#?}", e));
-            return;
-        }
-    };
-
-    let sign_msg: SignedMessage = match node.into_serde() {
-        Ok(result) => result,
-        Err(e) => {
-            ConsoleService::error(&format!("{:#?}", e));
-            return;
-        }
-    };
-
-    cb.emit((from, msg, sign_msg));
 }

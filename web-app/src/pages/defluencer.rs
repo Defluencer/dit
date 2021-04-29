@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::components::{ChatWindow, Navbar, VideoPlayer, VideoThumbnail};
-use crate::utils::ipfs::IPFSService;
+use crate::utils::ipfs::IpfsService;
 use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
 use crate::utils::web3::Web3Service;
 
@@ -22,7 +22,7 @@ use cid::Cid;
 pub struct Defluencer {
     link: ComponentLink<Self>,
 
-    ipfs: IPFSService,
+    ipfs: IpfsService,
     web3: Web3Service,
     ens_name: String,
 
@@ -42,14 +42,15 @@ pub struct Defluencer {
 
 pub enum Msg {
     Name(Result<Cid, web3::contract::Error>),
-    Beacon((Cid, Beacon)),
-    List((Cid, VideoList)),
-    Metadata((Cid, VideoMetadata)),
+    Beacon(Result<Beacon, ipfs_api::response::Error>),
+    List((Cid, Result<VideoList, ipfs_api::response::Error>)),
+    ResolveList(Result<(Cid, VideoList), ipfs_api::response::Error>),
+    Metadata((Cid, Result<VideoMetadata, ipfs_api::response::Error>)),
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub ipfs: IPFSService, // From app.
+    pub ipfs: IpfsService, // From app.
     pub web3: Web3Service, // From app.
     pub ens_name: String,  // From router. Beacon Cid or ENS name.
 }
@@ -70,11 +71,12 @@ impl Component for Defluencer {
 
         let beacon_cid = match Cid::from_str(&ens_name) {
             Ok(cid) => {
-                spawn_local(ipfs_dag_get_callback(
-                    ipfs.clone(),
-                    cid,
-                    link.callback_once(Msg::Beacon),
-                ));
+                let cb = link.callback(Msg::Beacon);
+                let client = ipfs.clone();
+
+                spawn_local(
+                    async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) },
+                );
 
                 Some(cid)
             }
@@ -110,9 +112,10 @@ impl Component for Defluencer {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Name(result) => self.name_update(result),
-            Msg::Beacon((_, beacon)) => self.beacon_update(beacon),
-            Msg::List((cid, list)) => self.video_list_update(cid, list),
-            Msg::Metadata((cid, metadata)) => self.video_metadata_update(cid, metadata),
+            Msg::Beacon(result) => self.beacon_update(result),
+            Msg::List((cid, result)) => self.video_list_update(cid, result),
+            Msg::ResolveList(result) => //TODO
+            Msg::Metadata((cid, result)) => self.video_metadata_update(cid, result),
         }
     }
 
@@ -127,8 +130,8 @@ impl Component for Defluencer {
                     <div class="defluencer_page">
                         <Navbar />
                         <div class="live_stream">
-                            <VideoPlayer metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
-                            <ChatWindow web3=self.web3.clone() topic=beacon.topics.live_chat.clone() />
+                            <VideoPlayer ipfs=self.ipfs.clone() metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
+                            <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() topic=beacon.topics.live_chat.clone() />
                         </div>
                         <div class="video_list">
                         {
@@ -176,11 +179,10 @@ impl Defluencer {
             }
         };
 
-        spawn_local(ipfs_dag_get_callback(
-            self.ipfs.clone(),
-            cid,
-            self.link.callback(Msg::Beacon),
-        ));
+        let cb = self.link.callback(Msg::Beacon);
+        let client = self.ipfs.clone();
+
+        spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
 
         if let Some(beacon_cid) = self.beacon_cid.as_ref() {
             if *beacon_cid == cid {
@@ -199,25 +201,31 @@ impl Defluencer {
     }
 
     /// Receive beacon node then get video list node
-    fn beacon_update(&mut self, beacon: Beacon) -> bool {
+    fn beacon_update(&mut self, result: Result<Beacon, ipfs_api::response::Error>) -> bool {
+        let beacon = match result {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
         if let Some(cid) = get_cid(&beacon.video_list, self.storage.as_ref()) {
             self.list_cid = Some(cid);
 
-            spawn_local(ipfs_dag_get_callback(
-                self.ipfs.clone(),
-                cid,
-                self.link.callback(Msg::List),
-            ));
+            let cb = self.link.callback(Msg::List);
+            let client = self.ipfs.clone();
+
+            spawn_local(async move {
+                cb.emit((cid, client.dag_get(cid, Option::<String>::None).await))
+            });
         }
 
-        spawn_local(ipfs_resolve_and_get_callback(
-            self.ipfs.clone(),
-            beacon.video_list.clone(),
-            self.link.callback(Msg::List),
-        ));
+        let cb = self.link.callback(Msg::ResolveList);
+        let client = self.ipfs.clone();
+        let ipns = beacon.video_list.clone();
+
+        spawn_local(async move { cb.emit(client.resolve_and_dag_get(ipns).await) });
 
         self.beacon = Some(beacon);
 
@@ -225,7 +233,16 @@ impl Defluencer {
     }
 
     /// Receive video list, save locally and try to get all metadata
-    fn video_list_update(&mut self, list_cid: Cid, list: VideoList) -> bool {
+    fn video_list_update(
+        &mut self,
+        list_cid: Cid,
+        response: Result<VideoList, ipfs_api::response::Error>,
+    ) -> bool {
+        let list = match response {
+            Ok(l) => l,
+            Err(_) => return false,
+        };
+
         if let Some(old_list_cid) = self.list_cid.as_ref() {
             if *old_list_cid == list_cid && self.video_list.is_some() {
                 return false;
@@ -251,11 +268,13 @@ impl Defluencer {
         }
 
         for metadata in list.metadata.iter().rev() {
-            spawn_local(ipfs_dag_get_callback(
-                self.ipfs.clone(),
-                metadata.link,
-                self.link.callback(Msg::Metadata),
-            ))
+            let cb = self.link.callback(Msg::Metadata);
+            let client = self.ipfs.clone();
+            let cid = metadata.link;
+
+            spawn_local(async move {
+                cb.emit((cid, client.dag_get(cid, Option::<String>::None).await))
+            });
         }
 
         self.call_count += list.metadata.len();
@@ -266,7 +285,16 @@ impl Defluencer {
     }
 
     /// Receive video metadata then update thumbnails
-    fn video_metadata_update(&mut self, metadata_cid: Cid, metadata: VideoMetadata) -> bool {
+    fn video_metadata_update(
+        &mut self,
+        metadata_cid: Cid,
+        response: Result<VideoMetadata, ipfs_api::response::Error>,
+    ) -> bool {
+        let metadata = match response {
+            Ok(d) => d,
+            Err(_) => return false,
+        };
+
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
             "Display Add => {} \n {}",

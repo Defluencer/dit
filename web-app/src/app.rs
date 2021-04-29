@@ -1,5 +1,5 @@
 use crate::pages::{Defluencer, Home, Settings, Video};
-use crate::utils::ipfs::IPFSService;
+use crate::utils::ipfs::IpfsService;
 use crate::utils::web3::Web3Service;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
@@ -30,7 +30,7 @@ impl AppRoute {
 
 pub struct App {
     web3: Web3Service,
-    ipfs: IPFSService,
+    ipfs: IpfsService,
 }
 
 impl Component for App {
@@ -39,7 +39,7 @@ impl Component for App {
 
     fn create(_props: Self::Properties, _: ComponentLink<Self>) -> Self {
         let web3 = Web3Service::new().unwrap();
-        let ipfs = IPFSService::new();
+        let ipfs = IpfsService::new();
 
         Self { web3, ipfs }
     }
