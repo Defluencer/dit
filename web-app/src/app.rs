@@ -50,7 +50,7 @@ impl Component for App {
     }
 
     fn view(&self) -> Html {
-        let web3 = self.web3;
+        let web3 = self.web3.clone();
 
         html! {
             <>

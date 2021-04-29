@@ -18,15 +18,13 @@ use cid::Cid;
 
 use linked_data::chat::{SignedMessage, UnsignedMessage};
 
-const SIGN_MSG_KEY: &str = "signed_message";
-
 pub struct Display {
     link: ComponentLink<Self>,
 
-    topic: String,
+    topic: Rc<str>,
     _pubsub_closure: Closure<dyn Fn(String, Vec<u8>)>,
 
-    trusted: HashMap<(String, Cid), String>,
+    trusted_identities: HashMap<Cid, (String, String)>,
 
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
@@ -39,7 +37,7 @@ pub enum Msg {
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub topic: String,
+    pub topic: Rc<str>,
 }
 
 impl Component for Display {
@@ -62,7 +60,7 @@ impl Component for Display {
             link,
             topic,
             _pubsub_closure,
-            trusted: HashMap::with_capacity(100),
+            trusted_identities: HashMap::with_capacity(100),
 
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
@@ -121,8 +119,12 @@ impl Display {
             return false;
         }
 
-        if let Some(name) = self.trusted.get(&(from, msg.origin.link)) {
-            return self.display_msg(name, &msg.message);
+        if let Some((peer_id, name)) = self.trusted_identities.get(&msg.origin.link) {
+            if *peer_id == from {
+                let name = name.clone();
+
+                return self.display_msg(&name, &msg.message);
+            }
         }
 
         let cb = self.link.callback_once(Msg::Origin);
@@ -174,8 +176,8 @@ impl Display {
             return false;
         }
 
-        self.trusted
-            .insert((from, msg.origin.link), sign_msg.data.name);
+        self.trusted_identities
+            .insert(msg.origin.link, (from, sign_msg.data.name.clone()));
 
         self.display_msg(&sign_msg.data.name, &msg.message)
     }

@@ -10,9 +10,11 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
+use linked_data::chat::Content;
+
 #[derive(Clone)]
 pub struct Web3Service {
-    pub client: Web3<Eip1193>,
+    client: Web3<Eip1193>,
 }
 
 impl Web3Service {
@@ -26,7 +28,7 @@ impl Web3Service {
         Ok(Self { client })
     }
 
-    pub async fn get_ipfs_content(&self, name: &str) -> Result<Cid, web3::contract::Error> {
+    pub async fn get_ipfs_content(&self, name: String) -> Result<Cid, web3::contract::Error> {
         let name = &format!("defluencer.{}.eth", name);
 
         #[cfg(debug_assertions)]
@@ -64,7 +66,9 @@ impl Web3Service {
     }
 
     //https://docs.rs/web3/0.15.0/web3/api/struct.Eth.html#method.sign
-    pub async fn eth_sign(&self, addrs: Address, data: Vec<u8>) -> Result<[u8; 65], Error> {
+    pub async fn eth_sign(&self, addrs: Address, data: Content) -> Result<[u8; 65], Error> {
+        let data = serde_json::to_vec(&data).expect("Cannot Serialize");
+
         let sign = self.client.eth().sign(addrs, data.into()).await?;
 
         Ok(sign.to_fixed_bytes())
@@ -76,6 +80,4 @@ impl Web3Service {
 
         Ok(name)
     }
-
-    //TODO Set chat name to ens name
 }

@@ -1,17 +1,14 @@
+use std::rc::Rc;
+use std::str;
+
 use crate::components::chat::display::Display;
 use crate::components::chat::inputs::Inputs;
-use crate::utils::local_storage::get_local_storage;
 use crate::utils::web3::Web3Service;
-
-use web_sys::{Storage, Window};
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 pub struct ChatWindow {
-    link: ComponentLink<Self>,
-    topic: String,
-    window: Window,
-    storage: Option<Storage>,
+    topic: Rc<str>,
     web3: Web3Service,
 }
 
@@ -25,23 +22,14 @@ impl Component for ChatWindow {
     type Message = ();
     type Properties = Props;
 
-    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
         let web3 = props.web3;
-        let topic = props.topic;
+        let topic = Rc::from(props.topic);
 
-        let window = web_sys::window().expect("Can't get window");
-        let storage = get_local_storage(&window);
-
-        Self {
-            link,
-            topic,
-            window,
-            storage,
-            web3,
-        }
+        Self { topic, web3 }
     }
 
-    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
         false
     }
 
@@ -52,8 +40,8 @@ impl Component for ChatWindow {
     fn view(&self) -> Html {
         html! {
         <div class="chat_window">
-            <Display topic=self.topic />
-            <Inputs topic=self.topic web3=self.web3/>
+            <Display topic=self.topic.clone() />
+            <Inputs topic=self.topic.clone() web3=self.web3.clone() />
         </div>
         }
     }

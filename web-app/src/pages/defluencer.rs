@@ -74,8 +74,12 @@ impl Component for Defluencer {
             }
             Err(_) => {
                 let cb = link.callback_once(Msg::Name);
+                let web3_clone = web3.clone();
+                let ens_name_clone = ens_name.clone();
 
-                spawn_local(async move { cb.emit(web3.get_ipfs_content(&ens_name).await) });
+                spawn_local(
+                    async move { cb.emit(web3_clone.get_ipfs_content(ens_name_clone).await) },
+                );
 
                 get_cid(&ens_name, storage.as_ref())
             }
@@ -117,7 +121,7 @@ impl Component for Defluencer {
                         <Navbar />
                         <div class="live_stream">
                             <VideoPlayer metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
-                            <ChatWindow topic=beacon.topics.live_chat.clone() />
+                            <ChatWindow web3=self.web3.clone() topic=beacon.topics.live_chat.clone() />
                         </div>
                         <div class="video_list">
                         {
