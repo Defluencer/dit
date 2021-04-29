@@ -10,6 +10,7 @@ blockies = "0.3.0"
 cid = "0.6"
 futures = "0.3"
 futures-util = { version = "0.3" }
+http = "0.2.4"
 ipfs-api = { git = "https://github.com/sionois/rust-ipfs-api", branch = "pubsub-reqwest", features = ["with-reqwest"] }
 js-sys = "0.3"
 linked-data = { path = "../linked-data" }

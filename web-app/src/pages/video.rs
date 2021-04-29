@@ -1,5 +1,5 @@
 use crate::components::{Navbar, VideoPlayer};
-use crate::utils::ipfs::ipfs_dag_get_callback;
+use crate::utils::ipfs::IPFSService;
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -9,18 +9,17 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-use ipfs_api::IpfsClient;
-
 pub struct Video {
     metadata: Option<VideoMetadata>,
 }
 
 pub enum Msg {
-    Metadata((Cid, VideoMetadata)),
+    Metadata(Result<VideoMetadata, ipfs_api::response::Error>),
 }
 
 #[derive(Clone, Properties)]
 pub struct Props {
+    pub ipfs: IPFSService,
     pub metadata_cid: Cid,
 }
 
@@ -29,20 +28,20 @@ impl Component for Video {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let ipfs = IpfsClient::default();
+        let Props { ipfs, metadata_cid } = props;
 
-        spawn_local(ipfs_dag_get_callback(
-            ipfs.clone(),
-            props.metadata_cid,
-            link.callback(Msg::Metadata),
-        ));
+        let cb = link.callback(Msg::Metadata);
+
+        spawn_local(
+            async move { cb.emit(ipfs.dag_get(metadata_cid, Option::<String>::None).await) },
+        );
 
         Self { metadata: None }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Metadata((_, metadata)) => self.update_metadata(metadata),
+            Msg::Metadata(res) => self.update_metadata(res),
         }
     }
 
@@ -69,7 +68,19 @@ impl Component for Video {
 }
 
 impl Video {
-    fn update_metadata(&mut self, metadata: VideoMetadata) -> bool {
+    fn update_metadata(
+        &mut self,
+        response: Result<VideoMetadata, ipfs_api::response::Error>,
+    ) -> bool {
+        let metadata = match response {
+            Ok(md) => md,
+            Err(e) => {
+                //TODO display error
+                // states; loading, video or error
+                return false;
+            }
+        };
+
         self.metadata = Some(metadata);
 
         true

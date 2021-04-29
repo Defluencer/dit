@@ -2337,6 +2337,7 @@ dependencies = [
  "cid",
  "futures",
  "futures-util",
+ "http",
  "ipfs-api",
  "js-sys",
  "linked-data",

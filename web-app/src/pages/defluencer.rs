@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::components::{ChatWindow, Navbar, VideoPlayer, VideoThumbnail};
-use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
+use crate::utils::ipfs::IPFSService;
 use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
 use crate::utils::web3::Web3Service;
 
@@ -18,12 +18,11 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-use ipfs_api::IpfsClient;
-
 /// Specific Defluencer Home Page
 pub struct Defluencer {
     link: ComponentLink<Self>,
 
+    ipfs: IPFSService,
     web3: Web3Service,
     ens_name: String,
 
@@ -39,8 +38,6 @@ pub struct Defluencer {
 
     call_count: usize,
     metadata_map: HashMap<Cid, VideoMetadata>,
-
-    ipfs: IpfsClient,
 }
 
 pub enum Msg {
@@ -52,6 +49,7 @@ pub enum Msg {
 
 #[derive(Properties, Clone)]
 pub struct Props {
+    pub ipfs: IPFSService, // From app.
     pub web3: Web3Service, // From app.
     pub ens_name: String,  // From router. Beacon Cid or ENS name.
 }
@@ -61,9 +59,11 @@ impl Component for Defluencer {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let ipfs = IpfsClient::default();
-
-        let ens_name = props.ens_name;
+        let Props {
+            ipfs,
+            web3,
+            ens_name,
+        } = props;
 
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
@@ -93,6 +93,7 @@ impl Component for Defluencer {
 
         Self {
             link,
+            ipfs,
             web3,
             ens_name,
             searching: true,
@@ -103,7 +104,6 @@ impl Component for Defluencer {
             storage,
             call_count: 0,
             metadata_map: HashMap::with_capacity(10),
-            ipfs,
         }
     }
 
