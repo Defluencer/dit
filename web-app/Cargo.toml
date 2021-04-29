@@ -8,7 +8,9 @@ licence = "MIT OR Apache-2.0"
 [dependencies]
 blockies = "0.3.0"
 cid = "0.6"
-futures = "0.3.13"
+futures = "0.3"
+futures-util = { version = "0.3" }
+ipfs-api = { git = "https://github.com/sionois/rust-ipfs-api", branch = "pubsub-reqwest", features = ["with-reqwest"] }
 js-sys = "0.3"
 linked-data = { path = "../linked-data" }
 serde = { version = "1.0", features = ["derive"] }

@@ -2336,6 +2336,8 @@ dependencies = [
  "blockies",
  "cid",
  "futures",
+ "futures-util",
+ "ipfs-api",
  "js-sys",
  "linked-data",
  "serde",

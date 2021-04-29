@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 use std::str;
 use std::str::FromStr;
 
-use crate::utils::bindings::{ipfs_subscribe, ipfs_unsubscribe};
 use crate::utils::ema::ExponentialMovingAverage;
 use crate::utils::ipfs::{audio_video_cat, init_cat, ipfs_dag_get_path_callback};
 
