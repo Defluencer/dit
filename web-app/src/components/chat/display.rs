@@ -14,21 +14,25 @@ use cid::Cid;
 
 use linked_data::chat::{SignedMessage, UnsignedMessage};
 
+use ipfs_api::response::Error;
+use ipfs_api::response::PubsubSubResponse;
+
 pub struct Display {
     link: ComponentLink<Self>,
 
     ipfs: IpfsService,
-    topic: Rc<str>,
-
+    //topic: Rc<str>,
     trusted_identities: HashMap<Cid, (String, String)>,
+
+    msg_buffer: Vec<(String, UnsignedMessage)>,
 
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
 }
 
 pub enum Msg {
-    PubSub((String, Vec<u8>)),
-    Origin(Result<SignedMessage, ipfs_api::response::Error>),
+    PubSub(Result<PubsubSubResponse, Error>),
+    Origin((Cid, Result<SignedMessage, Error>)),
 }
 
 #[derive(Properties, Clone)]
@@ -44,14 +48,20 @@ impl Component for Display {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let Props { ipfs, topic } = props;
 
-        //TODO ipfs_subscribe(&topic, _pubsub_closure.as_ref().unchecked_ref());
+        let client = ipfs.clone();
+        let cb = link.callback(Msg::PubSub);
+        let sub_topic = topic.to_string();
+
+        spawn_local(async move { client.pubsub_sub(sub_topic, cb).await });
 
         Self {
             link,
 
             ipfs,
-            topic,
+            //topic,
             trusted_identities: HashMap::with_capacity(100),
+
+            msg_buffer: Vec::with_capacity(10),
 
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
@@ -60,8 +70,8 @@ impl Component for Display {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::PubSub((from, data)) => self.on_pubsub_update(from, data),
-            Msg::Origin(result) => self.on_signed_msg(result),
+            Msg::PubSub(result) => self.on_pubsub_update(result),
+            Msg::Origin((cid, result)) => self.on_signed_msg(cid, result),
         }
     }
 
@@ -85,13 +95,36 @@ impl Component for Display {
         #[cfg(debug_assertions)]
         ConsoleService::info("Dropping Live Chat");
 
-        //TODO ipfs_unsubscribe(&self.topic);
+        //ipfs_unsubscribe(&self.topic);
     }
 }
 
 impl Display {
     /// Callback when GossipSub receive a message.
-    fn on_pubsub_update(&mut self, from: String, data: Vec<u8>) -> bool {
+    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, Error>) -> bool {
+        let response = match result {
+            Ok(res) => res,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
+        let PubsubSubResponse {
+            from,
+            data,
+            seqno: _,
+            topic_ids: _,
+            unrecognized: _,
+        } = response;
+
+        if from.is_none() || data.is_none() {
+            return false;
+        }
+
+        let from = from.unwrap();
+        let data = data.unwrap();
+
         #[cfg(debug_assertions)]
         ConsoleService::info("PubSub Message");
 
@@ -100,7 +133,10 @@ impl Display {
 
         let msg: UnsignedMessage = match serde_json::from_slice(&data) {
             Ok(msg) => msg,
-            Err(_) => return false,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
         };
 
         #[cfg(debug_assertions)]
@@ -110,19 +146,38 @@ impl Display {
             return false;
         }
 
-        if let Some((peer_id, name)) = self.trusted_identities.get(&msg.origin.link) {
-            if *peer_id == from {
-                let name = name.clone();
+        match self.trusted_identities.get(&msg.origin.link) {
+            Some(value) => {
+                if value.0 == from {
+                    let msg_data = MessageData {
+                        id: self.next_id,
+                        sender_name: Rc::from(value.1.clone()),
+                        message: Rc::from(msg.message),
+                    };
 
-                return self.display_msg(&name, &msg.message);
+                    self.chat_messages.push_back(msg_data);
+
+                    if self.chat_messages.len() >= 10 {
+                        self.chat_messages.pop_front();
+                    }
+
+                    self.next_id += 1;
+
+                    return true;
+                }
+            }
+            None => {
+                let cb = self.link.callback_once(Msg::Origin);
+                let client = self.ipfs.clone();
+                let cid = msg.origin.link;
+
+                self.msg_buffer.push((from, msg));
+
+                spawn_local(async move {
+                    cb.emit((cid, client.dag_get(cid, Option::<String>::None).await))
+                });
             }
         }
-
-        let cb = self.link.callback_once(Msg::Origin);
-        let client = self.ipfs.clone();
-        let cid = msg.origin.link;
-
-        spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
 
         false
     }
@@ -134,27 +189,10 @@ impl Display {
         //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)
     }
 
-    fn display_msg(&mut self, name: &str, msg: &str) -> bool {
-        let msg_data = MessageData {
-            id: self.next_id,
-            sender_name: Rc::from(name),
-            message: Rc::from(msg),
-        };
-
-        self.chat_messages.push_back(msg_data);
-
-        if self.chat_messages.len() >= 10 {
-            self.chat_messages.pop_front();
-        }
-
-        self.next_id += 1;
-
-        true
-    }
-
-    /// Callback when IPFS get signed message dag node.
+    /// Callback when IPFS dag get signed message node.
     fn on_signed_msg(
         &mut self,
+        cid: Cid,
         response: Result<SignedMessage, ipfs_api::response::Error>,
     ) -> bool {
         let sign_msg = match response {
@@ -167,20 +205,45 @@ impl Display {
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Signed Message => {:#?}", sign_msg));
-        false
-        //TODO
 
-        /* if from != sign_msg.data.peer_id {
-            return false;
+        let verified = sign_msg.verify();
+
+        if verified {
+            self.trusted_identities.insert(
+                cid,
+                (sign_msg.data.peer_id.clone(), sign_msg.data.name.clone()),
+            );
         }
 
-        if !sign_msg.verify() {
-            return false;
+        let mut i = self.msg_buffer.len() - 1;
+        while i != 0 {
+            let (from, msg) = &self.msg_buffer[i];
+
+            if cid != msg.origin.link {
+                continue;
+            }
+
+            if *from == sign_msg.data.peer_id && verified {
+                let msg_data = MessageData {
+                    id: self.next_id,
+                    sender_name: Rc::from(sign_msg.data.name.clone()),
+                    message: Rc::from(msg.message.clone()),
+                };
+
+                self.chat_messages.push_back(msg_data);
+
+                if self.chat_messages.len() >= 10 {
+                    self.chat_messages.pop_front();
+                }
+
+                self.next_id += 1;
+            }
+
+            self.msg_buffer.swap_remove(i);
+
+            i -= 1;
         }
 
-        self.trusted_identities
-            .insert(msg.origin.link, (from, sign_msg.data.name.clone()));
-
-        self.display_msg(&sign_msg.data.name, &msg.message) */
+        true
     }
 }

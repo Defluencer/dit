@@ -1,13 +1,17 @@
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::io::Cursor;
+use std::str::FromStr;
 
 use crate::utils::local_storage::{get_local_ipfs_addrs, get_local_storage, set_local_ipfs_addrs};
 
 use ipfs_api::response::Error;
+use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 use ipfs_api::TryFromUri;
 
+use futures::Stream;
+use futures::StreamExt;
 use futures_util::TryStreamExt;
 
 use futures::join;
@@ -16,6 +20,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use yew::services::ConsoleService;
+use yew::Callback;
 
 use cid::Cid;
 
@@ -33,18 +38,21 @@ impl IpfsService {
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
 
-        let addrs = match get_local_ipfs_addrs(storage.as_ref()) {
-            Some(addrs) => &addrs,
-            None => {
-                set_local_ipfs_addrs(DEFAULT_URI, storage.as_ref());
+        let mut uri = None;
 
-                DEFAULT_URI
+        if let Some(addrs) = get_local_ipfs_addrs(storage.as_ref()) {
+            if let Ok(uri_from_str) = Uri::from_str(&addrs) {
+                uri = Some(uri_from_str);
             }
-        };
+        }
 
-        let uri = Uri::from_static(addrs);
+        if uri.is_none() {
+            set_local_ipfs_addrs(DEFAULT_URI, storage.as_ref());
 
-        let client = IpfsClient::build_with_base_uri(uri);
+            uri = Some(Uri::from_static(DEFAULT_URI));
+        }
+
+        let client = IpfsClient::build_with_base_uri(uri.unwrap());
 
         Self { client }
     }
@@ -157,5 +165,16 @@ impl IpfsService {
         let node = serde_json::from_slice::<T>(&result).expect("Invalid Dag Node");
 
         Ok(node)
+    }
+
+    pub async fn pubsub_sub<U>(&self, topic: U, cb: Callback<Result<PubsubSubResponse, Error>>)
+    where
+        U: Into<Cow<'static, str>>,
+    {
+        let mut stream = self.client.pubsub_sub(&topic.into(), true);
+
+        while let Some(result) = stream.next().await {
+            cb.emit(result);
+        }
     }
 }

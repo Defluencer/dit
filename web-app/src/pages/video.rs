@@ -4,24 +4,32 @@ use crate::utils::ipfs::IpfsService;
 use wasm_bindgen_futures::spawn_local;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::services::ConsoleService;
 
 use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-pub struct Video {
-    ipfs: IpfsService,
-    metadata: Option<VideoMetadata>,
+#[allow(clippy::large_enum_variant)]
+enum State {
+    Loading,
+    Ready(VideoMetadata),
+    Error(ipfs_api::response::Error),
 }
 
-pub enum Msg {
-    Metadata(Result<VideoMetadata, ipfs_api::response::Error>),
+pub struct Video {
+    ipfs: IpfsService,
+    state: State,
 }
 
 #[derive(Clone, Properties)]
 pub struct Props {
     pub ipfs: IpfsService,
     pub metadata_cid: Cid,
+}
+
+pub enum Msg {
+    Metadata(Result<VideoMetadata, ipfs_api::response::Error>),
 }
 
 impl Component for Video {
@@ -31,22 +39,22 @@ impl Component for Video {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let Props { ipfs, metadata_cid } = props;
 
-        let cb = link.callback(Msg::Metadata);
+        let cb = link.callback_once(Msg::Metadata);
         let client = ipfs.clone();
 
         spawn_local(
-            async move { cb.emit(ipfs.dag_get(metadata_cid, Option::<String>::None).await) },
+            async move { cb.emit(client.dag_get(metadata_cid, Option::<String>::None).await) },
         );
 
         Self {
             ipfs,
-            metadata: None,
+            state: State::Loading,
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Metadata(res) => self.update_metadata(res),
+            Msg::Metadata(result) => self.update_metadata(result),
         }
     }
 
@@ -57,14 +65,14 @@ impl Component for Video {
     fn view(&self) -> Html {
         html! {
             <div class="video_page">
-                <Navbar />
-                {
-                    if let Some(md) = self.metadata.as_ref() {
-                        html! { <VideoPlayer ipfs=self.ipfs.clone() metadata=Some(md.clone()) topic=Option::<String>::None streamer_peer_id=Option::<String>::None /> }
-                    } else {
-                        html! { <div class="center_text"> {"Loading..."} </div> }
-                    }
+            <Navbar />
+            {
+                match &self.state {
+                    State::Loading => html! { <div class="center_text"> {"Loading..."} </div> },
+                    State::Ready(md) => html! { <VideoPlayer ipfs=self.ipfs.clone() metadata=Some(md.clone()) topic=Option::<String>::None streamer_peer_id=Option::<String>::None /> },
+                    State::Error(e) => html! { <div class="center_text"> { format!("{:#?}", e) } </div> },
                 }
+            }
             </div>
         }
     }
@@ -80,13 +88,13 @@ impl Video {
         let metadata = match response {
             Ok(md) => md,
             Err(e) => {
-                //TODO display error
-                // states; loading, video or error
+                ConsoleService::error(&format!("{:?}", e));
+                self.state = State::Error(e);
                 return false;
             }
         };
 
-        self.metadata = Some(metadata);
+        self.state = State::Ready(metadata);
 
         true
     }

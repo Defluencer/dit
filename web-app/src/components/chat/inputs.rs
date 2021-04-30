@@ -37,7 +37,6 @@ pub struct Inputs {
 
     ipfs: IpfsService,
     topic: Rc<str>,
-
     state: State,
 
     window: Window,
@@ -93,7 +92,6 @@ impl Component for Inputs {
 
             ipfs,
             topic,
-
             state,
 
             window,
