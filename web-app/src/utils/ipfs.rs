@@ -6,11 +6,10 @@ use std::str::FromStr;
 use crate::utils::local_storage::{get_local_ipfs_addrs, get_local_storage, set_local_ipfs_addrs};
 
 use ipfs_api::response::Error;
-use ipfs_api::response::PubsubSubResponse;
+use ipfs_api::response::{IdResponse, PubsubPubResponse, PubsubSubResponse};
 use ipfs_api::IpfsClient;
 use ipfs_api::TryFromUri;
 
-use futures::Stream;
 use futures::StreamExt;
 use futures_util::TryStreamExt;
 
@@ -176,5 +175,16 @@ impl IpfsService {
         while let Some(result) = stream.next().await {
             cb.emit(result);
         }
+    }
+
+    pub async fn pubsub_pub<U>(&self, topic: U, msg: U) -> Result<PubsubPubResponse, Error>
+    where
+        U: Into<Cow<'static, str>>,
+    {
+        self.client.pubsub_pub(&topic.into(), &msg.into()).await
+    }
+
+    pub async fn ipfs_node_id(&self) -> Result<IdResponse, Error> {
+        self.client.id(None).await
     }
 }

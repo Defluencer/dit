@@ -18,6 +18,8 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
+use ipfs_api::response::Error;
+
 pub struct Defluencer {
     link: ComponentLink<Self>,
 
@@ -40,11 +42,11 @@ pub struct Defluencer {
 }
 
 pub enum Msg {
-    Name(Result<Cid, web3::contract::Error>),
-    Beacon(Result<Beacon, ipfs_api::response::Error>),
-    List((Cid, Result<VideoList, ipfs_api::response::Error>)),
-    ResolveList(Result<(Cid, VideoList), ipfs_api::response::Error>),
-    Metadata((Cid, Result<VideoMetadata, ipfs_api::response::Error>)),
+    ResolveName(Result<Cid, web3::contract::Error>),
+    Beacon(Result<Beacon, Error>),
+    List((Cid, Result<VideoList, Error>)),
+    ResolveList(Result<(Cid, VideoList), Error>),
+    Metadata((Cid, Result<VideoMetadata, Error>)),
 }
 
 #[derive(Properties, Clone)]
@@ -80,13 +82,11 @@ impl Component for Defluencer {
                 Some(cid)
             }
             Err(_) => {
-                let cb = link.callback_once(Msg::Name);
-                let web3_clone = web3.clone();
-                let ens_name_clone = ens_name.clone();
+                let cb = link.callback_once(Msg::ResolveName);
+                let web3 = web3.clone();
+                let name = ens_name.clone();
 
-                spawn_local(
-                    async move { cb.emit(web3_clone.get_ipfs_content(ens_name_clone).await) },
-                );
+                spawn_local(async move { cb.emit(web3.get_ipfs_content(name).await) });
 
                 get_cid(&ens_name, storage.as_ref())
             }
@@ -110,7 +110,7 @@ impl Component for Defluencer {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Name(result) => self.on_name_resolved(result),
+            Msg::ResolveName(result) => self.on_name_resolved(result),
             Msg::Beacon(result) => self.on_beacon_update(result),
             Msg::List((cid, result)) => self.on_video_list_update(cid, result),
             Msg::ResolveList(result) => self.on_video_list_resolved(result),
@@ -169,8 +169,8 @@ impl Component for Defluencer {
 
 impl Defluencer {
     /// Callback when Ethereum Name Service resolve name to beacon Cid.
-    fn on_name_resolved(&mut self, result: Result<Cid, web3::contract::Error>) -> bool {
-        let cid = match result {
+    fn on_name_resolved(&mut self, res: Result<Cid, web3::contract::Error>) -> bool {
+        let cid = match res {
             Ok(cid) => cid,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -201,8 +201,8 @@ impl Defluencer {
     }
 
     /// Callback when IPFS dag get return beacon node.
-    fn on_beacon_update(&mut self, result: Result<Beacon, ipfs_api::response::Error>) -> bool {
-        let beacon = match result {
+    fn on_beacon_update(&mut self, res: Result<Beacon, Error>) -> bool {
+        let beacon = match res {
             Ok(b) => b,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -236,11 +236,8 @@ impl Defluencer {
     }
 
     /// Callback when IPFS dag get return VideoList node.
-    fn on_video_list_resolved(
-        &mut self,
-        response: Result<(Cid, VideoList), ipfs_api::response::Error>,
-    ) -> bool {
-        let (cid, list) = match response {
+    fn on_video_list_resolved(&mut self, res: Result<(Cid, VideoList), Error>) -> bool {
+        let (cid, list) = match res {
             Ok((cid, list)) => (cid, list),
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -252,12 +249,8 @@ impl Defluencer {
     }
 
     /// Callback when IPFS resolve and dag get VideoList node.
-    fn on_video_list_update(
-        &mut self,
-        list_cid: Cid,
-        response: Result<VideoList, ipfs_api::response::Error>,
-    ) -> bool {
-        let list = match response {
+    fn on_video_list_update(&mut self, list_cid: Cid, res: Result<VideoList, Error>) -> bool {
+        let list = match res {
             Ok(l) => l,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -307,12 +300,8 @@ impl Defluencer {
     }
 
     /// Callback when IPFS dag get returns VideoMetadata node.
-    fn on_video_metadata_update(
-        &mut self,
-        metadata_cid: Cid,
-        response: Result<VideoMetadata, ipfs_api::response::Error>,
-    ) -> bool {
-        let metadata = match response {
+    fn on_video_metadata_update(&mut self, cid: Cid, res: Result<VideoMetadata, Error>) -> bool {
+        let metadata = match res {
             Ok(d) => d,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -323,11 +312,11 @@ impl Defluencer {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
             "Display Add => {} \n {}",
-            &metadata_cid.to_string(),
+            &cid.to_string(),
             &serde_json::to_string_pretty(&metadata).expect("Can't print")
         ));
 
-        self.metadata_map.insert(metadata_cid, metadata);
+        self.metadata_map.insert(cid, metadata);
 
         if self.call_count > 0 {
             self.call_count -= 1;

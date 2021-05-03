@@ -23,9 +23,12 @@ use linked_data::IPLDLink;
 
 use web3::types::Address;
 
+use ipfs_api::response::Error;
+use ipfs_api::response::IdResponse;
+
 const SIGN_MSG_KEY: &str = "signed_message";
 
-enum State {
+enum DisplayState {
     Connect,
     NameOk(String),
     Chatting,
@@ -37,7 +40,7 @@ pub struct Inputs {
 
     ipfs: IpfsService,
     topic: Rc<str>,
-    state: State,
+    state: DisplayState,
 
     window: Window,
     storage: Option<Storage>,
@@ -48,7 +51,8 @@ pub struct Inputs {
     address: Option<Address>,
     peer_id: Option<String>,
     name: Option<String>,
-    sign_msg: Option<Cid>,
+    sign_msg_content: Option<Content>,
+    sign_msg_cid: Option<Cid>,
 
     text_area: Option<HtmlTextAreaElement>,
     text_closure: Option<Closure<dyn Fn(KeyboardEvent)>>,
@@ -58,11 +62,13 @@ pub enum Msg {
     SetMsg(String),
     SendMsg,
     Connect,
+    PeerID(Result<IdResponse, Error>),
     Account(Result<Address, web3::Error>),
     AccountName(Result<String, web3::contract::Error>),
     SetName(String),
     SubmitName,
     Signed(Result<[u8; 65], web3::Error>),
+    Minted(Result<Cid, Error>),
 }
 
 #[derive(Properties, Clone)]
@@ -82,9 +88,9 @@ impl Component for Inputs {
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
 
-        let (sign_msg, state) = match get_cid(SIGN_MSG_KEY, storage.as_ref()) {
-            Some(msg) => (Some(msg), State::Chatting),
-            None => (None, State::Connect),
+        let (sign_msg_cid, state) = match get_cid(SIGN_MSG_KEY, storage.as_ref()) {
+            Some(cid) => (Some(cid), DisplayState::Chatting),
+            None => (None, DisplayState::Connect),
         };
 
         Self {
@@ -100,10 +106,11 @@ impl Component for Inputs {
 
             temp_msg: None,
 
-            sign_msg,
             address: None,
             peer_id: None,
             name: None,
+            sign_msg_content: None,
+            sign_msg_cid,
 
             text_area: None,
             text_closure: None,
@@ -115,11 +122,13 @@ impl Component for Inputs {
             Msg::SetMsg(msg) => self.on_chat_input(msg),
             Msg::SendMsg => self.send_message(),
             Msg::Connect => self.connect_account(),
+            Msg::PeerID(res) => self.on_peer_id(res),
             Msg::Account(res) => self.on_account_connected(res),
             Msg::AccountName(res) => self.on_account_name(res),
             Msg::SetName(name) => self.on_name_input(name),
             Msg::SubmitName => self.on_name_submit(),
             Msg::Signed(res) => self.on_signature(res),
+            Msg::Minted(res) => self.on_sign_msg_minted(res),
         }
     }
 
@@ -129,7 +138,7 @@ impl Component for Inputs {
 
     fn view(&self) -> Html {
         let content = match &self.state {
-            State::Chatting => {
+            DisplayState::Chatting => {
                 html! {
                 <div>
                     <textarea class="input_text" id="input_text"
@@ -140,17 +149,17 @@ impl Component for Inputs {
                     <button class="send_button" onclick=self.link.callback(|_| Msg::SendMsg)>{ "Send" }</button>
                 </div> }
             }
-            State::Connect => {
+            DisplayState::Connect => {
                 html! { <button class="connect_button" onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button> }
             }
-            State::NameOk(name) => {
+            DisplayState::NameOk(name) => {
                 html! {
                 <form id="submit_name">
                     <label class="name_label"><input placeholder=name oninput=self.link.callback(|e: InputData|  Msg::SetName(e.value)) /></label>
                     <button class="submit_button" onclick=self.link.callback(|_|  Msg::SubmitName)>{ "Confirm" }</button>
                 </form> }
             }
-            State::Error(e) => {
+            DisplayState::Error(e) => {
                 html! { <div> { e } </div> }
             }
         };
@@ -216,7 +225,7 @@ impl Inputs {
             text_area.set_value("");
         }
 
-        let cid = self.sign_msg.expect("Cannot send message with no origin");
+        let cid = self.sign_msg_cid.expect("No signed message CID");
 
         let msg = serde_json::to_string(&UnsignedMessage {
             message: msg.clone(),
@@ -226,7 +235,15 @@ impl Inputs {
 
         self.temp_msg = None;
 
-        //TODO ipfs_publish(&self.topic, &msg);
+        let client = self.ipfs.clone();
+        let topic = self.topic.to_string();
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Publish Message");
+
+        spawn_local(async move {
+            let _ = client.pubsub_pub(topic, msg).await;
+        });
 
         false
     }
@@ -236,26 +253,57 @@ impl Inputs {
         let cb = self.link.callback(Msg::Account);
         let web3 = self.web3.clone();
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Get Address");
+
         spawn_local(async move { cb.emit(web3.get_eth_accounts().await) });
+
+        let cb = self.link.callback(Msg::PeerID);
+        let client = self.ipfs.clone();
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Get Peer ID");
+
+        spawn_local(async move { cb.emit(client.ipfs_node_id().await) });
 
         false
     }
 
     /// Callback with response of request accounts.
     fn on_account_connected(&mut self, response: Result<Address, web3::Error>) -> bool {
-        match response {
-            Ok(address) => {
-                #[cfg(debug_assertions)]
-                ConsoleService::info(&format!("Address => {}", &address.to_string()));
-
-                self.address = Some(address);
-
-                let cb = self.link.callback(Msg::AccountName);
-                let web3 = self.web3.clone();
-                spawn_local(async move { cb.emit(web3.get_name(address).await) });
+        let address = match response {
+            Ok(address) => address,
+            Err(e) => {
+                self.state = DisplayState::Error(e.to_string());
+                return true;
             }
-            Err(e) => self.state = State::Error(e.to_string()),
-        }
+        };
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Address => {}", &address.to_string()));
+
+        self.address = Some(address);
+
+        let cb = self.link.callback(Msg::AccountName);
+        let web3 = self.web3.clone();
+        spawn_local(async move { cb.emit(web3.get_name(address).await) });
+
+        false
+    }
+
+    fn on_peer_id(&mut self, response: Result<IdResponse, Error>) -> bool {
+        let id = match response {
+            Ok(id) => id.id,
+            Err(e) => {
+                self.state = DisplayState::Error(e.to_string());
+                return true;
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Peer ID => {}", &id));
+
+        self.peer_id = Some(id);
 
         false
     }
@@ -263,7 +311,7 @@ impl Inputs {
     fn on_account_name(&mut self, response: Result<String, web3::contract::Error>) -> bool {
         let name = response.unwrap_or_default();
 
-        self.state = State::NameOk(name);
+        self.state = DisplayState::NameOk(name);
 
         true
     }
@@ -275,13 +323,16 @@ impl Inputs {
     }
 
     fn on_name_submit(&mut self) -> bool {
-        let address = self.address.take().expect("Invalid Address");
+        let address = self.address.expect("Invalid Address");
         let peer_id = self.peer_id.take().expect("Invalid Peer Id");
         let name = self.name.take().expect("Invalid Name");
 
         let cb = self.link.callback_once(Msg::Signed);
         let web3 = self.web3.clone();
         let data = Content { peer_id, name };
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Sign Message");
 
         spawn_local(async move { cb.emit(web3.eth_sign(address, data).await) });
 
@@ -292,7 +343,7 @@ impl Inputs {
         let signature = match reponse {
             Ok(sig) => sig.to_vec(),
             Err(e) => {
-                self.state = State::Error(e.to_string());
+                self.state = DisplayState::Error(e.to_string());
                 return true;
             }
         };
@@ -303,12 +354,7 @@ impl Inputs {
             .expect("Invalid Address")
             .to_fixed_bytes();
 
-        //TODO get peer id somehow
-        let peer_id = self.peer_id.take().expect("Invalid Peer Id");
-
-        let name = self.name.take().expect("Invalid Name");
-
-        let data = Content { peer_id, name };
+        let data = self.sign_msg_content.take().expect("No signed msg content");
 
         let signed_msg = SignedMessage {
             address,
@@ -316,11 +362,30 @@ impl Inputs {
             signature,
         };
 
-        //TODO add to IPFS
+        let cb = self.link.callback_once(Msg::Minted);
+        let client = self.ipfs.clone();
 
-        /* set_cid(SIGN_MSG_KEY, &cid, self.storage.as_ref());
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Mint Signed Message");
 
-        self.state = State::Chatting; */
+        spawn_local(async move { cb.emit(client.dag_put(&signed_msg).await) });
+
+        false
+    }
+
+    fn on_sign_msg_minted(&mut self, response: Result<Cid, ipfs_api::response::Error>) -> bool {
+        let cid = match response {
+            Ok(cid) => cid,
+            Err(e) => {
+                self.state = DisplayState::Error(e.to_string());
+                return true;
+            }
+        };
+
+        set_cid(SIGN_MSG_KEY, &cid, self.storage.as_ref());
+
+        self.sign_msg_cid = Some(cid);
+        self.state = DisplayState::Chatting;
 
         true
     }

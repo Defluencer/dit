@@ -118,12 +118,10 @@ impl Display {
             unrecognized: _,
         } = response;
 
-        if from.is_none() || data.is_none() {
-            return false;
-        }
-
-        let from = from.unwrap();
-        let data = data.unwrap();
+        let (from, data) = match (from, data) {
+            (Some(from), Some(data)) => (from, data),
+            _ => return false,
+        };
 
         #[cfg(debug_assertions)]
         ConsoleService::info("PubSub Message");

@@ -4,7 +4,6 @@ use crate::utils::ipfs::IpfsService;
 use wasm_bindgen_futures::spawn_local;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
-use yew::services::ConsoleService;
 
 use linked_data::video::VideoMetadata;
 
@@ -85,16 +84,10 @@ impl Video {
         &mut self,
         response: Result<VideoMetadata, ipfs_api::response::Error>,
     ) -> bool {
-        let metadata = match response {
-            Ok(md) => md,
-            Err(e) => {
-                ConsoleService::error(&format!("{:?}", e));
-                self.state = State::Error(e);
-                return false;
-            }
+        self.state = match response {
+            Ok(md) => State::Ready(md),
+            Err(e) => State::Error(e),
         };
-
-        self.state = State::Ready(metadata);
 
         true
     }
