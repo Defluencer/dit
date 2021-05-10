@@ -4,18 +4,34 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 
 use yewtil::NeqAssign;
 
+use cid::multibase::Base;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MessageData {
     pub id: usize,
-    pub sender_name: Rc<str>,
-    pub message: Rc<str>,
+    img_data: Rc<str>,
+    sender_name: Rc<str>,
+    message: Rc<str>,
 }
 
 impl MessageData {
+    pub fn new(id: usize, img_data: &[u8], name: &str, message: &str) -> Self {
+        let base = Base::Base64;
+        let encoded = base.encode(img_data);
+        let url = format!("data:image/png;base64,{}", encoded);
+
+        Self {
+            id,
+            img_data: Rc::from(url),
+            sender_name: Rc::from(name),
+            message: Rc::from(message),
+        }
+    }
+
     fn render(&self) -> Html {
         html! {
             <div class="chat_message">
-            //TODO blockies
+                <img src=self.img_data height="32" width="32" />
                 <h3>{ &self.sender_name }</h3>
                 <p>{ &self.message }</p>
             </div>

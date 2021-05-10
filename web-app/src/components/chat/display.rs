@@ -12,17 +12,22 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
-use linked_data::chat::{SignedMessage, UnsignedMessage};
+use linked_data::chat::{Content, SignedMessage, UnsignedMessage};
 
 use reqwest::Error;
+
+use blockies::Ethereum;
 
 pub struct Display {
     link: ComponentLink<Self>,
 
     ipfs: IpfsService,
-    //topic: Rc<str>,
-    trusted_identities: HashMap<Cid, (String, String)>,
+    img_gen: Ethereum,
 
+    /// Signed Message Cid Mapped to address, peer id and name
+    trusted_identities: HashMap<Cid, ([u8; 20], Content)>,
+
+    /// Peer Id with Unsigned Messages
     msg_buffer: Vec<(String, UnsignedMessage)>,
 
     next_id: usize,
@@ -53,11 +58,22 @@ impl Component for Display {
 
         spawn_local(async move { client.pubsub_sub(sub_topic, cb).await });
 
+        //https://github.com/ethereum/blockies
+        //https://docs.rs/blockies/0.3.0/blockies/struct.Ethereum.html
+        let img_gen = Ethereum {
+            size: 8,
+            scale: 4,
+            color: None,
+            background_color: None,
+            spot_color: None,
+        };
+
         Self {
             link,
 
             ipfs,
-            //topic,
+            img_gen,
+
             trusted_identities: HashMap::with_capacity(100),
 
             msg_buffer: Vec::with_capacity(10),
@@ -133,13 +149,16 @@ impl Display {
         }
 
         match self.trusted_identities.get(&msg.origin.link) {
-            Some(value) => {
-                if value.0 == from {
-                    let msg_data = MessageData {
-                        id: self.next_id,
-                        sender_name: Rc::from(value.1.clone()),
-                        message: Rc::from(msg.message),
-                    };
+            Some((addrs, content)) => {
+                if content.peer_id == from {
+                    let mut data = Vec::new();
+
+                    self.img_gen
+                        .create_icon(&mut data, addrs)
+                        .expect("Invalid Blocky");
+
+                    let msg_data =
+                        MessageData::new(self.next_id, &data, &content.name, &msg.message);
 
                     self.chat_messages.push_back(msg_data);
 
@@ -193,13 +212,6 @@ impl Display {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Verifiable => {}", verified));
 
-        if verified {
-            self.trusted_identities.insert(
-                cid,
-                (sign_msg.data.peer_id.clone(), sign_msg.data.name.clone()),
-            );
-        }
-
         let mut i = self.msg_buffer.len();
         while i != 0 {
             let (peer_id, msg) = &self.msg_buffer[i - 1];
@@ -209,11 +221,14 @@ impl Display {
             }
 
             if *peer_id == sign_msg.data.peer_id && verified {
-                let msg_data = MessageData {
-                    id: self.next_id,
-                    sender_name: Rc::from(sign_msg.data.name.clone()),
-                    message: Rc::from(msg.message.clone()),
-                };
+                let mut data = Vec::new();
+
+                self.img_gen
+                    .create_icon(&mut data, &sign_msg.address)
+                    .expect("Invalid Blocky");
+
+                let msg_data =
+                    MessageData::new(self.next_id, &data, &sign_msg.data.name, &msg.message);
 
                 self.chat_messages.push_back(msg_data);
 
@@ -227,6 +242,11 @@ impl Display {
             self.msg_buffer.swap_remove(i - 1);
 
             i -= 1;
+        }
+
+        if verified {
+            self.trusted_identities
+                .insert(cid, (sign_msg.address, sign_msg.data));
         }
 
         true
