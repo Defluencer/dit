@@ -3,7 +3,7 @@ use std::str;
 use std::str::FromStr;
 
 use crate::utils::ema::ExponentialMovingAverage;
-use crate::utils::ipfs::IpfsService;
+use crate::utils::ipfs::{IpfsService, PubsubSubResponse};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -18,8 +18,7 @@ use linked_data::video::{SetupNode, Track, VideoMetadata};
 
 use cid::Cid;
 
-use ipfs_api::response::Error;
-use ipfs_api::response::PubsubSubResponse;
+use reqwest::Error;
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -83,7 +82,7 @@ pub enum Msg {
     SetupNode(Result<SetupNode, Error>),
     Append(Result<(Vec<u8>, Vec<u8>), Error>),
     AppendVideo(Result<Vec<u8>, Error>),
-    PubSub(Result<PubsubSubResponse, Error>),
+    PubSub(Result<PubsubSubResponse, std::io::Error>),
 }
 
 #[derive(Clone, Properties)]
@@ -258,8 +257,8 @@ impl VideoPlayer {
     }
 
     /// Callback when GossipSub receive an update.
-    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, Error>) {
-        let response = match result {
+    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, std::io::Error>) {
+        let res = match result {
             Ok(res) => res,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -267,18 +266,7 @@ impl VideoPlayer {
             }
         };
 
-        let PubsubSubResponse {
-            from,
-            data,
-            seqno: _,
-            topic_ids: _,
-            unrecognized: _,
-        } = response;
-
-        let (from, data) = match (from, data) {
-            (Some(from), Some(data)) => (from, data),
-            _ => return,
-        };
+        let PubsubSubResponse { from, data } = res;
 
         let live = self.live_stream.as_mut().unwrap();
 
@@ -388,7 +376,7 @@ impl VideoPlayer {
     }
 
     /// Create source buffer then load initialization segment.
-    fn add_source_buffer(&mut self, setup_node: Result<SetupNode, ipfs_api::response::Error>) {
+    fn add_source_buffer(&mut self, setup_node: Result<SetupNode, Error>) {
         let setup_node = match setup_node {
             Ok(n) => n,
             Err(e) => {
@@ -797,7 +785,7 @@ impl VideoPlayer {
     }
 
     /// Append audio and video segments to the buffers.
-    fn append_buffers(&self, response: Result<(Vec<u8>, Vec<u8>), ipfs_api::response::Error>) {
+    fn append_buffers(&self, response: Result<(Vec<u8>, Vec<u8>), Error>) {
         let (mut aud_seg, mut vid_seg) = match response {
             Ok((a, v)) => (a, v),
             Err(e) => {
@@ -818,7 +806,7 @@ impl VideoPlayer {
     }
 
     /// Append video segments to the buffer.
-    fn append_video_buffer(&self, response: Result<Vec<u8>, ipfs_api::response::Error>) {
+    fn append_video_buffer(&self, response: Result<Vec<u8>, Error>) {
         let mut vid_seg = match response {
             Ok(d) => d,
             Err(e) => {

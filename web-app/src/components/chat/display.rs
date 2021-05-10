@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::str;
 
 use crate::components::chat::message::{MessageData, UIMessage};
-use crate::utils::ipfs::IpfsService;
+use crate::utils::ipfs::{IpfsService, PubsubSubResponse};
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -14,8 +14,7 @@ use cid::Cid;
 
 use linked_data::chat::{SignedMessage, UnsignedMessage};
 
-use ipfs_api::response::Error;
-use ipfs_api::response::PubsubSubResponse;
+use reqwest::Error;
 
 pub struct Display {
     link: ComponentLink<Self>,
@@ -31,7 +30,7 @@ pub struct Display {
 }
 
 pub enum Msg {
-    PubSub(Result<PubsubSubResponse, Error>),
+    PubSub(Result<PubsubSubResponse, std::io::Error>),
     Origin((Cid, Result<SignedMessage, Error>)),
 }
 
@@ -101,8 +100,8 @@ impl Component for Display {
 
 impl Display {
     /// Callback when GossipSub receive a message.
-    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, Error>) -> bool {
-        let response = match result {
+    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, std::io::Error>) -> bool {
+        let res = match result {
             Ok(res) => res,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -110,21 +109,10 @@ impl Display {
             }
         };
 
-        let PubsubSubResponse {
-            from,
-            data,
-            seqno: _,
-            topic_ids: _,
-            unrecognized: _,
-        } = response;
-
-        let (from, data) = match (from, data) {
-            (Some(from), Some(data)) => (from, data),
-            _ => return false,
-        };
-
         #[cfg(debug_assertions)]
-        ConsoleService::info("PubSub Message");
+        ConsoleService::info("PubSub Message Received");
+
+        let PubsubSubResponse { from, data } = res;
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
@@ -138,7 +126,7 @@ impl Display {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Unsigned Message => {:#?}", msg));
+        ConsoleService::info(&format!("Message => {}", msg.message));
 
         if !self.is_allowed(&from, &msg.origin.link) {
             return false;
@@ -188,11 +176,7 @@ impl Display {
     }
 
     /// Callback when IPFS dag get signed message node.
-    fn on_signed_msg(
-        &mut self,
-        cid: Cid,
-        response: Result<SignedMessage, ipfs_api::response::Error>,
-    ) -> bool {
+    fn on_signed_msg(&mut self, cid: Cid, response: Result<SignedMessage, Error>) -> bool {
         let sign_msg = match response {
             Ok(m) => m,
             Err(e) => {
@@ -202,9 +186,12 @@ impl Display {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Signed Message => {:#?}", sign_msg));
+        ConsoleService::info("Signed Message Received");
 
         let verified = sign_msg.verify();
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Verifiable => {}", verified));
 
         if verified {
             self.trusted_identities.insert(
@@ -213,15 +200,15 @@ impl Display {
             );
         }
 
-        let mut i = self.msg_buffer.len() - 1;
+        let mut i = self.msg_buffer.len();
         while i != 0 {
-            let (from, msg) = &self.msg_buffer[i];
+            let (peer_id, msg) = &self.msg_buffer[i - 1];
 
             if cid != msg.origin.link {
                 continue;
             }
 
-            if *from == sign_msg.data.peer_id && verified {
+            if *peer_id == sign_msg.data.peer_id && verified {
                 let msg_data = MessageData {
                     id: self.next_id,
                     sender_name: Rc::from(sign_msg.data.name.clone()),
@@ -237,7 +224,7 @@ impl Display {
                 self.next_id += 1;
             }
 
-            self.msg_buffer.swap_remove(i);
+            self.msg_buffer.swap_remove(i - 1);
 
             i -= 1;
         }

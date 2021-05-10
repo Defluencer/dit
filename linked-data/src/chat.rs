@@ -2,7 +2,16 @@ use crate::IPLDLink;
 
 use serde::{Deserialize, Serialize};
 
+/// Unsigned chat message with origin.
 #[derive(Serialize, Deserialize, Debug)]
+pub struct UnsignedMessage {
+    pub message: String,
+
+    /// Link to signed message.
+    pub origin: IPLDLink,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Content {
     pub peer_id: String,
 
@@ -19,15 +28,6 @@ pub struct SignedMessage {
 
     /// Content crypto-signed with this address.
     pub signature: Vec<u8>,
-}
-
-/// Unsigned chat message with origin.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct UnsignedMessage {
-    pub message: String,
-
-    /// Link to signed message.
-    pub origin: IPLDLink,
 }
 
 use secp256k1::recover;
@@ -65,7 +65,7 @@ impl SignedMessage {
 }
 
 /// Compute the Keccak-256 hash of input bytes.
-pub fn keccak256(bytes: &[u8]) -> [u8; 32] {
+fn keccak256(bytes: &[u8]) -> [u8; 32] {
     use tiny_keccak::{Hasher, Keccak};
     let mut output = [0u8; 32];
     let mut hasher = Keccak::v256();

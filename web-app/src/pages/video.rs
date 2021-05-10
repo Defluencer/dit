@@ -9,11 +9,13 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
+use reqwest::Error;
+
 #[allow(clippy::large_enum_variant)]
 enum State {
     Loading,
     Ready(VideoMetadata),
-    Error(ipfs_api::response::Error),
+    Error(Error),
 }
 
 pub struct Video {
@@ -28,7 +30,7 @@ pub struct Props {
 }
 
 pub enum Msg {
-    Metadata(Result<VideoMetadata, ipfs_api::response::Error>),
+    Metadata(Result<VideoMetadata, Error>),
 }
 
 impl Component for Video {
@@ -80,10 +82,7 @@ impl Component for Video {
 }
 
 impl Video {
-    fn update_metadata(
-        &mut self,
-        response: Result<VideoMetadata, ipfs_api::response::Error>,
-    ) -> bool {
+    fn update_metadata(&mut self, response: Result<VideoMetadata, Error>) -> bool {
         self.state = match response {
             Ok(md) => State::Ready(md),
             Err(e) => State::Error(e),

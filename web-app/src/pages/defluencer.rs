@@ -18,7 +18,7 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-use ipfs_api::response::Error;
+use reqwest::Error;
 
 pub struct Defluencer {
     link: ComponentLink<Self>,
