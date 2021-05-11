@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::str;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::components::chat::message::{MessageData, UIMessage};
 use crate::utils::ipfs::{IpfsService, PubsubSubResponse};
@@ -32,6 +33,8 @@ pub struct Display {
 
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
+
+    drop_sig: Rc<AtomicBool>,
 }
 
 pub enum Msg {
@@ -56,7 +59,10 @@ impl Component for Display {
         let cb = link.callback(Msg::PubSub);
         let sub_topic = topic.to_string();
 
-        spawn_local(async move { client.pubsub_sub(sub_topic, cb).await });
+        let drop_sig = Rc::from(AtomicBool::new(false));
+        let sig = drop_sig.clone();
+
+        spawn_local(async move { client.pubsub_sub(sub_topic, cb, sig).await });
 
         //https://github.com/ethereum/blockies
         //https://docs.rs/blockies/0.3.0/blockies/struct.Ethereum.html
@@ -80,6 +86,8 @@ impl Component for Display {
 
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
+
+            drop_sig,
         }
     }
 
@@ -110,7 +118,7 @@ impl Component for Display {
         #[cfg(debug_assertions)]
         ConsoleService::info("Dropping Live Chat");
 
-        //ipfs_unsubscribe(&self.topic);
+        self.drop_sig.store(true, Ordering::Relaxed);
     }
 }
 

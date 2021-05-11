@@ -13,9 +13,9 @@ pub struct UnsignedMessage {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Content {
-    pub peer_id: String,
-
     pub name: String,
+
+    pub peer_id: String,
 }
 
 /// Crypto-signed message origin.

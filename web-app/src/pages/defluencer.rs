@@ -64,8 +64,10 @@ impl Component for Defluencer {
         let Props {
             ipfs,
             web3,
-            ens_name,
+            mut ens_name,
         } = props;
+
+        ens_name.make_ascii_uppercase();
 
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);

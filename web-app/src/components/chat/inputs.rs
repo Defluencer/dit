@@ -287,6 +287,7 @@ impl Inputs {
 
         let cb = self.link.callback(Msg::AccountName);
         let web3 = self.web3.clone();
+
         spawn_local(async move { cb.emit(web3.get_name(address).await) });
 
         false
@@ -337,7 +338,7 @@ impl Inputs {
 
         let cb = self.link.callback_once(Msg::Signed);
         let web3 = self.web3.clone();
-        let data = Content { peer_id, name };
+        let data = Content { name, peer_id };
 
         self.sign_msg_content = Some(data.clone());
 

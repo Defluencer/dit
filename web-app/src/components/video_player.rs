@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
+use std::rc::Rc;
 use std::str;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::utils::ema::ExponentialMovingAverage;
 use crate::utils::ipfs::{IpfsService, PubsubSubResponse};
@@ -42,10 +44,11 @@ struct MediaBuffers {
 }
 
 struct LiveStream {
-    //topic: String,
     streamer_peer_id: String,
 
     buffer: VecDeque<Cid>,
+
+    drop_sig: Rc<AtomicBool>,
 }
 
 pub struct VideoPlayer {
@@ -132,13 +135,15 @@ impl Component for VideoPlayer {
             Some(topic) => {
                 let client = ipfs.clone();
                 let cb = link.callback(Msg::PubSub);
+                let drop_sig = Rc::from(AtomicBool::new(false));
+                let sig = drop_sig.clone();
 
-                spawn_local(async move { client.pubsub_sub(topic, cb).await });
+                spawn_local(async move { client.pubsub_sub(topic, cb, sig).await });
 
                 Some(LiveStream {
-                    //topic,
                     streamer_peer_id: streamer_peer_id.unwrap(),
                     buffer: VecDeque::with_capacity(5),
+                    drop_sig,
                 })
             }
             None => None,
@@ -226,9 +231,9 @@ impl Component for VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info("Dropping Video Player");
 
-        /* if let Some(live) = self.live_stream.as_ref() {
-            ipfs_unsubscribe(&live.topic);
-        } */
+        if let Some(live) = self.live_stream.as_ref() {
+            live.drop_sig.store(true, Ordering::Relaxed);
+        }
 
         if self.handle != 0 {
             self.window.clear_timeout_with_handle(self.handle);
