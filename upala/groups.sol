@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.3;
 
-import "eth/signatures.sol";
+import "upala/signatures.sol";
 
 contract UpalaGroups {
     uint256 private nextId;
