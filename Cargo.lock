@@ -1063,7 +1063,6 @@ version = "0.1.0"
 dependencies = [
  "cid",
  "libsecp256k1",
- "multihash",
  "serde",
  "serde_json",
  "tiny-keccak",
@@ -2386,11 +2385,9 @@ name = "web-app"
 version = "0.1.0"
 dependencies = [
  "blockies",
- "bytes",
  "cid",
  "futures",
  "futures-util",
- "http",
  "js-sys",
  "linked-data",
  "reqwest 0.11.3 (git+http://github.com/SionoiS/reqwest?branch=better_wasm)",
