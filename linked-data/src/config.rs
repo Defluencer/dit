@@ -26,7 +26,9 @@ impl Default for Configuration {
             },
 
             chat: ChatConfig {
-                pubsub_topic: "defluencer_live_chat".into(),
+                topic: "defluencer_live_chat".into(),
+                mods: String::default(),
+                bans: String::default(),
             },
         }
     }
@@ -48,8 +50,11 @@ pub struct VideoConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChatConfig {
-    pub pubsub_topic: String,
-    //pub blacklist: IPLDLink,
-    //pub whitelist: IPLDLink,
-    //pub mods: IPLDLink,
+    pub topic: String,
+
+    /// IPNS link
+    pub mods: String,
+
+    /// IPNS link
+    pub bans: String,
 }

@@ -1,20 +1,17 @@
 use crate::actors::archivist::Archive;
 use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
 
-//use hyper::body::Bytes;
-
-//use ipfs_api::response::Error;
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
 use linked_data::chat::{SignedMessage, UnsignedMessage};
 use linked_data::config::ChatConfig;
-//use linked_data::moderation::{Blacklist, Moderators, Whitelist};
+use linked_data::moderation::{Bans, Moderators};
 
 use cid::Cid;
 
@@ -23,36 +20,60 @@ pub struct ChatAggregator {
 
     archive_tx: UnboundedSender<Archive>,
 
-    config: ChatConfig,
-
     trusted: HashMap<String, Cid>,
-    //blacklist: Blacklist,
 
-    //whitelist: Whitelist,
+    ban_cache: HashSet<String>,
 
-    //mods: Moderators,
+    topic: String,
+
+    bans: Bans,
+    mods: Moderators,
 }
 
 impl ChatAggregator {
-    pub fn new(ipfs: IpfsClient, archive_tx: UnboundedSender<Archive>, config: ChatConfig) -> Self {
+    pub async fn new(
+        ipfs: IpfsClient,
+        archive_tx: UnboundedSender<Archive>,
+        config: ChatConfig,
+    ) -> Self {
+        let ChatConfig { topic, mods, bans } = config;
+
+        let res = ipfs
+            .name_resolve(Some(&mods), false, false)
+            .await
+            .expect("Invalid Mods Link");
+
+        let mods = ipfs_dag_get_node_async(&ipfs, &res.path)
+            .await
+            .expect("Invalid Moderators Node");
+
+        let res = ipfs
+            .name_resolve(Some(&bans), false, false)
+            .await
+            .expect("Invalid Mods Link");
+
+        let bans = ipfs_dag_get_node_async(&ipfs, &res.path)
+            .await
+            .expect("Invalid Moderators Node");
+
         Self {
             ipfs,
 
             archive_tx,
 
-            config,
-
             trusted: HashMap::with_capacity(100),
-            //blacklist,
 
-            //whitelist,
+            ban_cache: HashSet::with_capacity(100),
 
-            //mods: mods,
+            topic,
+
+            bans,
+            mods,
         }
     }
 
     pub async fn start(&mut self) {
-        let mut stream = self.ipfs.pubsub_sub(&self.config.pubsub_topic, true);
+        let mut stream = self.ipfs.pubsub_sub(&self.topic, true);
 
         println!("Chat System Online");
 
@@ -63,7 +84,7 @@ impl ChatAggregator {
             }
 
             match result {
-                Ok(response) => self.process_msg(&response).await,
+                Ok(response) => self.process_msg(response).await,
                 Err(error) => {
                     eprintln!("{}", error);
                     continue;
@@ -74,18 +95,22 @@ impl ChatAggregator {
         println!("Chat System Offline");
     }
 
-    async fn process_msg(&mut self, msg: &PubsubSubResponse) {
-        let from = match msg.from.as_ref() {
+    async fn process_msg(&mut self, msg: PubsubSubResponse) {
+        let from = match msg.from {
             Some(from) => from,
             None => return,
         };
 
-        let data = match msg.data.as_ref() {
+        if self.ban_cache.contains(&from) {
+            return;
+        }
+
+        let data = match msg.data {
             Some(data) => data,
             None => return,
         };
 
-        let msg: UnsignedMessage = match serde_json::from_slice(data) {
+        let msg: UnsignedMessage = match serde_json::from_slice(&data) {
             Ok(data) => data,
             Err(e) => {
                 eprintln!("Deserialization failed. {}", e);
@@ -93,9 +118,7 @@ impl ChatAggregator {
             }
         };
 
-        //TODO filter with lists
-
-        if Some(&msg.origin.link) == self.trusted.get(from) {
+        if Some(&msg.origin.link) == self.trusted.get(&from) {
             return self.mint_and_archive(msg).await;
         }
 
@@ -113,6 +136,11 @@ impl ChatAggregator {
         }
 
         if !sign_msg.verify() {
+            return;
+        }
+
+        if self.bans.banned.contains(&sign_msg.address) {
+            self.ban_cache.insert(from);
             return;
         }
 
@@ -136,11 +164,4 @@ impl ChatAggregator {
             eprintln!("Archive receiver hung up. {}", error);
         }
     }
-
-    /* /// Verify identity against white & black lists
-    fn is_allowed(&self, _from: &str, _identity: &UnsignedMessage) -> bool {
-        //TODO verify white & black list
-        true
-        //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)
-    } */
 }

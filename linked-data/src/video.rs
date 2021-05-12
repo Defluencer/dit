@@ -4,6 +4,13 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+/// List of all video metadata links.
+#[derive(Deserialize, Serialize, Default)]
+pub struct VideoList {
+    /// Oldest to newest videos metadata.
+    pub metadata: Vec<IPLDLink>,
+}
+
 /// Metadata for video thumbnail and playback.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {

@@ -1,4 +1,4 @@
-use crate::actors::{Archivist, SetupAggregator, VideoAggregator};
+use crate::actors::{Archivist, ChatAggregator, SetupAggregator, VideoAggregator};
 use crate::server::start_server;
 use crate::utils::config::get_config;
 
@@ -11,9 +11,22 @@ use linked_data::config::Configuration;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-pub struct File {}
+pub struct Stream {
+    /// Disable chat archiving.
+    #[structopt(long)]
+    no_chat: bool,
 
-pub async fn file_cli(_file: File) {
+    /// Disable all archiving.
+    #[structopt(long)]
+    no_archive: bool,
+}
+
+pub async fn stream_cli(stream: Stream) {
+    let Stream {
+        no_chat,
+        no_archive,
+    } = stream;
+
     let ipfs = IpfsClient::default();
 
     if ipfs.id(None).await.is_err() {
@@ -34,23 +47,43 @@ pub async fn file_cli(_file: File) {
 
     let mut handles = Vec::with_capacity(4);
 
-    let (archive_tx, archive_rx) = unbounded_channel();
+    let topic = chat.topic.clone();
 
-    archive.archive_live_chat = false;
+    let archive_tx = {
+        if !no_archive {
+            let (archive_tx, archive_rx) = unbounded_channel();
 
-    let mut archivist = Archivist::new(ipfs.clone(), archive_rx);
+            if !no_chat {
+                let mut chat = ChatAggregator::new(ipfs.clone(), archive_tx.clone(), chat).await;
 
-    let archive_handle = tokio::spawn(async move {
-        archivist.start().await;
-    });
+                let chat_handle = tokio::spawn(async move {
+                    chat.start().await;
+                });
 
-    handles.push(archive_handle);
+                handles.push(chat_handle);
+            }
+
+            archive.archive_live_chat = !no_chat;
+
+            let mut archivist = Archivist::new(ipfs.clone(), archive_rx);
+
+            let archive_handle = tokio::spawn(async move {
+                archivist.start().await;
+            });
+
+            handles.push(archive_handle);
+
+            Some(archive_tx)
+        } else {
+            None
+        }
+    };
 
     let (video_tx, video_rx) = unbounded_channel();
 
-    video.pubsub_enable = false;
+    video.pubsub_enable = true;
 
-    let mut video = VideoAggregator::new(ipfs.clone(), video_rx, Some(archive_tx.clone()), video);
+    let mut video = VideoAggregator::new(ipfs.clone(), video_rx, archive_tx.clone(), video);
 
     let video_handle = tokio::spawn(async move {
         video.start().await;
@@ -73,9 +106,9 @@ pub async fn file_cli(_file: File) {
             input_socket_addr,
             video_tx,
             setup_tx,
-            Some(archive_tx),
+            archive_tx,
             ipfs,
-            chat.pubsub_topic,
+            topic,
         )
         .await;
     });
