@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
+use std::rc::Rc;
 use std::str;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::utils::bindings::{ipfs_subscribe, ipfs_unsubscribe};
 use crate::utils::ema::ExponentialMovingAverage;
-use crate::utils::ipfs::{audio_video_cat, init_cat, ipfs_dag_get_path_callback};
+use crate::utils::ipfs::{IpfsService, PubsubSubResponse};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -12,14 +13,14 @@ use wasm_bindgen_futures::spawn_local;
 
 use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url, Window};
 
-use js_sys::Uint8Array;
-
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use linked_data::video::{SetupNode, TempSetupNode, Track, VideoMetadata};
+use linked_data::video::{SetupNode, Track, VideoMetadata};
 
 use cid::Cid;
+
+use reqwest::Error;
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -43,17 +44,17 @@ struct MediaBuffers {
 }
 
 struct LiveStream {
-    topic: String,
     streamer_peer_id: String,
 
     buffer: VecDeque<Cid>,
 
-    _pubsub_closure: Closure<dyn Fn(String, Vec<u8>)>,
+    drop_sig: Rc<AtomicBool>,
 }
 
 pub struct VideoPlayer {
     link: ComponentLink<Self>,
 
+    ipfs: IpfsService,
     metadata: Option<VideoMetadata>,
     live_stream: Option<LiveStream>,
 
@@ -76,19 +77,20 @@ pub struct VideoPlayer {
     handle: i32,
 }
 
-#[allow(clippy::large_enum_variant)] //TODO check if worth fixing
 pub enum Msg {
     SourceOpen,
     Seeking,
     UpdateEnd,
     Timeout,
-    SetupNode(SetupNode),
-    Append((Option<Uint8Array>, Uint8Array)),
-    PubSub((String, Vec<u8>)),
+    SetupNode(Result<SetupNode, Error>),
+    Append(Result<(Vec<u8>, Vec<u8>), Error>),
+    AppendVideo(Result<Vec<u8>, Error>),
+    PubSub(Result<PubsubSubResponse, std::io::Error>),
 }
 
 #[derive(Clone, Properties)]
 pub struct Props {
+    pub ipfs: IpfsService,
     pub metadata: Option<VideoMetadata>,
     pub topic: Option<String>,
     pub streamer_peer_id: Option<String>,
@@ -100,6 +102,7 @@ impl Component for VideoPlayer {
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let Props {
+            ipfs,
             metadata,
             topic,
             streamer_peer_id,
@@ -123,26 +126,24 @@ impl Component for VideoPlayer {
             poster_link.push_str("bafkreicovb5qdvrine4vidt77xahhvovahmekvsojbiqewp7ih7pzvnn7i");
         }
 
-        let cb = link.callback_once(|_| Msg::SourceOpen);
+        let cb = link.callback(|_| Msg::SourceOpen);
         let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
         media_source.set_onsourceopen(Some(closure.as_ref().unchecked_ref()));
         let source_open_closure = Some(closure);
 
         let live_stream = match topic {
             Some(topic) => {
+                let client = ipfs.clone();
                 let cb = link.callback(Msg::PubSub);
-                let _pubsub_closure =
-                    Closure::wrap(
-                        Box::new(move |from: String, data: Vec<u8>| cb.emit((from, data)))
-                            as Box<dyn Fn(String, Vec<u8>)>,
-                    );
-                ipfs_subscribe(&topic, _pubsub_closure.as_ref().unchecked_ref());
+                let drop_sig = Rc::from(AtomicBool::new(false));
+                let sig = drop_sig.clone();
+
+                spawn_local(async move { client.pubsub_sub(topic, cb, sig).await });
 
                 Some(LiveStream {
-                    topic,
                     streamer_peer_id: streamer_peer_id.unwrap(),
                     buffer: VecDeque::with_capacity(5),
-                    _pubsub_closure,
+                    drop_sig,
                 })
             }
             None => None,
@@ -151,6 +152,7 @@ impl Component for VideoPlayer {
         Self {
             link,
 
+            ipfs,
             metadata,
             live_stream,
 
@@ -179,9 +181,10 @@ impl Component for VideoPlayer {
             Msg::Seeking => self.on_seeking(),
             Msg::UpdateEnd => self.on_update_end(),
             Msg::Timeout => self.on_timeout(),
-            Msg::SetupNode(node) => self.add_source_buffer(node),
-            Msg::Append((aud_res, vid_res)) => self.append_buffers(aud_res, vid_res),
-            Msg::PubSub((from, data)) => self.on_pubsub_update(from, data),
+            Msg::SetupNode(result) => self.add_source_buffer(result),
+            Msg::Append(result) => self.append_buffers(result),
+            Msg::AppendVideo(result) => self.append_video_buffer(result),
+            Msg::PubSub(result) => self.on_pubsub_update(result),
         }
 
         false
@@ -229,7 +232,7 @@ impl Component for VideoPlayer {
         ConsoleService::info("Dropping Video Player");
 
         if let Some(live) = self.live_stream.as_ref() {
-            ipfs_unsubscribe(&live.topic);
+            live.drop_sig.store(true, Ordering::Relaxed);
         }
 
         if self.handle != 0 {
@@ -250,22 +253,30 @@ impl VideoPlayer {
         if let Some(metadata) = self.metadata.as_ref() {
             self.media_source.set_duration(metadata.duration);
 
+            let cb = self.link.callback_once(Msg::SetupNode);
+            let client = self.ipfs.clone();
             let cid = metadata.video.link;
 
-            let cb = self.link.callback_once(Msg::SetupNode);
-
-            spawn_local(ipfs_dag_get_path_callback::<_, TempSetupNode, SetupNode>(
-                cid, SETUP_PATH, cb,
-            ));
+            spawn_local(async move { cb.emit(client.dag_get(cid, Some(SETUP_PATH)).await) });
         }
     }
 
     /// Callback when GossipSub receive an update.
-    fn on_pubsub_update(&mut self, from: String, data: Vec<u8>) {
-        let live = self.live_stream.as_mut().unwrap();
+    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, std::io::Error>) {
+        let res = match result {
+            Ok(res) => res,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info("PubSub Message");
+        ConsoleService::info("PubSub Message Received");
+
+        let PubsubSubResponse { from, data } = res;
+
+        let live = self.live_stream.as_mut().unwrap();
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
@@ -301,10 +312,9 @@ impl VideoPlayer {
 
         if self.media_buffers.is_none() {
             let cb = self.link.callback_once(Msg::SetupNode);
+            let client = self.ipfs.clone();
 
-            spawn_local(ipfs_dag_get_path_callback::<_, TempSetupNode, SetupNode>(
-                cid, "/setup/", cb,
-            ));
+            spawn_local(async move { cb.emit(client.dag_get(cid, Some("/setup/")).await) });
         }
     }
 
@@ -353,7 +363,7 @@ impl VideoPlayer {
             return;
         }
 
-        let cb = self.link.callback(|_| Msg::Timeout);
+        let cb = self.link.callback_once(|_| Msg::Timeout);
 
         let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
 
@@ -371,7 +381,15 @@ impl VideoPlayer {
     }
 
     /// Create source buffer then load initialization segment.
-    fn add_source_buffer(&mut self, setup_node: SetupNode) {
+    fn add_source_buffer(&mut self, setup_node: Result<SetupNode, Error>) {
+        let setup_node = match setup_node {
+            Ok(n) => n,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Adding Source Buffer");
 
@@ -454,9 +472,10 @@ impl VideoPlayer {
         self.media_buffers = Some(media_buffer);
         self.state = MachineState::Load;
 
-        let cb = self.link.callback(Msg::Append);
+        let cb = self.link.callback_once(Msg::Append);
+        let client = self.ipfs.clone();
 
-        spawn_local(audio_video_cat(audio_path, video_path, cb));
+        spawn_local(async move { cb.emit(client.double_path_cat(audio_path, video_path).await) });
     }
 
     /// Load either live or VOD segment.
@@ -485,12 +504,13 @@ impl VideoPlayer {
         let audio_path = format!("{}/track/audio", cid.to_string());
         let video_path = format!("{}/track/{}", cid.to_string(), track_name);
 
-        let cb = self.link.callback(Msg::Append);
-
         self.state = MachineState::AdaptativeBitrate;
         self.ema.start_timer();
 
-        spawn_local(audio_video_cat(audio_path, video_path, cb));
+        let cb = self.link.callback_once(Msg::Append);
+        let client = self.ipfs.clone();
+
+        spawn_local(async move { cb.emit(client.double_path_cat(audio_path, video_path).await) });
     }
 
     /// Get CID from timecode then fetch video data from ipfs.
@@ -560,12 +580,13 @@ impl VideoPlayer {
             track_name,
         );
 
-        let cb = self.link.callback(Msg::Append);
-
         self.state = MachineState::AdaptativeBitrate;
         self.ema.start_timer();
 
-        spawn_local(audio_video_cat(audio_path, video_path, cb));
+        let cb = self.link.callback_once(Msg::Append);
+        let client = self.ipfs.clone();
+
+        spawn_local(async move { cb.emit(client.double_path_cat(audio_path, video_path).await) });
     }
 
     /// Recalculate download speed then set quality level.
@@ -762,22 +783,46 @@ impl VideoPlayer {
 
         self.state = MachineState::Load;
 
-        let cb = self.link.callback(Msg::Append);
+        let cb = self.link.callback_once(Msg::AppendVideo);
+        let client = self.ipfs.clone();
 
-        spawn_local(init_cat(cid, cb));
+        spawn_local(async move { cb.emit(client.cid_cat(cid).await) });
     }
 
     /// Append audio and video segments to the buffers.
-    fn append_buffers(&self, audio_res: Option<Uint8Array>, vid_seg: Uint8Array) {
+    fn append_buffers(&self, response: Result<(Vec<u8>, Vec<u8>), Error>) {
+        let (mut aud_seg, mut vid_seg) = match response {
+            Ok((a, v)) => (a, v),
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
+
         let buffers = self.media_buffers.as_ref().unwrap();
 
-        if let Some(aud_seg) = audio_res {
-            if let Err(e) = buffers.audio.append_buffer_with_array_buffer_view(&aud_seg) {
-                ConsoleService::warn(&format!("{:#?}", e));
-            }
+        if let Err(e) = buffers.audio.append_buffer_with_u8_array(&mut aud_seg) {
+            ConsoleService::warn(&format!("{:#?}", e));
         }
 
-        if let Err(e) = buffers.video.append_buffer_with_array_buffer_view(&vid_seg) {
+        if let Err(e) = buffers.video.append_buffer_with_u8_array(&mut vid_seg) {
+            ConsoleService::warn(&format!("{:#?}", e));
+        }
+    }
+
+    /// Append video segments to the buffer.
+    fn append_video_buffer(&self, response: Result<Vec<u8>, Error>) {
+        let mut vid_seg = match response {
+            Ok(d) => d,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return;
+            }
+        };
+
+        let buffers = self.media_buffers.as_ref().unwrap();
+
+        if let Err(e) = buffers.video.append_buffer_with_u8_array(&mut vid_seg) {
             ConsoleService::warn(&format!("{:#?}", e));
         }
     }

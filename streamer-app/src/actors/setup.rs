@@ -76,7 +76,7 @@ impl SetupAggregator {
             .to_str()
             .expect("Invalid Unicode");
 
-        let link = Some(IPLDLink { link: cid });
+        let link = Some(cid.into());
 
         if let Some((_, _, init_seg)) = self.map.get_mut(name) {
             *init_seg = link;
@@ -173,7 +173,7 @@ impl SetupAggregator {
 
         println!("Setup Node Minted => {}", &cid.to_string());
 
-        let msg = VideoData::Setup((IPLDLink { link: cid }, self.track_len));
+        let msg = VideoData::Setup((cid.into(), self.track_len));
 
         if let Err(error) = self.video_tx.send(msg) {
             eprintln!("Video receiver hung up! Error: {}", error);

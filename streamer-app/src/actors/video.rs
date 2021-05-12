@@ -99,8 +99,7 @@ impl VideoAggregator {
         let buffer_index = index - self.node_mint_count;
 
         if let Some(node) = self.video_nodes.get_mut(buffer_index) {
-            node.tracks
-                .insert(quality.to_owned(), IPLDLink { link: cid });
+            node.tracks.insert(quality.to_owned(), cid.into());
 
             node.setup = self.setup_link;
 
@@ -111,7 +110,7 @@ impl VideoAggregator {
         } else {
             let mut tracks = HashMap::with_capacity(4);
 
-            tracks.insert(quality.to_owned(), IPLDLink { link: cid });
+            tracks.insert(quality.to_owned(), cid.into());
 
             let setup = self.setup_link;
 
@@ -174,7 +173,7 @@ impl VideoAggregator {
 
         self.video_nodes.pop_front();
         self.node_mint_count += 1;
-        self.previous = Some(IPLDLink { link: cid });
+        self.previous = Some(cid.into());
 
         println!("Video Node Minted => {}", &cid.to_string());
 

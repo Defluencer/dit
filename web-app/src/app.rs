@@ -1,4 +1,6 @@
 use crate::pages::{Defluencer, Home, Settings, Video};
+use crate::utils::ipfs::IpfsService;
+use crate::utils::web3::Web3Service;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew_router::prelude::{Route, Router, Switch};
@@ -26,14 +28,20 @@ impl AppRoute {
     }
 }
 
-pub struct App {}
+pub struct App {
+    web3: Web3Service,
+    ipfs: IpfsService,
+}
 
 impl Component for App {
     type Message = ();
     type Properties = ();
 
     fn create(_props: Self::Properties, _: ComponentLink<Self>) -> Self {
-        Self {}
+        let web3 = Web3Service::new().unwrap();
+        let ipfs = IpfsService::new();
+
+        Self { web3, ipfs }
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
@@ -45,14 +53,17 @@ impl Component for App {
     }
 
     fn view(&self) -> Html {
+        let web3 = self.web3.clone();
+        let ipfs = self.ipfs.clone();
+
         html! {
             <>
                 <Router<AppRoute>
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
-                            AppRoute::Video(cid) => html! { <Video metadata_cid=cid /> },
+                            AppRoute::Video(cid) => html! { <Video ipfs=ipfs.clone() metadata_cid=cid /> },
                             AppRoute::Settings => html! { <Settings /> },
-                            AppRoute::Defluencer(name) => html! { <Defluencer ens_name=name /> },
+                            AppRoute::Defluencer(name) => html! { <Defluencer ipfs=ipfs.clone() web3=web3.clone() ens_name=name /> },
                             AppRoute::Home => html! { <Home /> },
                         }
                     })

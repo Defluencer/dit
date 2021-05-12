@@ -38,7 +38,7 @@ pub async fn file_cli(_file: File) {
 
     archive.archive_live_chat = false;
 
-    let mut archivist = Archivist::new(ipfs.clone(), archive_rx, archive);
+    let mut archivist = Archivist::new(ipfs.clone(), archive_rx);
 
     let archive_handle = tokio::spawn(async move {
         archivist.start().await;

@@ -9,3 +9,6 @@ As video play, new nodes are created and linked to previous ones. A node contain
 
 ## Video
 Nodes are created at specific intervals and linked together to form a structure around the video allowing it to be addressable by timecode.
+
+## Chat
+Display Name and GossipSub Peer ID are signed using Ethereum Keys then the address, name, id and signature are minted as a node on IPFS. When sending or receiving a message the link is used to verify that IDs matches and signature is correct.

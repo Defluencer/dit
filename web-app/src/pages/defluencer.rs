@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::components::{ChatWindow, Navbar, VideoPlayer, VideoThumbnail};
-use crate::utils::ens::{get_ens_beacon_async, EthereumNameService};
-use crate::utils::ipfs::{ipfs_dag_get_callback, ipfs_resolve_and_get_callback};
+use crate::utils::ipfs::IpfsService;
 use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
+use crate::utils::web3::Web3Service;
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -13,15 +13,18 @@ use web_sys::Storage;
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use linked_data::beacon::{Beacon, TempVideoList, VideoList};
-use linked_data::video::{TempVideoMetadata, VideoMetadata};
+use linked_data::beacon::{Beacon, VideoList};
+use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-/// Specific Defluencer Home Page
+use reqwest::Error;
+
 pub struct Defluencer {
     link: ComponentLink<Self>,
 
+    ipfs: IpfsService,
+    web3: Web3Service,
     ens_name: String,
 
     storage: Option<Storage>,
@@ -39,15 +42,18 @@ pub struct Defluencer {
 }
 
 pub enum Msg {
-    Name(Result<Cid, ()>),
-    Beacon((Cid, Beacon)),
-    List((Cid, VideoList)),
-    Metadata((Cid, VideoMetadata)),
+    ResolveName(Result<Cid, web3::contract::Error>),
+    Beacon(Result<Beacon, Error>),
+    List((Cid, Result<VideoList, Error>)),
+    ResolveList(Result<(Cid, VideoList), Error>),
+    Metadata((Cid, Result<VideoMetadata, Error>)),
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub ens_name: String,
+    pub ipfs: IpfsService, // From app.
+    pub web3: Web3Service, // From app.
+    pub ens_name: String,  // From router. Beacon Cid or ENS name.
 }
 
 impl Component for Defluencer {
@@ -55,24 +61,34 @@ impl Component for Defluencer {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let ens_name = props.ens_name;
+        let Props {
+            ipfs,
+            web3,
+            mut ens_name,
+        } = props;
+
+        ens_name.make_ascii_lowercase();
 
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
 
         let beacon_cid = match Cid::from_str(&ens_name) {
             Ok(cid) => {
-                spawn_local(ipfs_dag_get_callback::<Beacon, Beacon>(
-                    cid,
-                    link.callback(Msg::Beacon),
-                ));
+                let cb = link.callback_once(Msg::Beacon);
+                let client = ipfs.clone();
+
+                spawn_local(
+                    async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) },
+                );
 
                 Some(cid)
             }
             Err(_) => {
-                let ens = EthereumNameService::new().expect("Can't get window.ethereum");
+                let cb = link.callback_once(Msg::ResolveName);
+                let web3 = web3.clone();
+                let name = ens_name.clone();
 
-                get_ens_beacon_async(ens, ens_name.clone(), link.callback(Msg::Name));
+                spawn_local(async move { cb.emit(web3.get_ipfs_content(name).await) });
 
                 get_cid(&ens_name, storage.as_ref())
             }
@@ -80,6 +96,8 @@ impl Component for Defluencer {
 
         Self {
             link,
+            ipfs,
+            web3,
             ens_name,
             searching: true,
             beacon_cid,
@@ -94,10 +112,11 @@ impl Component for Defluencer {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Name(result) => self.name_update(result),
-            Msg::Beacon((_, beacon)) => self.beacon_update(beacon),
-            Msg::List((cid, list)) => self.video_list_update(cid, list),
-            Msg::Metadata((cid, metadata)) => self.video_metadata_update(cid, metadata),
+            Msg::ResolveName(result) => self.on_name_resolved(result),
+            Msg::Beacon(result) => self.on_beacon_update(result),
+            Msg::List((cid, result)) => self.on_video_list_update(cid, result),
+            Msg::ResolveList(result) => self.on_video_list_resolved(result),
+            Msg::Metadata((cid, result)) => self.on_video_metadata_update(cid, result),
         }
     }
 
@@ -112,8 +131,8 @@ impl Component for Defluencer {
                     <div class="defluencer_page">
                         <Navbar />
                         <div class="live_stream">
-                            <VideoPlayer metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
-                            <ChatWindow topic=beacon.topics.live_chat.clone() />
+                            <VideoPlayer ipfs=self.ipfs.clone() metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
+                            <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() topic=beacon.topics.live_chat.clone() />
                         </div>
                         <div class="video_list">
                         {
@@ -151,20 +170,21 @@ impl Component for Defluencer {
 }
 
 impl Defluencer {
-    /// Receive beacon Cid from ENS then get beacon node
-    fn name_update(&mut self, result: Result<Cid, ()>) -> bool {
-        let cid = match result {
+    /// Callback when Ethereum Name Service resolve name to beacon Cid.
+    fn on_name_resolved(&mut self, res: Result<Cid, web3::contract::Error>) -> bool {
+        let cid = match res {
             Ok(cid) => cid,
-            Err(_) => {
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
                 self.searching = false;
                 return true;
             }
         };
 
-        spawn_local(ipfs_dag_get_callback::<Beacon, Beacon>(
-            cid,
-            self.link.callback(Msg::Beacon),
-        ));
+        let cb = self.link.callback_once(Msg::Beacon);
+        let client = self.ipfs.clone();
+
+        spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
 
         if let Some(beacon_cid) = self.beacon_cid.as_ref() {
             if *beacon_cid == cid {
@@ -182,32 +202,64 @@ impl Defluencer {
         false
     }
 
-    /// Receive beacon node then get video list node
-    fn beacon_update(&mut self, beacon: Beacon) -> bool {
+    /// Callback when IPFS dag get return beacon node.
+    fn on_beacon_update(&mut self, res: Result<Beacon, Error>) -> bool {
+        let beacon = match res {
+            Ok(b) => b,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
         if let Some(cid) = get_cid(&beacon.video_list, self.storage.as_ref()) {
             self.list_cid = Some(cid);
 
-            spawn_local(ipfs_dag_get_callback::<TempVideoList, VideoList>(
-                cid,
-                self.link.callback(Msg::List),
-            ));
+            let cb = self.link.callback_once(Msg::List);
+            let client = self.ipfs.clone();
+
+            spawn_local(async move {
+                cb.emit((cid, client.dag_get(cid, Option::<String>::None).await))
+            });
         }
 
-        spawn_local(ipfs_resolve_and_get_callback::<TempVideoList, VideoList>(
-            beacon.video_list.clone(),
-            self.link.callback(Msg::List),
-        ));
+        let cb = self.link.callback_once(Msg::ResolveList);
+        let client = self.ipfs.clone();
+        let ipns = beacon.video_list.clone();
+
+        spawn_local(async move { cb.emit(client.resolve_and_dag_get(ipns).await) });
 
         self.beacon = Some(beacon);
 
         false
     }
 
-    /// Receive video list, save locally and try to get all metadata
-    fn video_list_update(&mut self, list_cid: Cid, list: VideoList) -> bool {
+    /// Callback when IPFS dag get return VideoList node.
+    fn on_video_list_resolved(&mut self, res: Result<(Cid, VideoList), Error>) -> bool {
+        let (cid, list) = match res {
+            Ok((cid, list)) => (cid, list),
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
+        self.on_video_list_update(cid, Ok(list))
+    }
+
+    /// Callback when IPFS resolve and dag get VideoList node.
+    fn on_video_list_update(&mut self, list_cid: Cid, res: Result<VideoList, Error>) -> bool {
+        let list = match res {
+            Ok(l) => l,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
         if let Some(old_list_cid) = self.list_cid.as_ref() {
             if *old_list_cid == list_cid && self.video_list.is_some() {
                 return false;
@@ -232,11 +284,19 @@ impl Defluencer {
             set_cid(&beacon.video_list, &list_cid, self.storage.as_ref());
         }
 
+        if list.metadata.is_empty() {
+            self.video_list = Some(list);
+            return true;
+        }
+
         for metadata in list.metadata.iter().rev() {
-            spawn_local(ipfs_dag_get_callback::<TempVideoMetadata, VideoMetadata>(
-                metadata.link,
-                self.link.callback(Msg::Metadata),
-            ))
+            let cb = self.link.callback_once(Msg::Metadata);
+            let client = self.ipfs.clone();
+            let cid = metadata.link;
+
+            spawn_local(async move {
+                cb.emit((cid, client.dag_get(cid, Option::<String>::None).await))
+            });
         }
 
         self.call_count += list.metadata.len();
@@ -246,16 +306,24 @@ impl Defluencer {
         false
     }
 
-    /// Receive video metadata then update thumbnails
-    fn video_metadata_update(&mut self, metadata_cid: Cid, metadata: VideoMetadata) -> bool {
+    /// Callback when IPFS dag get returns VideoMetadata node.
+    fn on_video_metadata_update(&mut self, cid: Cid, res: Result<VideoMetadata, Error>) -> bool {
+        let metadata = match res {
+            Ok(d) => d,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
             "Display Add => {} \n {}",
-            &metadata_cid.to_string(),
+            &cid.to_string(),
             &serde_json::to_string_pretty(&metadata).expect("Can't print")
         ));
 
-        self.metadata_map.insert(metadata_cid, metadata);
+        self.metadata_map.insert(cid, metadata);
 
         if self.call_count > 0 {
             self.call_count -= 1;

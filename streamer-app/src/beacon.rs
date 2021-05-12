@@ -87,6 +87,10 @@ async fn create_beacon(ipfs: &IpfsClient, args: Beacon) -> Result<(), Error> {
         topics,
         peer_id,
         video_list: keypair.id,
+        //TODO chat & mederation
+        //chat_allow: None,
+        //chat_block: None,
+        //chat_mods: None,
     };
 
     let cid = ipfs_dag_put_node_async(&ipfs, &beacon).await?;

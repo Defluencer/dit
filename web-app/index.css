@@ -53,7 +53,9 @@ nav {
 }
 
 .chat_message {
-    display: block;
+    flex-direction: row;
+    display: flex;
+    flex-wrap: wrap;
 }
 
 .input_text {

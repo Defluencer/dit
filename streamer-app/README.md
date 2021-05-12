@@ -24,7 +24,6 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 - With your broadcast software output set to ffmpeg. Default: ```rtmp://localhost:2525```
 - Start Streaming!
 - When done streaming stop your broadcast software.
-- Wait 30 seconds to catch up with chat messages.
 - Press Ctrl-c in streamer-app window to save.
 
 ## Pre-recorded Video
