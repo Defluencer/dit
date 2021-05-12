@@ -271,12 +271,12 @@ impl VideoPlayer {
             }
         };
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info("PubSub Message Received");
+
         let PubsubSubResponse { from, data } = res;
 
         let live = self.live_stream.as_mut().unwrap();
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("PubSub Message");
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
