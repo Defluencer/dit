@@ -14,7 +14,7 @@ use ipfs_api::IpfsClient;
 
 use linked_data::chat::{SignedMessage, UnsignedMessage};
 use linked_data::config::ChatConfig;
-use linked_data::moderation::{Blacklist, Moderators, Whitelist};
+//use linked_data::moderation::{Blacklist, Moderators, Whitelist};
 
 use cid::Cid;
 
@@ -108,7 +108,7 @@ impl ChatAggregator {
                 }
             };
 
-        if from != &sign_msg.data.peer_id {
+        if *from != sign_msg.data.peer_id {
             return;
         }
 
@@ -137,10 +137,10 @@ impl ChatAggregator {
         }
     }
 
-    /// Verify identity against white & black lists
+    /* /// Verify identity against white & black lists
     fn is_allowed(&self, _from: &str, _identity: &UnsignedMessage) -> bool {
         //TODO verify white & black list
         true
         //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)
-    }
+    } */
 }

@@ -7,7 +7,6 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use ipfs_api::IpfsClient;
 
 use linked_data::video::{DayNode, HourNode, MinuteNode, SecondNode, TimecodeNode};
-use linked_data::IPLDLink;
 
 use cid::Cid;
 
@@ -67,23 +66,19 @@ impl Archivist {
     }
 
     /// Link chat message to SecondNodes.
-    async fn archive_chat_message(&mut self, msg: Cid) {
+    async fn archive_chat_message(&mut self, msg_cid: Cid) {
         let node = match self.video_chat_buffer.front_mut() {
             Some(node) => node,
             None => return,
         };
 
-        let link = IPLDLink { link: msg };
-
-        node.links_to_chat.push(link);
+        node.links_to_chat.push(msg_cid.into());
     }
 
     /// Buffers SecondNodes, waiting for chat messages to be linked.
     async fn archive_video_segment(&mut self, cid: Cid) {
-        let link_variants = IPLDLink { link: cid };
-
         let second_node = SecondNode {
-            link_to_video: link_variants,
+            link_to_video: cid.into(),
             links_to_chat: Vec::with_capacity(5),
         };
 
@@ -120,9 +115,7 @@ impl Archivist {
             }
         };
 
-        let link = IPLDLink { link: cid };
-
-        self.minute_node.links_to_seconds.push(link);
+        self.minute_node.links_to_seconds.push(cid.into());
     }
 
     /// Create DAG node containing 60 SecondNode links. HourNode is then appended with the CID.
@@ -137,9 +130,7 @@ impl Archivist {
 
         self.minute_node.links_to_seconds.clear();
 
-        let link = IPLDLink { link: cid };
-
-        self.hour_node.links_to_minutes.push(link);
+        self.hour_node.links_to_minutes.push(cid.into());
     }
 
     /// Create DAG node containing 60 MinuteNode links. DayNode is then appended with the CID.
@@ -154,9 +145,7 @@ impl Archivist {
 
         self.hour_node.links_to_minutes.clear();
 
-        let link = IPLDLink { link: cid };
-
-        self.day_node.links_to_hours.push(link);
+        self.day_node.links_to_hours.push(cid.into());
     }
 
     /// Create all remaining DAG nodes then pin and print the final CID.
@@ -199,7 +188,7 @@ impl Archivist {
         };
 
         let stream = TimecodeNode {
-            timecode: IPLDLink { link: cid },
+            timecode: cid.into(),
         };
 
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &stream).await {

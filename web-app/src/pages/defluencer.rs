@@ -67,7 +67,7 @@ impl Component for Defluencer {
             mut ens_name,
         } = props;
 
-        ens_name.make_ascii_uppercase();
+        ens_name.make_ascii_lowercase();
 
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
@@ -282,6 +282,11 @@ impl Defluencer {
         } else {
             self.list_cid = Some(list_cid);
             set_cid(&beacon.video_list, &list_cid, self.storage.as_ref());
+        }
+
+        if list.metadata.is_empty() {
+            self.video_list = Some(list);
+            return true;
         }
 
         for metadata in list.metadata.iter().rev() {

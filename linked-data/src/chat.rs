@@ -2,7 +2,7 @@ use crate::IPLDLink;
 
 use serde::{Deserialize, Serialize};
 
-/// Unsigned chat message with origin.
+/// Unsigned chat message with verifiable origin.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UnsignedMessage {
     pub message: String,
@@ -26,8 +26,7 @@ pub struct SignedMessage {
 
     pub data: Content,
 
-    /// Content crypto-signed with this address.
-    pub signature: Vec<u8>,
+    pub signature: Vec<u8>, // Should be [u8; 65] but serde can't deal with big arrays.
 }
 
 use secp256k1::recover;
