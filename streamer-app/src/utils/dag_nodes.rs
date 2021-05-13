@@ -1,3 +1,5 @@
+use ipfs_api::response::KeyListResponse;
+use ipfs_api::response::KeyPair;
 use std::convert::TryFrom;
 use std::io::Cursor;
 
@@ -57,4 +59,55 @@ where
     );
 
     Ok(node)
+}
+
+/// Serialize the new node, pin it then publish it under this IPNS key.
+pub async fn update_ipns<T>(ipfs: &IpfsClient, key: &str, video_list: &T) -> Result<(), Error>
+where
+    T: ?Sized + Serialize,
+{
+    let cid = ipfs_dag_put_node_async(ipfs, video_list).await?;
+
+    ipfs.pin_add(&cid.to_string(), true).await?;
+
+    ipfs.name_publish(&cid.to_string(), false, None, None, Some(key))
+        .await?;
+
+    Ok(())
+}
+
+/// Get node associated with IPNS key, unpin it then return it.
+pub async fn get_from_ipns<T>(ipfs: &IpfsClient, key: &str) -> Result<T, Error>
+where
+    T: ?Sized + DeserializeOwned + Serialize,
+{
+    let mut res = ipfs.key_list().await?;
+
+    let keypair = match search_keypairs(&key, &mut res) {
+        Some(kp) => kp,
+        None => return Err(Error::Uncategorized("Key Not Found".into())),
+    };
+
+    #[cfg(debug_assertions)]
+    println!("IPNS: key => {} {}", &keypair.name, &keypair.id);
+
+    let res = ipfs.name_resolve(Some(&keypair.id), false, false).await?;
+
+    let cid = Cid::try_from(res.path).expect("Invalid Cid");
+
+    ipfs.pin_rm(&cid.to_string(), true).await?;
+
+    let node = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
+
+    Ok(node)
+}
+
+pub fn search_keypairs(name: &str, res: &mut KeyListResponse) -> Option<KeyPair> {
+    for (i, keypair) in res.keys.iter_mut().enumerate() {
+        if keypair.name == name {
+            return Some(res.keys.remove(i));
+        }
+    }
+
+    None
 }

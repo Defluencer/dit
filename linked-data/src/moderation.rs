@@ -1,15 +1,13 @@
-//use crate::IPLDLink;
+use crate::chat::Address;
 
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-/// Ethereum address
-type Address = [u8; 20];
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Ban {
     pub address: Address,
+    pub peer_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

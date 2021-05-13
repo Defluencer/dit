@@ -9,6 +9,7 @@ description = "Decentralized influencer toolkit command line interface."
 [dependencies]
 cid = "0.6"
 futures-util = "0.3"
+hex = "0.4"
 hyper = { version = "0.14", features = ["http1", "server", "runtime", "stream"] }
 ipfs-api = { git = "https://github.com/sionois/rust-ipfs-api", branch = "pubsub-reqwest", features = ["with-reqwest"] }
 linked-data = { path = "../linked-data" }

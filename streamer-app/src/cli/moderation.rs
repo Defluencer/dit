@@ -1,13 +1,9 @@
-use crate::cli::beacon::search_keypairs;
-use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async};
+use crate::utils::dag_nodes::{get_from_ipns, update_ipns};
 
-use std::convert::TryFrom;
+use hex::FromHex;
 
 use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
-
-use linked_data::video::{DayNode, HourNode, MinuteNode, VideoList, VideoMetadata};
-use linked_data::IPLDLink;
 
 use cid::Cid;
 
@@ -24,98 +20,230 @@ pub struct Moderation {
 
 #[derive(Debug, StructOpt)]
 enum Command {
-    /// TODO
-    Bans(UpdateBans),
+    /// Manage list of banned users.
+    Bans(BanCommands),
 
-    /// TODO
-    Mods(UpdateMods),
-}
-
-#[derive(Debug, StructOpt)]
-pub struct UpdateBans {
-    /// TODO
-    #[structopt(short, long, default_value = BANS_KEY)]
-    key: String,
-
-    /// TODO
-    #[structopt(long)]
-    cid: Cid,
-}
-
-#[derive(Debug, StructOpt)]
-pub struct UpdateMods {
-    /// TODO
-    #[structopt(short, long, default_value = MODS_KEY)]
-    key: String,
-
-    /// TODO
-    #[structopt(long)]
-    cid: Cid,
+    /// Manage list of moderators.
+    Mods(ModCommands),
 }
 
 pub async fn moderation_cli(cli: Moderation) {
     let res = match cli.cmd {
-        Command::Bans(update) => update_ban_list(update).await,
-        Command::Mods(update) => update_mod_list(update).await,
+        Command::Bans(update) => ban_command(update).await,
+        Command::Mods(update) => mod_command(update).await,
     };
 
     if let Err(e) = res {
-        eprintln!("IPFS: {}", e);
+        eprintln!("❗ IPFS: {}", e);
     }
 }
 
-async fn update_ban_list(command: UpdateBans) -> Result<(), Error> {
+#[derive(Debug, StructOpt)]
+struct BanCommands {
+    #[structopt(subcommand)]
+    cmd: BanCommand,
+}
+
+#[derive(Debug, StructOpt)]
+enum BanCommand {
+    /// Ban users.
+    Ban(Ban),
+
+    /// Unban users.
+    UnBan(UnBan),
+
+    /// Replace the current list with another.
+    ReplaceList(ReplaceBanList),
+}
+
+async fn ban_command(cli: BanCommands) -> Result<(), Error> {
+    match cli.cmd {
+        BanCommand::Ban(args) => ban_user(args).await,
+        BanCommand::UnBan(args) => unban_user(args).await,
+        BanCommand::ReplaceList(args) => replace_ban_list(args).await,
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub struct Ban {
+    /// Ethereum Address.
+    #[structopt(short, long)]
+    address: String,
+}
+
+async fn ban_user(args: Ban) -> Result<(), Error> {
+    let address = <[u8; 20]>::from_hex(&args.address).expect("Invalid Ethereum Adress");
+
+    println!("Banning User...");
+
     let ipfs = IpfsClient::default();
 
-    //TODO
+    let mut ban_list: linked_data::moderation::Bans = get_from_ipns(&ipfs, BANS_KEY).await?;
+
+    ban_list.banned.insert(address);
+
+    update_ipns(&ipfs, BANS_KEY, &ban_list).await?;
+
+    println!("✅ User {} Banned", args.address);
 
     Ok(())
 }
 
-async fn update_mod_list(command: UpdateMods) -> Result<(), Error> {
+#[derive(Debug, StructOpt)]
+pub struct UnBan {
+    /// Ethereum Address.
+    #[structopt(short, long)]
+    address: String,
+}
+
+async fn unban_user(args: UnBan) -> Result<(), Error> {
+    let address = <[u8; 20]>::from_hex(&args.address).expect("Invalid Ethereum Adress");
+
+    println!("Unbanning User...");
+
     let ipfs = IpfsClient::default();
 
-    //TODO
+    let mut ban_list: linked_data::moderation::Bans = get_from_ipns(&ipfs, BANS_KEY).await?;
+
+    if ban_list.banned.remove(&address) {
+        update_ipns(&ipfs, BANS_KEY, &ban_list).await?;
+
+        println!("✅ User {} Unbanned", args.address);
+
+        return Ok(());
+    }
+
+    println!("❗ User {} was not banned", args.address);
 
     Ok(())
 }
 
-/// Serialize the new bans list, pin it then publish it under this IPNS key.
-pub async fn update_bans_list(
-    ipfs: &IpfsClient,
-    key: &str,
-    bans_list: &linked_data::moderation::Bans,
-) -> Result<(), Error> {
-    println!("Updating Bans List...");
+#[derive(Debug, StructOpt)]
+pub struct ReplaceBanList {
+    /// CID of the new ban list.
+    #[structopt(long)]
+    cid: Cid,
+}
 
-    let cid = ipfs_dag_put_node_async(ipfs, bans_list).await?;
+async fn replace_ban_list(args: ReplaceBanList) -> Result<(), Error> {
+    println!("Replacing Ban List...");
 
-    ipfs.pin_add(&cid.to_string(), true).await?;
+    let ipfs = IpfsClient::default();
 
-    ipfs.name_publish(&cid.to_string(), false, None, None, Some(key))
+    ipfs.pin_add(&args.cid.to_string(), true).await?;
+
+    ipfs.name_publish(&args.cid.to_string(), false, None, None, Some(BANS_KEY))
         .await?;
 
-    println!("New Bans List CID => {}", &cid.to_string());
+    println!(
+        "✅ Previous Ban List Replaced with {}",
+        &args.cid.to_string()
+    );
 
     Ok(())
 }
 
-/// Serialize the new mods list, pin it then publish it under this IPNS key.
-pub async fn update_mods_list(
-    ipfs: &IpfsClient,
-    key: &str,
-    bans_list: &linked_data::moderation::Moderators,
-) -> Result<(), Error> {
-    println!("Updating Mods List...");
+#[derive(Debug, StructOpt)]
+struct ModCommands {
+    #[structopt(subcommand)]
+    cmd: ModCommand,
+}
 
-    let cid = ipfs_dag_put_node_async(ipfs, bans_list).await?;
+#[derive(Debug, StructOpt)]
+enum ModCommand {
+    /// Promote user to moderator.
+    Mod(Mod),
 
-    ipfs.pin_add(&cid.to_string(), true).await?;
+    /// Demote user from moderator.
+    UnMod(UnMod),
 
-    ipfs.name_publish(&cid.to_string(), false, None, None, Some(key))
+    /// Replace the current moderator list with another.
+    ReplaceModList(ReplaceModList),
+}
+
+async fn mod_command(cli: ModCommands) -> Result<(), Error> {
+    match cli.cmd {
+        ModCommand::Mod(args) => mod_user(args).await,
+        ModCommand::UnMod(args) => unmod_user(args).await,
+        ModCommand::ReplaceModList(args) => replace_mod_list(args).await,
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub struct Mod {
+    /// Ethereum address.
+    #[structopt(long)]
+    address: String,
+}
+
+async fn mod_user(args: Mod) -> Result<(), Error> {
+    let address = <[u8; 20]>::from_hex(&args.address).expect("Invalid Ethereum Adress");
+
+    println!("Promoting User...");
+
+    let ipfs = IpfsClient::default();
+
+    let mut mods_list: linked_data::moderation::Moderators = get_from_ipns(&ipfs, MODS_KEY).await?;
+
+    mods_list.mods.insert(address);
+
+    update_ipns(&ipfs, MODS_KEY, &mods_list).await?;
+
+    println!("✅ User {} Promoted To Moderator", args.address);
+
+    Ok(())
+}
+
+#[derive(Debug, StructOpt)]
+pub struct UnMod {
+    /// Ethereum address.
+    #[structopt(long)]
+    address: String,
+}
+
+async fn unmod_user(args: UnMod) -> Result<(), Error> {
+    let address = <[u8; 20]>::from_hex(&args.address).expect("Invalid Ethereum Adress");
+
+    println!("Demoting Moderator...");
+
+    let ipfs = IpfsClient::default();
+
+    let mut mod_list: linked_data::moderation::Moderators = get_from_ipns(&ipfs, MODS_KEY).await?;
+
+    if mod_list.mods.remove(&address) {
+        update_ipns(&ipfs, MODS_KEY, &mod_list).await?;
+
+        println!("✅ Moderator {} Demoted", args.address);
+
+        return Ok(());
+    }
+
+    println!("❗ User {} Was Not A Moderator", args.address);
+
+    Ok(())
+}
+
+#[derive(Debug, StructOpt)]
+pub struct ReplaceModList {
+    /// CID of the new moderator list
+    #[structopt(long)]
+    cid: Cid,
+}
+
+async fn replace_mod_list(args: ReplaceModList) -> Result<(), Error> {
+    println!("Replacing Moderator List...");
+
+    let ipfs = IpfsClient::default();
+
+    ipfs.pin_add(&args.cid.to_string(), true).await?;
+
+    ipfs.name_publish(&args.cid.to_string(), false, None, None, Some(MODS_KEY))
         .await?;
 
-    println!("New Mods List CID => {}", &cid.to_string());
+    println!(
+        "✅ Previous Moderator List Replaced with {}",
+        &args.cid.to_string()
+    );
 
     Ok(())
 }

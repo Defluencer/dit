@@ -1,5 +1,6 @@
 use crate::actors::archivist::Archive;
-use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async};
+use crate::cli::moderation::BANS_KEY;
+use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async, update_ipns};
 
 use std::collections::{HashMap, HashSet};
 
@@ -11,7 +12,8 @@ use ipfs_api::IpfsClient;
 
 use linked_data::chat::{SignedMessage, UnsignedMessage};
 use linked_data::config::ChatConfig;
-use linked_data::moderation::{Bans, Moderators};
+use linked_data::moderation::{Ban, Bans};
+use linked_data::{Message, MessageType};
 
 use cid::Cid;
 
@@ -20,14 +22,17 @@ pub struct ChatAggregator {
 
     archive_tx: UnboundedSender<Archive>,
 
+    /// Map of peer IDs to signed message CIDs
     trusted: HashMap<String, Cid>,
 
+    /// Set of banned peer IDs.
     ban_cache: HashSet<String>,
+    ban_count: usize,
 
     topic: String,
 
     bans: Bans,
-    mods: Moderators,
+    //mods: Moderators,
 }
 
 impl ChatAggregator {
@@ -36,16 +41,20 @@ impl ChatAggregator {
         archive_tx: UnboundedSender<Archive>,
         config: ChatConfig,
     ) -> Self {
-        let ChatConfig { topic, mods, bans } = config;
+        let ChatConfig {
+            topic,
+            mods: _,
+            bans,
+        } = config;
 
-        let res = ipfs
-            .name_resolve(Some(&mods), false, false)
-            .await
-            .expect("Invalid Mods Link");
+        /* let res = ipfs
+        .name_resolve(Some(&mods), false, false)
+        .await
+        .expect("Invalid Mods Link"); */
 
-        let mods = ipfs_dag_get_node_async(&ipfs, &res.path)
-            .await
-            .expect("Invalid Moderators Node");
+        /* let mods = ipfs_dag_get_node_async(&ipfs, &res.path)
+        .await
+        .expect("Invalid Moderators Node"); */
 
         let res = ipfs
             .name_resolve(Some(&bans), false, false)
@@ -64,18 +73,19 @@ impl ChatAggregator {
             trusted: HashMap::with_capacity(100),
 
             ban_cache: HashSet::with_capacity(100),
+            ban_count: 0,
 
             topic,
 
             bans,
-            mods,
+            //mods,
         }
     }
 
     pub async fn start(&mut self) {
         let mut stream = self.ipfs.pubsub_sub(&self.topic, true);
 
-        println!("Chat System Online");
+        println!("✅ Chat System Online");
 
         while let Some(result) = stream.next().await {
             if self.archive_tx.is_closed() {
@@ -92,7 +102,15 @@ impl ChatAggregator {
             }
         }
 
-        println!("Chat System Offline");
+        if self.ban_count > 0 {
+            println!("Updating Banned List with {} New Users 👍", self.ban_count);
+
+            if let Err(e) = update_ipns(&self.ipfs, &BANS_KEY, &self.bans).await {
+                eprintln!("❗ IPNS Update Failed. {}", e);
+            }
+        }
+
+        println!("❌ Chat System Offline");
     }
 
     async fn process_msg(&mut self, msg: PubsubSubResponse) {
@@ -110,23 +128,30 @@ impl ChatAggregator {
             None => return,
         };
 
-        let msg: UnsignedMessage = match serde_json::from_slice(&data) {
+        let msg: Message = match serde_json::from_slice(&data) {
             Ok(data) => data,
             Err(e) => {
-                eprintln!("Deserialization failed. {}", e);
+                eprintln!("❗ Deserialization failed. {}", e);
                 return;
             }
         };
 
-        if Some(&msg.origin.link) == self.trusted.get(&from) {
+        match msg.msg_type {
+            MessageType::Unsigned(unmsg) => self.update_msg(from, msg.origin.link, unmsg).await,
+            MessageType::Ban(ban) => self.update_bans(from, ban).await,
+        }
+    }
+
+    async fn update_msg(&mut self, from: String, origin: Cid, msg: UnsignedMessage) {
+        if Some(&origin) == self.trusted.get(&from) {
             return self.mint_and_archive(msg).await;
         }
 
         let sign_msg: SignedMessage =
-            match ipfs_dag_get_node_async(&self.ipfs, &msg.origin.link.to_string()).await {
+            match ipfs_dag_get_node_async(&self.ipfs, &origin.to_string()).await {
                 Ok(msg) => msg,
                 Err(e) => {
-                    eprintln!("IPFS: dag get failed {}", e);
+                    eprintln!("❗ IPFS: dag get failed {}", e);
                     return;
                 }
             };
@@ -144,16 +169,24 @@ impl ChatAggregator {
             return;
         }
 
-        self.trusted.insert(from.to_owned(), msg.origin.link);
+        self.trusted.insert(from.to_owned(), origin);
 
         self.mint_and_archive(msg).await;
+    }
+
+    async fn update_bans(&mut self, _from: String, ban: Ban) {
+        self.ban_cache.insert(ban.peer_id);
+
+        self.bans.banned.insert(ban.address);
+
+        self.ban_count += 1;
     }
 
     async fn mint_and_archive(&mut self, msg: UnsignedMessage) {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &msg).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
+                eprintln!("❗ IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -161,7 +194,7 @@ impl ChatAggregator {
         let msg = Archive::Chat(cid);
 
         if let Err(error) = self.archive_tx.send(msg) {
-            eprintln!("Archive receiver hung up. {}", error);
+            eprintln!("❗ Archive receiver hung up. {}", error);
         }
     }
 }
