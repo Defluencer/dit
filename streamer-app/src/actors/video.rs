@@ -61,7 +61,7 @@ impl VideoAggregator {
     }
 
     pub async fn start(&mut self) {
-        println!("Video System Online");
+        println!("✅ Video System Online");
 
         while let Some(msg) = self.service_rx.recv().await {
             match msg {
@@ -73,7 +73,7 @@ impl VideoAggregator {
             }
         }
 
-        println!("Video System Offline");
+        println!("❌ Video System Offline");
     }
 
     /// Update or create VideoNode in queue then try to mint one.
@@ -130,7 +130,7 @@ impl VideoAggregator {
                 let msg = Archive::Video(cid);
 
                 if let Err(error) = archive_tx.send(msg) {
-                    eprintln!("Archive receiver hung up! Error: {}", error);
+                    eprintln!("❗ Archive receiver hung up! Error: {}", error);
                 }
             }
 
@@ -138,7 +138,7 @@ impl VideoAggregator {
                 let topic = &self.config.pubsub_topic;
 
                 if let Err(e) = self.ipfs.pubsub_pub(topic, &cid.to_string()).await {
-                    eprintln!("IPFS: pubsub pub failed {}", e);
+                    eprintln!("❗ IPFS: pubsub pub failed {}", e);
                 }
             }
         }
@@ -166,7 +166,7 @@ impl VideoAggregator {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, node).await {
             Ok(res) => res,
             Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
+                eprintln!("❗ IPFS: dag put failed {}", e);
                 return None;
             }
         };

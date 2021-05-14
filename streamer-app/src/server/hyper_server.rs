@@ -28,7 +28,7 @@ async fn shutdown_signal(
             eprintln!("Archive receiver hung up {}", error);
         }
 
-        //Hacky way to shutdown chat actor.
+        //Hacky way to shutdown chat actor. Send some msg to trigger a check
         ipfs.pubsub_pub(&topic, "Stopping")
             .await
             .expect("PubSub Pub Failed!");

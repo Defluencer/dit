@@ -52,7 +52,7 @@ impl Archivist {
     }
 
     pub async fn start(&mut self) {
-        println!("Archive System Online");
+        println!("✅ Archive System Online");
 
         while let Some(event) = self.archive_rx.recv().await {
             match event {
@@ -62,7 +62,7 @@ impl Archivist {
             }
         }
 
-        println!("Archive System Offline");
+        println!("❌ Archive System Offline");
     }
 
     /// Link chat message to SecondNodes.
@@ -110,7 +110,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &node).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
+                eprintln!("❗ IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -123,7 +123,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.minute_node).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
+                eprintln!("❗ IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -138,7 +138,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.hour_node).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
+                eprintln!("❗ IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -182,7 +182,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &self.day_node).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
+                eprintln!("❗ IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -194,7 +194,7 @@ impl Archivist {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &stream).await {
             Ok(cid) => cid,
             Err(e) => {
-                eprintln!("IPFS: dag put failed {}", e);
+                eprintln!("❗ IPFS: dag put failed {}", e);
                 return;
             }
         };
@@ -203,7 +203,7 @@ impl Archivist {
 
         match self.ipfs.pin_add(&cid.to_string(), true).await {
             Ok(_) => println!("Final Timecode-addressable Node => {}", &cid.to_string()),
-            Err(e) => eprintln!("IPFS: pin add failed {}", e),
+            Err(e) => eprintln!("❗ IPFS: pin add failed {}", e),
         }
     }
 }

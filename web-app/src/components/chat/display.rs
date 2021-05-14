@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::str;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,7 +13,9 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
-use linked_data::chat::{Content, SignedMessage, UnsignedMessage};
+use linked_data::chat::{Address, Content, SignedMessage, UnsignedMessage};
+use linked_data::moderation::{Bans, Moderators};
+use linked_data::{Message, MessageType};
 
 use reqwest::Error;
 
@@ -26,10 +28,16 @@ pub struct Display {
     img_gen: Ethereum,
 
     /// Signed Message Cid Mapped to address, peer id and name
-    trusted_identities: HashMap<Cid, ([u8; 20], Content)>,
+    trusted_identities: HashMap<Cid, ([u8; 20], String, String)>,
 
-    /// Peer Id with Unsigned Messages
-    msg_buffer: Vec<(String, UnsignedMessage)>,
+    bans: Option<Bans>,
+    mods: Option<Moderators>,
+
+    /// Set of banned peer IDs.
+    ban_cache: HashSet<String>,
+
+    /// Peer Id with Messages
+    msg_buffer: Vec<(String, Message)>,
 
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
@@ -40,12 +48,16 @@ pub struct Display {
 pub enum Msg {
     PubSub(Result<PubsubSubResponse, std::io::Error>),
     Origin((Cid, Result<SignedMessage, Error>)),
+    BanList(Result<(Cid, Bans), Error>),
+    ModList(Result<(Cid, Moderators), Error>),
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
     pub ipfs: IpfsService,
     pub topic: Rc<str>,
+    pub ban_list: Rc<str>,
+    pub mod_list: Rc<str>,
 }
 
 impl Component for Display {
@@ -53,7 +65,12 @@ impl Component for Display {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let Props { ipfs, topic } = props;
+        let Props {
+            ipfs,
+            topic,
+            ban_list,
+            mod_list,
+        } = props;
 
         let client = ipfs.clone();
         let cb = link.callback(Msg::PubSub);
@@ -63,6 +80,18 @@ impl Component for Display {
         let sig = drop_sig.clone();
 
         spawn_local(async move { client.pubsub_sub(sub_topic, cb, sig).await });
+
+        let cb = link.callback_once(Msg::BanList);
+        let client = ipfs.clone();
+        let ipns = ban_list.to_string();
+
+        spawn_local(async move { cb.emit(client.resolve_and_dag_get(ipns).await) });
+
+        let cb = link.callback_once(Msg::ModList);
+        let client = ipfs.clone();
+        let ipns = mod_list.to_string();
+
+        spawn_local(async move { cb.emit(client.resolve_and_dag_get(ipns).await) });
 
         //https://github.com/ethereum/blockies
         //https://docs.rs/blockies/0.3.0/blockies/struct.Ethereum.html
@@ -82,6 +111,11 @@ impl Component for Display {
 
             trusted_identities: HashMap::with_capacity(100),
 
+            bans: None,
+            mods: None,
+
+            ban_cache: HashSet::with_capacity(100),
+
             msg_buffer: Vec::with_capacity(10),
 
             chat_messages: VecDeque::with_capacity(20),
@@ -95,6 +129,8 @@ impl Component for Display {
         match msg {
             Msg::PubSub(result) => self.on_pubsub_update(result),
             Msg::Origin((cid, result)) => self.on_signed_msg(cid, result),
+            Msg::BanList(result) => self.on_ban_list_resolved(result),
+            Msg::ModList(result) => self.on_mod_list_resolved(result),
         }
     }
 
@@ -141,7 +177,11 @@ impl Display {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
 
-        let msg: UnsignedMessage = match serde_json::from_slice(&data) {
+        if self.ban_cache.contains(&from) {
+            return false;
+        }
+
+        let msg: Message = match serde_json::from_slice(&data) {
             Ok(msg) => msg,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -149,57 +189,81 @@ impl Display {
             }
         };
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Message => {}", msg.message));
+        self.process_msg(from, msg)
+    }
 
-        if !self.is_allowed(&from, &msg.origin.link) {
+    fn process_msg(&mut self, from: String, msg: Message) -> bool {
+        if !self.trusted_identities.contains_key(&msg.origin.link) {
+            self.get_origin(from, msg);
             return false;
         }
 
-        match self.trusted_identities.get(&msg.origin.link) {
-            Some((addrs, content)) => {
-                if content.peer_id == from {
-                    let mut data = Vec::new();
+        let (addrs, peer_id, name) = &self.trusted_identities[&msg.origin.link];
 
-                    self.img_gen
-                        .create_icon(&mut data, addrs)
-                        .expect("Invalid Blocky");
+        if from != *peer_id {
+            return false;
+        }
 
-                    let msg_data =
-                        MessageData::new(self.next_id, &data, &content.name, &msg.message);
-
-                    self.chat_messages.push_back(msg_data);
-
-                    if self.chat_messages.len() >= 10 {
-                        self.chat_messages.pop_front();
-                    }
-
-                    self.next_id += 1;
-
-                    return true;
+        match msg.msg_type {
+            MessageType::Unsigned(msg) => {
+                //self.update_display(addrs, name, &msg);
+                #[cfg(debug_assertions)]
+                ConsoleService::info(&format!("Message => {}", &msg.message));
+                let mut data = Vec::new();
+                self.img_gen
+                    .create_icon(&mut data, addrs)
+                    .expect("Invalid Blocky");
+                let msg_data = MessageData::new(self.next_id, &data, &name, &msg.message);
+                self.chat_messages.push_back(msg_data);
+                if self.chat_messages.len() >= 10 {
+                    self.chat_messages.pop_front();
                 }
+                self.next_id += 1;
+                return true;
             }
-            None => {
-                let cb = self.link.callback_once(Msg::Origin);
-                let client = self.ipfs.clone();
-                let cid = msg.origin.link;
-
-                self.msg_buffer.push((from, msg));
-
-                spawn_local(async move {
-                    cb.emit((cid, client.dag_get(cid, Option::<String>::None).await))
-                });
+            MessageType::Ban(ban) => {
+                if let Some(mod_list) = &self.mods {
+                    if mod_list.mods.contains(addrs) {
+                        self.ban_cache.insert(ban.peer_id);
+                    }
+                }
             }
         }
 
         false
     }
 
-    /// Verify identity against white & black lists
-    fn is_allowed(&self, _from: &str, _cid: &Cid) -> bool {
-        //TODO verify white & black list
-        true
-        //self.whitelist.whitelist.contains(identity) || !self.blacklist.blacklist.contains(identity)
+    fn get_origin(&mut self, from: String, msg: Message) {
+        let cb = self.link.callback_once(Msg::Origin);
+        let client = self.ipfs.clone();
+        let cid = msg.origin.link;
+
+        self.msg_buffer.push((from, msg));
+
+        spawn_local(
+            async move { cb.emit((cid, client.dag_get(cid, Option::<String>::None).await)) },
+        );
+    }
+
+    fn update_display(&mut self, addrs: &Address, name: &str, msg: &UnsignedMessage) {
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("Message => {}", &msg.message));
+
+        let mut data = Vec::new();
+
+        self.img_gen
+            .create_icon(&mut data, addrs)
+            .expect("Invalid Blocky");
+
+        let msg_data = MessageData::new(self.next_id, &data, &name, &msg.message);
+
+        self.chat_messages.push_back(msg_data);
+
+        if self.chat_messages.len() >= 10 {
+            self.chat_messages.pop_front();
+        }
+
+        self.next_id += 1;
     }
 
     /// Callback when IPFS dag get signed message node.
@@ -215,48 +279,108 @@ impl Display {
         #[cfg(debug_assertions)]
         ConsoleService::info("Signed Message Received");
 
-        let verified = sign_msg.verify();
+        let mut trusted = sign_msg.verify();
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Verifiable => {}", verified));
+        ConsoleService::info(&format!("Verifiable => {}", trusted));
 
+        let SignedMessage {
+            address,
+            data,
+            signature: _,
+        } = sign_msg;
+
+        let Content { peer_id, name } = data;
+
+        if trusted {
+            if let Some(ban_list) = &self.bans {
+                if ban_list.banned.contains(&address) {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::info("This user is banned");
+
+                    self.ban_cache.insert(peer_id.to_owned());
+
+                    trusted = false;
+                }
+            }
+        }
+
+        let mut update = false;
+
+        // Iterate the message buffer in reverse
         let mut i = self.msg_buffer.len();
         while i != 0 {
-            let (peer_id, msg) = &self.msg_buffer[i - 1];
+            let (_, msg) = &self.msg_buffer[i - 1];
 
-            if cid != msg.origin.link {
+            let (from, msg) = if cid != msg.origin.link {
+                // If the message is not from this origin skip
                 continue;
-            }
+            } else {
+                let msg = self.msg_buffer.swap_remove(i - 1);
 
-            if *peer_id == sign_msg.data.peer_id && verified {
-                let mut data = Vec::new();
+                i -= 1;
 
-                self.img_gen
-                    .create_icon(&mut data, &sign_msg.address)
-                    .expect("Invalid Blocky");
+                msg
+            };
 
-                let msg_data =
-                    MessageData::new(self.next_id, &data, &sign_msg.data.name, &msg.message);
-
-                self.chat_messages.push_back(msg_data);
-
-                if self.chat_messages.len() >= 10 {
-                    self.chat_messages.pop_front();
+            if from == peer_id && trusted {
+                match msg.msg_type {
+                    MessageType::Unsigned(msg) => {
+                        self.update_display(&address, &name, &msg);
+                        update = true;
+                    }
+                    MessageType::Ban(ban) => {
+                        if let Some(mod_list) = &self.mods {
+                            if mod_list.mods.contains(&address) {
+                                self.ban_cache.insert(ban.peer_id);
+                            }
+                        }
+                    }
                 }
-
-                self.next_id += 1;
             }
-
-            self.msg_buffer.swap_remove(i - 1);
-
-            i -= 1;
         }
 
-        if verified {
+        if trusted {
             self.trusted_identities
-                .insert(cid, (sign_msg.address, sign_msg.data));
+                .insert(cid, (address, peer_id, name));
         }
 
-        true
+        update
+    }
+
+    /// Callback when IPFS dag get ban list node.
+    fn on_ban_list_resolved(&mut self, result: Result<(Cid, Bans), Error>) -> bool {
+        let bans = match result {
+            Ok((_, bans)) => bans,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Chat Ban List Received");
+
+        self.bans = Some(bans);
+
+        false
+    }
+
+    /// Callback when IPFS dag get mod list node.
+    fn on_mod_list_resolved(&mut self, result: Result<(Cid, Moderators), Error>) -> bool {
+        let mods = match result {
+            Ok((_, mods)) => mods,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Chat Moderator List Received");
+
+        self.mods = Some(mods);
+
+        false
     }
 }

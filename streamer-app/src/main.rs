@@ -1,19 +1,15 @@
 mod actors;
-mod beacon;
-mod file;
+mod cli;
 mod server;
-mod stream;
 mod utils;
-mod video;
 
-use crate::beacon::{beacon_cli, Beacon};
-use crate::file::{file_cli, File};
-use crate::stream::{stream_cli, Stream};
-use crate::video::{video_cli, Video};
+use crate::cli::beacon::{beacon_cli, Beacon};
+use crate::cli::file::{file_cli, File};
+use crate::cli::moderation::{moderation_cli, Moderation};
+use crate::cli::stream::{stream_cli, Stream};
+use crate::cli::video::{video_cli, Video};
 
 use structopt::StructOpt;
-
-const DEFAULT_KEY: &str = "videolist";
 
 #[derive(Debug, StructOpt)]
 #[structopt(about)]
@@ -30,6 +26,9 @@ enum CommandLineInterface {
 
     /// Create, update and delete videos.
     Video(Video),
+
+    /// Appoint Moderators & ban or unban users.
+    Moderation(Moderation),
 }
 
 #[tokio::main]
@@ -39,5 +38,6 @@ async fn main() {
         CommandLineInterface::File(file) => file_cli(file).await,
         CommandLineInterface::Beacon(beacon) => beacon_cli(beacon).await,
         CommandLineInterface::Video(video) => video_cli(video).await,
+        CommandLineInterface::Moderation(mods) => moderation_cli(mods).await,
     }
 }

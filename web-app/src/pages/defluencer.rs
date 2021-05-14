@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::str::FromStr;
 
 use crate::components::{ChatWindow, Navbar, VideoPlayer, VideoThumbnail};
@@ -13,8 +14,8 @@ use web_sys::Storage;
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use linked_data::beacon::{Beacon, VideoList};
-use linked_data::video::VideoMetadata;
+use linked_data::beacon::Beacon;
+use linked_data::video::{VideoList, VideoMetadata};
 
 use cid::Cid;
 
@@ -125,6 +126,8 @@ impl Component for Defluencer {
     }
 
     fn view(&self) -> Html {
+        //TODO refactor with state machine
+
         if let Some(beacon) = self.beacon.as_ref() {
             if let Some(video_list) = self.video_list.as_ref() {
                 return html! {
@@ -132,7 +135,7 @@ impl Component for Defluencer {
                         <Navbar />
                         <div class="live_stream">
                             <VideoPlayer ipfs=self.ipfs.clone() metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
-                            <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() topic=beacon.topics.live_chat.clone() />
+                            <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() topic=Rc::from(beacon.topics.live_chat.clone()) ban_list=Rc::from(beacon.bans.clone()) mod_list=Rc::from(beacon.mods.clone())/>
                         </div>
                         <div class="video_list">
                         {
@@ -215,7 +218,7 @@ impl Defluencer {
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
-        if let Some(cid) = get_cid(&beacon.video_list, self.storage.as_ref()) {
+        if let Some(cid) = get_cid(&beacon.videos, self.storage.as_ref()) {
             self.list_cid = Some(cid);
 
             let cb = self.link.callback_once(Msg::List);
@@ -228,7 +231,7 @@ impl Defluencer {
 
         let cb = self.link.callback_once(Msg::ResolveList);
         let client = self.ipfs.clone();
-        let ipns = beacon.video_list.clone();
+        let ipns = beacon.videos.clone();
 
         spawn_local(async move { cb.emit(client.resolve_and_dag_get(ipns).await) });
 
@@ -277,11 +280,11 @@ impl Defluencer {
         if let Some(old_list_cid) = self.list_cid.as_ref() {
             if *old_list_cid != list_cid {
                 self.list_cid = Some(list_cid);
-                set_cid(&beacon.video_list, &list_cid, self.storage.as_ref());
+                set_cid(&beacon.videos, &list_cid, self.storage.as_ref());
             }
         } else {
             self.list_cid = Some(list_cid);
-            set_cid(&beacon.video_list, &list_cid, self.storage.as_ref());
+            set_cid(&beacon.videos, &list_cid, self.storage.as_ref());
         }
 
         if list.metadata.is_empty() {

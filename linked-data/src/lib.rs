@@ -4,6 +4,9 @@ pub mod config;
 pub mod moderation;
 pub mod video;
 
+use crate::chat::UnsignedMessage;
+use crate::moderation::Ban;
+
 use std::convert::TryFrom;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -40,4 +43,18 @@ where
     let cid = Cid::try_from(cid_str).expect("Deserialize string to CID failed");
 
     Ok(cid)
+}
+
+#[derive(Deserialize, Serialize)]
+pub enum MessageType {
+    Unsigned(UnsignedMessage),
+    Ban(Ban),
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Message {
+    pub msg_type: MessageType,
+
+    /// Link to signed message.
+    pub origin: IPLDLink,
 }

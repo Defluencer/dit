@@ -1,14 +1,12 @@
-use crate::IPLDLink;
-
 use serde::{Deserialize, Serialize};
+
+/// Ethereum address
+pub type Address = [u8; 20];
 
 /// Unsigned chat message with verifiable origin.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UnsignedMessage {
     pub message: String,
-
-    /// Link to signed message.
-    pub origin: IPLDLink,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -21,8 +19,7 @@ pub struct Content {
 /// Crypto-signed message origin.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SignedMessage {
-    /// Ethereum address
-    pub address: [u8; 20],
+    pub address: Address,
 
     pub data: Content,
 

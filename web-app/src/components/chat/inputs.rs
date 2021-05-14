@@ -19,7 +19,7 @@ use yew::InputData;
 use cid::Cid;
 
 use linked_data::chat::{Content, SignedMessage, UnsignedMessage};
-use linked_data::IPLDLink;
+use linked_data::{Message, MessageType};
 
 use web3::types::Address;
 
@@ -153,7 +153,7 @@ impl Component for Inputs {
             DisplayState::NameOk(name) => {
                 html! {
                 <div class="submit_name">
-                    <label class="name_label"><input placeholder=name oninput=self.link.callback(|e: InputData|  Msg::SetName(e.value)) /></label>
+                    <label class="name_label">{ "Name" }<input placeholder=name oninput=self.link.callback(|e: InputData|  Msg::SetName(e.value)) /></label>
                     <button class="submit_button" onclick=self.link.callback_once(|_|  Msg::SubmitName)>{ "Confirm" }</button>
                 </div> }
             }
@@ -226,11 +226,13 @@ impl Inputs {
 
         let cid = self.sign_msg_cid.expect("No signed message CID");
 
-        let msg = serde_json::to_string(&UnsignedMessage {
-            message,
-            origin: IPLDLink { link: cid },
-        })
-        .expect("Cannot serialize");
+        let msg = Message {
+            msg_type: MessageType::Unsigned(UnsignedMessage { message }),
+
+            origin: cid.into(),
+        };
+
+        let json_string = serde_json::to_string(&msg).expect("Cannot serialize");
 
         self.temp_msg = None;
 
@@ -242,7 +244,7 @@ impl Inputs {
 
         spawn_local(async move {
             //TODO
-            let _ = client.pubsub_pub(topic, msg).await;
+            let _ = client.pubsub_pub(topic, json_string).await;
         });
 
         false

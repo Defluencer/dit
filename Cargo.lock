@@ -1911,6 +1911,7 @@ version = "0.1.0"
 dependencies = [
  "cid",
  "futures-util",
+ "hex",
  "hyper",
  "ipfs-api",
  "linked-data",

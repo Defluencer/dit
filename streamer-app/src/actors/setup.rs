@@ -54,7 +54,7 @@ impl SetupAggregator {
     }
 
     pub async fn start(&mut self) {
-        println!("Setup System Online");
+        println!("✅ Setup System Online");
 
         while let Some(msg) = self.service_rx.recv().await {
             match msg {
@@ -63,7 +63,7 @@ impl SetupAggregator {
             }
         }
 
-        println!("Setup System Offline");
+        println!("❌ Setup System Offline");
     }
 
     /// Update track with initialization segments then try to mint node.
@@ -176,7 +176,7 @@ impl SetupAggregator {
         let msg = VideoData::Setup((cid.into(), self.track_len));
 
         if let Err(error) = self.video_tx.send(msg) {
-            eprintln!("Video receiver hung up! Error: {}", error);
+            eprintln!("❗ Video receiver hung up! Error: {}", error);
         }
 
         self.service_rx.close();

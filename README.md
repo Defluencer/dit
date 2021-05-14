@@ -1,11 +1,13 @@
 # Decentralized Influencer Toolkit
-The project aim is to provide; live streaming, live chat, moderation tools and video on demand on the decentralized web.
+This project is 3 things; protocols, prototypes and libraries.
+The current focus is on protocols and prototypes. Once protocols crystalize, libraries will be created.
 
 ## Project Status
-- Live Streaming: Mostly working.
-- VOD: Saved stream & pre-recorded video.
-- Live Chat: Can send messages and archive them.
-- Moderation: In design.
+Most features are untested but fonctionnal.
+- Adaptative birate live streaming video.
+- Live chat with ethereum address as identity.
+- Ban chat user & manage moderator list.
+- Pre-recorded videos & past live streams on demand.
 
 ## Details
 - [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)

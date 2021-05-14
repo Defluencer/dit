@@ -30,7 +30,7 @@ pub async fn stream_cli(stream: Stream) {
     let ipfs = IpfsClient::default();
 
     if ipfs.id(None).await.is_err() {
-        eprintln!("IPFS must be started beforehand. Aborting...");
+        eprintln!("❗ IPFS must be started beforehand. Aborting...");
         return;
     }
 
@@ -47,14 +47,14 @@ pub async fn stream_cli(stream: Stream) {
 
     let mut handles = Vec::with_capacity(4);
 
-    let topic = chat.pubsub_topic.clone();
+    let topic = chat.topic.clone();
 
     let archive_tx = {
         if !no_archive {
             let (archive_tx, archive_rx) = unbounded_channel();
 
             if !no_chat {
-                let mut chat = ChatAggregator::new(ipfs.clone(), archive_tx.clone(), chat);
+                let mut chat = ChatAggregator::new(ipfs.clone(), archive_tx.clone(), chat).await;
 
                 let chat_handle = tokio::spawn(async move {
                     chat.start().await;
@@ -117,7 +117,7 @@ pub async fn stream_cli(stream: Stream) {
 
     for handle in handles {
         if let Err(e) = handle.await {
-            eprintln!("Main: {}", e);
+            eprintln!("❗ Main: {}", e);
         }
     }
 }

@@ -17,7 +17,7 @@ pub async fn file_cli(_file: File) {
     let ipfs = IpfsClient::default();
 
     if ipfs.id(None).await.is_err() {
-        eprintln!("IPFS must be started beforehand. Aborting...");
+        eprintln!("❗ IPFS must be started beforehand. Aborting...");
         return;
     }
 
@@ -75,7 +75,7 @@ pub async fn file_cli(_file: File) {
             setup_tx,
             Some(archive_tx),
             ipfs,
-            chat.pubsub_topic,
+            chat.topic,
         )
         .await;
     });
@@ -84,7 +84,7 @@ pub async fn file_cli(_file: File) {
 
     for handle in handles {
         if let Err(e) = handle.await {
-            eprintln!("Main: {}", e);
+            eprintln!("❗ Main: {}", e);
         }
     }
 }
