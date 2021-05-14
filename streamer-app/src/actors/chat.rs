@@ -10,9 +10,9 @@ use tokio_stream::StreamExt;
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
-use linked_data::chat::{SignedMessage, UnsignedMessage};
+use linked_data::chat::{Address, SignedMessage, UnsignedMessage};
 use linked_data::config::ChatConfig;
-use linked_data::moderation::{Ban, Bans};
+use linked_data::moderation::{Ban, Bans, Moderators};
 use linked_data::{Message, MessageType};
 
 use cid::Cid;
@@ -23,7 +23,7 @@ pub struct ChatAggregator {
     archive_tx: UnboundedSender<Archive>,
 
     /// Map of peer IDs to signed message CIDs
-    trusted: HashMap<String, Cid>,
+    trusted: HashMap<String, (Cid, Address)>,
 
     /// Set of banned peer IDs.
     ban_cache: HashSet<String>,
@@ -32,7 +32,7 @@ pub struct ChatAggregator {
     topic: String,
 
     bans: Bans,
-    //mods: Moderators,
+    mods: Moderators,
 }
 
 impl ChatAggregator {
@@ -41,20 +41,16 @@ impl ChatAggregator {
         archive_tx: UnboundedSender<Archive>,
         config: ChatConfig,
     ) -> Self {
-        let ChatConfig {
-            topic,
-            mods: _,
-            bans,
-        } = config;
+        let ChatConfig { topic, mods, bans } = config;
 
-        /* let res = ipfs
-        .name_resolve(Some(&mods), false, false)
-        .await
-        .expect("Invalid Mods Link"); */
+        let res = ipfs
+            .name_resolve(Some(&mods), false, false)
+            .await
+            .expect("Invalid Mods Link");
 
-        /* let mods = ipfs_dag_get_node_async(&ipfs, &res.path)
-        .await
-        .expect("Invalid Moderators Node"); */
+        let mods = ipfs_dag_get_node_async(&ipfs, &res.path)
+            .await
+            .expect("Invalid Moderators Node");
 
         let res = ipfs
             .name_resolve(Some(&bans), false, false)
@@ -78,7 +74,7 @@ impl ChatAggregator {
             topic,
 
             bans,
-            //mods,
+            mods,
         }
     }
 
@@ -94,7 +90,7 @@ impl ChatAggregator {
             }
 
             match result {
-                Ok(response) => self.process_msg(response).await,
+                Ok(response) => self.on_pubsub_message(response).await,
                 Err(error) => {
                     eprintln!("{}", error);
                     continue;
@@ -113,7 +109,7 @@ impl ChatAggregator {
         println!("❌ Chat System Offline");
     }
 
-    async fn process_msg(&mut self, msg: PubsubSubResponse) {
+    async fn on_pubsub_message(&mut self, msg: PubsubSubResponse) {
         let from = match msg.from {
             Some(from) => from,
             None => return,
@@ -136,19 +132,29 @@ impl ChatAggregator {
             }
         };
 
+        let value = self.trusted.get(&from);
+
+        if value.is_none() || value.unwrap().0/*origin*/ != msg.origin.link {
+            return self.get_origin(from.to_owned(), msg).await;
+        }
+
+        let address = &value.unwrap().1;
+
         match msg.msg_type {
-            MessageType::Unsigned(unmsg) => self.update_msg(from, msg.origin.link, unmsg).await,
-            MessageType::Ban(ban) => self.update_bans(from, ban).await,
+            MessageType::Unsigned(unmsg) => self.mint_and_archive(unmsg).await,
+            MessageType::Ban(ban) => {
+                if self.mods.mods.contains(address) {
+                    self.ban_cache.insert(ban.peer_id);
+                    self.bans.banned.insert(ban.address);
+                    self.ban_count += 1;
+                }
+            }
         }
     }
 
-    async fn update_msg(&mut self, from: String, origin: Cid, msg: UnsignedMessage) {
-        if Some(&origin) == self.trusted.get(&from) {
-            return self.mint_and_archive(msg).await;
-        }
-
+    async fn get_origin(&mut self, from: String, msg: Message) {
         let sign_msg: SignedMessage =
-            match ipfs_dag_get_node_async(&self.ipfs, &origin.to_string()).await {
+            match ipfs_dag_get_node_async(&self.ipfs, &msg.origin.link.to_string()).await {
                 Ok(msg) => msg,
                 Err(e) => {
                     eprintln!("❗ IPFS: dag get failed {}", e);
@@ -156,7 +162,7 @@ impl ChatAggregator {
                 }
             };
 
-        if *from != sign_msg.data.peer_id {
+        if from != sign_msg.data.peer_id {
             return;
         }
 
@@ -165,21 +171,21 @@ impl ChatAggregator {
         }
 
         if self.bans.banned.contains(&sign_msg.address) {
-            self.ban_cache.insert(from);
+            self.ban_cache.insert(from.to_owned());
             return;
         }
 
-        self.trusted.insert(from.to_owned(), origin);
+        self.trusted
+            .insert(from.to_owned(), (msg.origin.link, sign_msg.address));
 
-        self.mint_and_archive(msg).await;
+        self.process_msg(&sign_msg.address, msg).await;
     }
 
-    async fn update_bans(&mut self, _from: String, ban: Ban) {
-        self.ban_cache.insert(ban.peer_id);
-
-        self.bans.banned.insert(ban.address);
-
-        self.ban_count += 1;
+    async fn process_msg(&mut self, address: &Address, msg: Message) {
+        match msg.msg_type {
+            MessageType::Unsigned(unmsg) => self.mint_and_archive(unmsg).await,
+            MessageType::Ban(ban) => self.update_bans(address, ban),
+        }
     }
 
     async fn mint_and_archive(&mut self, msg: UnsignedMessage) {
@@ -196,5 +202,17 @@ impl ChatAggregator {
         if let Err(error) = self.archive_tx.send(msg) {
             eprintln!("❗ Archive receiver hung up. {}", error);
         }
+    }
+
+    fn update_bans(&mut self, address: &Address, ban: Ban) {
+        if !self.mods.mods.contains(address) {
+            return;
+        }
+
+        self.ban_cache.insert(ban.peer_id);
+
+        self.bans.banned.insert(ban.address);
+
+        self.ban_count += 1;
     }
 }
