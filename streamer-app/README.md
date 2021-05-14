@@ -2,15 +2,19 @@
 IPFS daemon must be running first. Command: ```ipfs daemon --enable-pubsub-experiment --enable-namesys-pubsub```
 
 ## Beacon
-A content beacon make your content discoverable and updateable. 
+A beacon make your content discoverable and updateable.
 - Command: ```streamer-app beacon --help``` for more info.
 
 ## Videos
-Video metadata can be created, updated and deleted using commands. Must create a beacon beforehand.
+Video metadata can be created, updated and deleted using commands. 
 - Command: ```streamer-app video --help``` for more info.
 
+## Moderation
+Ban & moderator lists can be managed using commands.
+- Command: ```streamer-app moderation --help``` for more info.
+
 ## Availability
-The content beacon and all your content must be reachable at all times. To achieve this you should leave your IPFS daemon running 24/7 and others can also help you by pinning some or all your content, the more the better. Because of the decentralized nature of IPFS, it does not matter who has your data or how much of it, it cannot be modified and everyone will help redistribute it.
+The beacon and all your content must be reachable at all times. To achieve this you should leave your IPFS daemon running 24/7 and others can also help you by pinning some or all your content, the more the better. Because of the decentralized nature of IPFS, it does not matter who has your data or how much of it, it cannot be modified and everyone will help redistribute it.
 
 ## Ethereum Name Service
 If you already have a domain, the beacon CID can be used with ENS to associate your name to your content. For use with defluencer.eth you must create a subdomain called defluencer and put the beacon CID in your records. It will make your name searchable on the website.
@@ -25,6 +29,7 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 - Start Streaming!
 - When done streaming stop your broadcast software.
 - Press Ctrl-c in streamer-app window to save.
+- Use the CLI to create metadata. Command: ```streamer-app video --help``` for more info.
 
 ## Pre-recorded Video
 - Start IPFS. ```Command: ipfs daemon```
@@ -32,6 +37,7 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 - Run example or custom ffmpeg script.
 - Wait until the video is processed.
 - Press Ctrl-c in streamer-app window to save.
+- Use the CLI to create metadata. Command: ```streamer-app video --help``` for more info.
 
 # Technical
 
@@ -42,18 +48,6 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 
 ## Configuration
 config.json will be created automatically or can be created manually.
-```
-{
-  "input_socket_addr": "127.0.0.1:2526",
-  "archive": {},
-  "video": {
-    "pubsub_topic": "defluencer_live_video"
-  },
-  "chat": {
-    "pubsub_topic": "defluencer_live_chat"
-  }
-}
-```
 - Input socket address is the IP and Port the app will listen for FFMPEG on.
 - Topics are used for live stream and chat. Choose some unique names.
 
