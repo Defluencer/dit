@@ -88,7 +88,7 @@ pub async fn video_cli(cli: Video) {
 }
 
 async fn add_video(command: Add) -> Result<(), Error> {
-    println!("Adding Video...");
+    println!("Adding Video Metadata...");
 
     let ipfs = IpfsClient::default();
 
@@ -113,13 +113,16 @@ async fn add_video(command: Add) -> Result<(), Error> {
 
     update_ipns(&ipfs, &VIDEOS_KEY, &video_list).await?;
 
-    println!("✅ Video #{} Added", (video_list.metadata.len() - 1));
+    println!(
+        "✅ Video Metadata #{} Added",
+        (video_list.metadata.len() - 1)
+    );
 
     Ok(())
 }
 
 async fn update_video(command: Update) -> Result<(), Error> {
-    println!("Updating Video...");
+    println!("Updating Video Metadata...");
     let ipfs = IpfsClient::default();
 
     let mut video_list = get_video_list(&ipfs).await?;
@@ -149,13 +152,13 @@ async fn update_video(command: Update) -> Result<(), Error> {
 
     update_ipns(&ipfs, &VIDEOS_KEY, &video_list).await?;
 
-    println!("✅ Video #{} Updated", command.index);
+    println!("✅ Video Metadata #{} Updated", command.index);
 
     Ok(())
 }
 
 async fn delete_video(command: Delete) -> Result<(), Error> {
-    println!("Deleting Video...");
+    println!("Deleting Video Metadata...");
     let ipfs = IpfsClient::default();
 
     let mut video_list = get_video_list(&ipfs).await?;
@@ -164,7 +167,7 @@ async fn delete_video(command: Delete) -> Result<(), Error> {
 
     update_ipns(&ipfs, &VIDEOS_KEY, &video_list).await?;
 
-    println!("✅ Video #{} Deleted", command.index);
+    println!("✅ Video Metadata #{} Deleted", command.index);
 
     Ok(())
 }

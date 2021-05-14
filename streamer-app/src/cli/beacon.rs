@@ -49,13 +49,13 @@ pub async fn beacon_cli(cli: Beacon) {
 async fn create_beacon(args: Create) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    println!("Generating Keys...");
-
     let mut res = ipfs.key_list().await?;
 
     let videos = match search_keypairs(&VIDEOS_KEY, &mut res) {
         Some(kp) => kp.id,
         None => {
+            println!("Generating Key...");
+
             let key = generate_key(&ipfs, &VIDEOS_KEY).await?;
 
             update_ipns(&ipfs, &VIDEOS_KEY, &VideoList::default()).await?;
@@ -64,9 +64,13 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
         }
     };
 
+    println!("✅ Videos IPNS Link => {}", &videos);
+
     let bans = match search_keypairs(&BANS_KEY, &mut res) {
         Some(kp) => kp.id,
         None => {
+            println!("Generating Key...");
+
             let key = generate_key(&ipfs, &BANS_KEY).await?;
 
             update_ipns(&ipfs, &BANS_KEY, &Bans::default()).await?;
@@ -75,9 +79,13 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
         }
     };
 
+    println!("✅ Bans IPNS Link => {}", &bans);
+
     let mods = match search_keypairs(&MODS_KEY, &mut res) {
         Some(kp) => kp.id,
         None => {
+            println!("Generating Key...");
+
             let key = generate_key(&ipfs, &MODS_KEY).await?;
 
             update_ipns(&ipfs, &MODS_KEY, &Moderators::default()).await?;
@@ -85,6 +93,8 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
             key
         }
     };
+
+    println!("✅ Mods IPNS Link => {}", &mods);
 
     println!("Creating Beacon...");
 
@@ -121,10 +131,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     ipfs.pin_add(&cid.to_string(), true).await?;
 
-    println!(
-        "✅ Beacon Created\nIPFS Path => ipfs://{}",
-        &cid.to_string()
-    );
+    println!("✅ Beacon Created => ipfs://{}", &cid.to_string());
 
     Ok(())
 }

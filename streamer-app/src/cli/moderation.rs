@@ -72,8 +72,7 @@ pub struct Ban {
 }
 
 async fn ban_user(args: Ban) -> Result<(), Error> {
-    //skip the 2 first char "0x"
-    let address = <[u8; 20]>::from_hex(&args.address[2..]).expect("Invalid Ethereum Adress");
+    let address = parse_address(&args.address);
 
     println!("Banning User...");
 
@@ -98,8 +97,7 @@ pub struct UnBan {
 }
 
 async fn unban_user(args: UnBan) -> Result<(), Error> {
-    //skip the 2 first char "0x"
-    let address = <[u8; 20]>::from_hex(&args.address[2..]).expect("Invalid Ethereum Adress");
+    let address = parse_address(&args.address);
 
     println!("Unbanning User...");
 
@@ -131,6 +129,8 @@ async fn replace_ban_list(args: ReplaceBanList) -> Result<(), Error> {
     println!("Replacing Ban List...");
 
     let ipfs = IpfsClient::default();
+
+    let _ = get_from_ipns(&ipfs, BANS_KEY).await?;
 
     ipfs.pin_add(&args.cid.to_string(), true).await?;
 
@@ -179,8 +179,7 @@ pub struct Mod {
 }
 
 async fn mod_user(args: Mod) -> Result<(), Error> {
-    //skip the 2 first char "0x"
-    let address = <[u8; 20]>::from_hex(&args.address[2..]).expect("Invalid Ethereum Adress");
+    let address = parse_address(&args.address);
 
     println!("Promoting User...");
 
@@ -192,7 +191,7 @@ async fn mod_user(args: Mod) -> Result<(), Error> {
 
     update_ipns(&ipfs, MODS_KEY, &mods_list).await?;
 
-    println!("✅ User {} Promoted To Moderator", args.address);
+    println!("✅ User {} Promoted To Moderator Position", args.address);
 
     Ok(())
 }
@@ -205,9 +204,7 @@ pub struct UnMod {
 }
 
 async fn unmod_user(args: UnMod) -> Result<(), Error> {
-    //skip the 2 first char "0x"
-    let address = <[u8; 20]>::from_hex(&args.address[2..]).expect("Invalid Ethereum Adress");
-
+    let address = parse_address(&args.address);
     println!("Demoting Moderator...");
 
     let ipfs = IpfsClient::default();
@@ -239,6 +236,8 @@ async fn replace_mod_list(args: ReplaceModList) -> Result<(), Error> {
 
     let ipfs = IpfsClient::default();
 
+    let _ = get_from_ipns(&ipfs, MODS_KEY).await?;
+
     ipfs.pin_add(&args.cid.to_string(), true).await?;
 
     ipfs.name_publish(&args.cid.to_string(), false, None, None, Some(MODS_KEY))
@@ -250,4 +249,12 @@ async fn replace_mod_list(args: ReplaceModList) -> Result<(), Error> {
     );
 
     Ok(())
+}
+
+fn parse_address(addrs: &str) -> [u8; 20] {
+    if let Some(end) = addrs.strip_prefix("0x") {
+        return <[u8; 20]>::from_hex(end).expect("Invalid Ethereum Address");
+    }
+
+    <[u8; 20]>::from_hex(&addrs).expect("Invalid Ethereum Address")
 }
