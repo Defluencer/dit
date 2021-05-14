@@ -279,10 +279,10 @@ impl Display {
         #[cfg(debug_assertions)]
         ConsoleService::info("Signed Message Received");
 
-        let verified = sign_msg.verify();
+        let mut trusted = sign_msg.verify();
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Verifiable => {}", verified));
+        ConsoleService::info(&format!("Verifiable => {}", trusted));
 
         let SignedMessage {
             address,
@@ -292,13 +292,28 @@ impl Display {
 
         let Content { peer_id, name } = data;
 
+        if trusted {
+            if let Some(ban_list) = &self.bans {
+                if ban_list.banned.contains(&address) {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::info("This user is banned");
+
+                    self.ban_cache.insert(peer_id.to_owned());
+
+                    trusted = false;
+                }
+            }
+        }
+
         let mut update = false;
 
+        // Iterate the message buffer in reverse
         let mut i = self.msg_buffer.len();
         while i != 0 {
             let (_, msg) = &self.msg_buffer[i - 1];
 
             let (from, msg) = if cid != msg.origin.link {
+                // If the message is not from this origin skip
                 continue;
             } else {
                 let msg = self.msg_buffer.swap_remove(i - 1);
@@ -308,7 +323,7 @@ impl Display {
                 msg
             };
 
-            if from == peer_id && verified {
+            if from == peer_id && trusted {
                 match msg.msg_type {
                     MessageType::Unsigned(msg) => {
                         self.update_display(&address, &name, &msg);
@@ -325,13 +340,7 @@ impl Display {
             }
         }
 
-        if verified {
-            if let Some(ban_list) = &self.bans {
-                if ban_list.banned.contains(&address) {
-                    self.ban_cache.insert(peer_id.to_owned());
-                }
-            }
-
+        if trusted {
             self.trusted_identities
                 .insert(cid, (address, peer_id, name));
         }

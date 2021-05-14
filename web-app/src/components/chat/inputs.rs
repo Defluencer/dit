@@ -153,7 +153,7 @@ impl Component for Inputs {
             DisplayState::NameOk(name) => {
                 html! {
                 <div class="submit_name">
-                    <label class="name_label"><input placeholder=name oninput=self.link.callback(|e: InputData|  Msg::SetName(e.value)) />{ "Name" }</label>
+                    <label class="name_label">{ "Name" }<input placeholder=name oninput=self.link.callback(|e: InputData|  Msg::SetName(e.value)) /></label>
                     <button class="submit_button" onclick=self.link.callback_once(|_|  Msg::SubmitName)>{ "Confirm" }</button>
                 </div> }
             }

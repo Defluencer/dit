@@ -21,7 +21,7 @@ pub struct Moderation {
 #[derive(Debug, StructOpt)]
 enum Command {
     /// Manage list of banned users.
-    Bans(BanCommands),
+    Ban(BanCommands),
 
     /// Manage list of moderators.
     Mods(ModCommands),
@@ -29,7 +29,7 @@ enum Command {
 
 pub async fn moderation_cli(cli: Moderation) {
     let res = match cli.cmd {
-        Command::Bans(update) => ban_command(update).await,
+        Command::Ban(update) => ban_command(update).await,
         Command::Mods(update) => mod_command(update).await,
     };
 
@@ -47,10 +47,10 @@ struct BanCommands {
 #[derive(Debug, StructOpt)]
 enum BanCommand {
     /// Ban users.
-    Ban(Ban),
+    Add(Ban),
 
     /// Unban users.
-    UnBan(UnBan),
+    Remove(UnBan),
 
     /// Replace the current list with another.
     ReplaceList(ReplaceBanList),
@@ -58,8 +58,8 @@ enum BanCommand {
 
 async fn ban_command(cli: BanCommands) -> Result<(), Error> {
     match cli.cmd {
-        BanCommand::Ban(args) => ban_user(args).await,
-        BanCommand::UnBan(args) => unban_user(args).await,
+        BanCommand::Add(args) => ban_user(args).await,
+        BanCommand::Remove(args) => unban_user(args).await,
         BanCommand::ReplaceList(args) => replace_ban_list(args).await,
     }
 }
@@ -72,7 +72,8 @@ pub struct Ban {
 }
 
 async fn ban_user(args: Ban) -> Result<(), Error> {
-    let address = <[u8; 20]>::from_hex(&args.address).expect("Invalid Ethereum Adress");
+    //skip the 2 first char "0x"
+    let address = <[u8; 20]>::from_hex(&args.address[2..]).expect("Invalid Ethereum Adress");
 
     println!("Banning User...");
 
@@ -97,7 +98,8 @@ pub struct UnBan {
 }
 
 async fn unban_user(args: UnBan) -> Result<(), Error> {
-    let address = <[u8; 20]>::from_hex(&args.address).expect("Invalid Ethereum Adress");
+    //skip the 2 first char "0x"
+    let address = <[u8; 20]>::from_hex(&args.address[2..]).expect("Invalid Ethereum Adress");
 
     println!("Unbanning User...");
 
@@ -151,11 +153,11 @@ struct ModCommands {
 
 #[derive(Debug, StructOpt)]
 enum ModCommand {
-    /// Promote user to moderator.
-    Mod(Mod),
+    /// Promote user to moderator position.
+    Add(Mod),
 
-    /// Demote user from moderator.
-    UnMod(UnMod),
+    /// Demote user from moderator position.
+    Remove(UnMod),
 
     /// Replace the current moderator list with another.
     ReplaceModList(ReplaceModList),
@@ -163,8 +165,8 @@ enum ModCommand {
 
 async fn mod_command(cli: ModCommands) -> Result<(), Error> {
     match cli.cmd {
-        ModCommand::Mod(args) => mod_user(args).await,
-        ModCommand::UnMod(args) => unmod_user(args).await,
+        ModCommand::Add(args) => mod_user(args).await,
+        ModCommand::Remove(args) => unmod_user(args).await,
         ModCommand::ReplaceModList(args) => replace_mod_list(args).await,
     }
 }
@@ -177,7 +179,8 @@ pub struct Mod {
 }
 
 async fn mod_user(args: Mod) -> Result<(), Error> {
-    let address = <[u8; 20]>::from_hex(&args.address).expect("Invalid Ethereum Adress");
+    //skip the 2 first char "0x"
+    let address = <[u8; 20]>::from_hex(&args.address[2..]).expect("Invalid Ethereum Adress");
 
     println!("Promoting User...");
 
@@ -202,7 +205,8 @@ pub struct UnMod {
 }
 
 async fn unmod_user(args: UnMod) -> Result<(), Error> {
-    let address = <[u8; 20]>::from_hex(&args.address).expect("Invalid Ethereum Adress");
+    //skip the 2 first char "0x"
+    let address = <[u8; 20]>::from_hex(&args.address[2..]).expect("Invalid Ethereum Adress");
 
     println!("Demoting Moderator...");
 
