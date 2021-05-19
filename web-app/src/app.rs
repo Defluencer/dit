@@ -1,11 +1,13 @@
-use crate::pages::{Defluencer, Home, Settings, Video};
+use crate::pages::{Home, Live, Settings, Video, Videos};
 use crate::utils::ipfs::IpfsService;
 use crate::utils::web3::Web3Service;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
-use yew_router::prelude::{Route, Router, Switch};
+use yew_router::prelude::{Router, Switch};
 
 use cid::Cid;
+
+pub const ENS_NAME: &str = "sionois";
 
 #[derive(Switch, Debug, Clone)]
 pub enum AppRoute {
@@ -15,17 +17,14 @@ pub enum AppRoute {
     #[to = "/#/settings"]
     Settings,
 
-    #[to = "/#/{ens_name}"]
-    Defluencer(String),
+    #[to = "/#/live"]
+    Live,
+
+    #[to = "/#/videos"]
+    Videos,
 
     #[to = "/"]
     Home,
-}
-
-impl AppRoute {
-    pub fn into_route(self) -> Route {
-        Route::from(self)
-    }
 }
 
 pub struct App {
@@ -63,7 +62,8 @@ impl Component for App {
                         match switch {
                             AppRoute::Video(cid) => html! { <Video ipfs=ipfs.clone() metadata_cid=cid /> },
                             AppRoute::Settings => html! { <Settings /> },
-                            AppRoute::Defluencer(name) => html! { <Defluencer ipfs=ipfs.clone() web3=web3.clone() ens_name=name /> },
+                            AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() /> },
+                            AppRoute::Videos => html! { <Videos ipfs=ipfs.clone() web3=web3.clone() /> },
                             AppRoute::Home => html! { <Home /> },
                         }
                     })

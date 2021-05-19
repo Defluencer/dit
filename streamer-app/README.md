@@ -17,7 +17,7 @@ Ban & moderator lists can be managed using commands.
 The beacon and all your content must be reachable at all times. To achieve this you should leave your IPFS daemon running 24/7 and others can also help you by pinning some or all your content, the more the better. Because of the decentralized nature of IPFS, it does not matter who has your data or how much of it, it cannot be modified and everyone will help redistribute it.
 
 ## Ethereum Name Service
-If you already have a domain, the beacon CID can be used with ENS to associate your name to your content. For use with defluencer.eth you must create a subdomain called defluencer and put the beacon CID in your records. It will make your name searchable on the website.
+If you already have a domain, the beacon CID can be used with ENS to associate your name to your content.
 
 # How To
 
