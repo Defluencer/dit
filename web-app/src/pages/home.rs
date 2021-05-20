@@ -27,13 +27,11 @@ impl Component for Home {
                 <div class="home_description">
                     <h1 class="home_text"> { "Defluencers" } </h1>
                     <h2 class="home_text"> { "Become Sovereign!" } </h2>
-                    <h3 class="home_text"> { "v0.1.0 (Alpha)" } </h3>
-                    <p class="home_text"> { "Defluencer.eth is a decentralized web application that allow anyone to live stream and host videos." } </p>
-                    <p class="home_text"> { "Most browsers cannot access the decentralized web yet, for now you will need the inter-planetary file system and access to the Ethereum blockchain via Metamask." } </p>
+                    <p class="home_text"> { "Defluencer.eth is a demo website that showcase decentralized live streaming, chat and video hosting." } </p>
+                    <p class="home_text"> { "Most web browsers cannot access the decentralized web yet, for now you will need Metamask and IPFS with CORS & PubSub enabled." } </p>
                     <a class="home_text" href="https://docs.ipfs.io/install/ipfs-desktop/#ipfs-desktop"> { "IPFS Desktop" } </a>
-                    <a class="home_text" href="https://docs.ipfs.io/install/ipfs-companion/#ipfs-companion"> { "IPFS Companion" } </a>
                     <a class="home_text" href="https://metamask.io/"> { "Metamask" } </a>
-                    <a class="home_text" href="https://github.com/SionoiS/dit"> { "I'm building this app on Github join me there!" } </a>
+                    <a class="home_text" href="https://github.com/SionoiS/dit"> { "My Repository" } </a>
                 </div>
             </div>
         }

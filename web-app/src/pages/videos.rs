@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::str::FromStr;
 
-use crate::components::{ChatWindow, Navbar, VideoPlayer, VideoThumbnail};
+use crate::app::ENS_NAME;
+use crate::components::{Navbar, VideoThumbnail};
 use crate::utils::ipfs::IpfsService;
 use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
 use crate::utils::web3::Web3Service;
@@ -21,19 +20,17 @@ use cid::Cid;
 
 use reqwest::Error;
 
-pub struct Defluencer {
+pub struct Videos {
     link: ComponentLink<Self>,
 
     ipfs: IpfsService,
-    web3: Web3Service,
-    ens_name: String,
 
     storage: Option<Storage>,
 
-    searching: bool,
-
     beacon_cid: Option<Cid>,
     beacon: Option<Beacon>,
+
+    searching: bool,
 
     list_cid: Option<Cid>,
     video_list: Option<VideoList>,
@@ -54,55 +51,39 @@ pub enum Msg {
 pub struct Props {
     pub ipfs: IpfsService, // From app.
     pub web3: Web3Service, // From app.
-    pub ens_name: String,  // From router. Beacon Cid or ENS name.
 }
 
-impl Component for Defluencer {
+impl Component for Videos {
     type Message = Msg;
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let Props {
-            ipfs,
-            web3,
-            mut ens_name,
-        } = props;
-
-        ens_name.make_ascii_lowercase();
+        let Props { ipfs, web3 } = props;
 
         let window = web_sys::window().expect("Can't get window");
         let storage = get_local_storage(&window);
 
-        let beacon_cid = match Cid::from_str(&ens_name) {
-            Ok(cid) => {
-                let cb = link.callback_once(Msg::Beacon);
-                let client = ipfs.clone();
+        let beacon_cid = get_cid(ENS_NAME, storage.as_ref());
 
-                spawn_local(
-                    async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) },
-                );
+        if let Some(cid) = beacon_cid {
+            let cb = link.callback_once(Msg::Beacon);
+            let client = ipfs.clone();
 
-                Some(cid)
-            }
-            Err(_) => {
-                let cb = link.callback_once(Msg::ResolveName);
-                let web3 = web3.clone();
-                let name = ens_name.clone();
+            spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
+        }
 
-                spawn_local(async move { cb.emit(web3.get_ipfs_content(name).await) });
+        // Check for beacon updates by resolving name.
+        let cb = link.callback_once(Msg::ResolveName);
+        let name = ENS_NAME.to_owned();
 
-                get_cid(&ens_name, storage.as_ref())
-            }
-        };
+        spawn_local(async move { cb.emit(web3.get_ipfs_content(name).await) });
 
         Self {
             link,
             ipfs,
-            web3,
-            ens_name,
-            searching: true,
             beacon_cid,
             beacon: None,
+            searching: true,
             list_cid: None,
             video_list: None,
             storage,
@@ -126,68 +107,46 @@ impl Component for Defluencer {
     }
 
     fn view(&self) -> Html {
-        //TODO refactor with state machine
-
-        if let Some(beacon) = self.beacon.as_ref() {
-            if let Some(video_list) = self.video_list.as_ref() {
-                return html! {
-                    <div class="defluencer_page">
-                        <Navbar />
-                        <div class="live_stream">
-                            <VideoPlayer ipfs=self.ipfs.clone() metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
-                            <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() topic=Rc::from(beacon.topics.live_chat.clone()) ban_list=Rc::from(beacon.bans.clone()) mod_list=Rc::from(beacon.mods.clone())/>
-                        </div>
-                        <div class="video_list">
-                        {
-                            for video_list.metadata.iter().rev().map(|ipld| {
-                                let cid = ipld.link;
-                                let mt = &self.metadata_map[&cid];
-                                html! {
-                                    <VideoThumbnail metadata_cid=cid metadata=mt />
-                                }
-                            }
-                            )
-                        }
-                        </div>
-                    </div>
-                };
-            }
-        }
-
-        if self.searching {
-            return html! {
-                <div class="defluencer_page">
-                    <Navbar />
-                    <div class="center_text">  {"Loading..."} </div>
-                </div>
-            };
+        let content = if self.searching {
+            html! { <div class="center_text">  {"Loading..."} </div> }
         } else {
-            return html! {
-                <div class="defluencer_page">
-                    <Navbar />
-                    <div class="center_text">  {"Defluencer not found!"} </div>
+            let video_list = self.video_list.as_ref().unwrap();
+
+            html! {
+                <div class="video_list">
+                {
+                    for video_list.metadata.iter().rev().map(|ipld| {
+                        let cid = ipld.link;
+                        let mt = &self.metadata_map[&cid];
+                        html! {
+                            <VideoThumbnail metadata_cid=cid metadata=mt />
+                        }
+                    }
+                    )
+                }
                 </div>
-            };
+            }
+        };
+
+        html! {
+            <div class="videos_page">
+                <Navbar />
+                { content }
+            </div>
         }
     }
 }
 
-impl Defluencer {
+impl Videos {
     /// Callback when Ethereum Name Service resolve name to beacon Cid.
     fn on_name_resolved(&mut self, res: Result<Cid, web3::contract::Error>) -> bool {
         let cid = match res {
             Ok(cid) => cid,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
-                self.searching = false;
-                return true;
+                return false;
             }
         };
-
-        let cb = self.link.callback_once(Msg::Beacon);
-        let client = self.ipfs.clone();
-
-        spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
 
         if let Some(beacon_cid) = self.beacon_cid.as_ref() {
             if *beacon_cid == cid {
@@ -195,10 +154,15 @@ impl Defluencer {
             }
         }
 
+        let cb = self.link.callback_once(Msg::Beacon);
+        let client = self.ipfs.clone();
+
+        spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Name Update");
 
-        set_local_beacon(&self.ens_name, &cid, self.storage.as_ref());
+        set_local_beacon(ENS_NAME, &cid, self.storage.as_ref());
 
         self.beacon_cid = Some(cid);
 
@@ -289,6 +253,7 @@ impl Defluencer {
 
         if list.metadata.is_empty() {
             self.video_list = Some(list);
+            self.searching = false;
             return true;
         }
 
@@ -305,6 +270,7 @@ impl Defluencer {
         self.call_count += list.metadata.len();
 
         self.video_list = Some(list);
+        self.searching = false;
 
         false
     }
