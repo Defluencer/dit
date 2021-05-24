@@ -126,12 +126,7 @@ impl VideoAggregator {
             self.video_nodes.push_back(node);
         }
 
-        if buffer_index != 0 {
-            #[cfg(debug_assertions)]
-            println!("Video: {} buffered nodes", self.video_nodes.len());
-            return;
-        }
-
+        // try to mint in case something failed previously
         while let Some(cid) = self.mint_video_node().await {
             if let Some(archive_tx) = self.archive_tx.as_ref() {
                 let msg = Archive::Video(cid);
@@ -149,6 +144,9 @@ impl VideoAggregator {
                 }
             }
         }
+
+        #[cfg(debug_assertions)]
+        println!("Video: {} buffered nodes", self.video_nodes.len());
     }
 
     /// Mint the first VideoNode in queue if it meets all requirements.
