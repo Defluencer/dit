@@ -27,6 +27,7 @@ pub struct VideoAggregator {
 
     node_mint_count: usize,
     video_nodes: VecDeque<VideoNode>,
+
     previous: Option<IPLDLink>,
 }
 
@@ -125,6 +126,7 @@ impl VideoAggregator {
             self.video_nodes.push_back(node);
         }
 
+        // try to mint in case something failed previously
         while let Some(cid) = self.mint_video_node().await {
             if let Some(archive_tx) = self.archive_tx.as_ref() {
                 let msg = Archive::Video(cid);
@@ -149,7 +151,7 @@ impl VideoAggregator {
 
     /// Mint the first VideoNode in queue if it meets all requirements.
     async fn mint_video_node(&mut self) -> Option<Cid> {
-        let node = self.video_nodes.get_mut(0)?;
+        let node = self.video_nodes.front_mut()?;
 
         node.setup = self.setup_link;
 

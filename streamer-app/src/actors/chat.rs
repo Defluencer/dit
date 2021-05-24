@@ -2,36 +2,30 @@ use crate::actors::archivist::Archive;
 use crate::cli::moderation::BANS_KEY;
 use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async, update_ipns};
 
-use std::collections::{HashMap, HashSet};
-
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
 
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
-use linked_data::chat::{Address, SignedMessage, UnsignedMessage};
+use linked_data::chat::{LocalModerationDB, PeerId, SignedMessage, UnsignedMessage};
 use linked_data::config::ChatConfig;
 use linked_data::moderation::{Ban, Bans, Moderators};
 use linked_data::{Message, MessageType};
-
-use cid::Cid;
 
 pub struct ChatAggregator {
     ipfs: IpfsClient,
 
     archive_tx: UnboundedSender<Archive>,
 
-    /// Map of peer IDs to signed message CIDs
-    trusted: HashMap<String, (Cid, Address)>,
-
-    /// Set of banned peer IDs.
-    ban_cache: HashSet<String>,
-    ban_count: usize,
+    mod_db: LocalModerationDB,
 
     topic: String,
 
     bans: Bans,
+
+    new_ban_count: usize,
+
     mods: Moderators,
 }
 
@@ -66,14 +60,14 @@ impl ChatAggregator {
 
             archive_tx,
 
-            trusted: HashMap::with_capacity(100),
-
-            ban_cache: HashSet::with_capacity(100),
-            ban_count: 0,
+            mod_db: LocalModerationDB::new(100, 0),
 
             topic,
 
             bans,
+
+            new_ban_count: 0,
+
             mods,
         }
     }
@@ -98,8 +92,11 @@ impl ChatAggregator {
             }
         }
 
-        if self.ban_count > 0 {
-            println!("Updating Banned List with {} New Users 👍", self.ban_count);
+        if self.new_ban_count > 0 {
+            println!(
+                "Updating Banned List with {} New Users 👍",
+                self.new_ban_count
+            );
 
             if let Err(e) = update_ipns(&self.ipfs, &BANS_KEY, &self.bans).await {
                 eprintln!("❗ IPNS Update Failed. {}", e);
@@ -110,12 +107,12 @@ impl ChatAggregator {
     }
 
     async fn on_pubsub_message(&mut self, msg: PubsubSubResponse) {
-        let from = match msg.from {
+        let peer = match msg.from {
             Some(from) => from,
             None => return,
         };
 
-        if self.ban_cache.contains(&from) {
+        if self.mod_db.is_banned(&peer) {
             return;
         }
 
@@ -132,27 +129,14 @@ impl ChatAggregator {
             }
         };
 
-        let value = self.trusted.get(&from);
-
-        if value.is_none() || value.unwrap().0/*origin*/ != msg.origin.link {
-            return self.get_origin(from.to_owned(), msg).await;
+        if !self.mod_db.verified(&peer, &msg.origin.link) {
+            return self.get_origin(peer, msg).await;
         }
 
-        let address = &value.unwrap().1;
-
-        match msg.msg_type {
-            MessageType::Unsigned(unmsg) => self.mint_and_archive(unmsg).await,
-            MessageType::Ban(ban) => {
-                if self.mods.mods.contains(address) {
-                    self.ban_cache.insert(ban.peer_id);
-                    self.bans.banned.insert(ban.address);
-                    self.ban_count += 1;
-                }
-            }
-        }
+        self.process_msg(&peer, msg).await
     }
 
-    async fn get_origin(&mut self, from: String, msg: Message) {
+    async fn get_origin(&mut self, peer: PeerId, msg: Message) {
         let sign_msg: SignedMessage =
             match ipfs_dag_get_node_async(&self.ipfs, &msg.origin.link.to_string()).await {
                 Ok(msg) => msg,
@@ -162,29 +146,31 @@ impl ChatAggregator {
                 }
             };
 
-        if from != sign_msg.data.peer_id {
+        self.mod_db
+            .add_peer(&peer, msg.origin.link, sign_msg.address, None);
+
+        if peer != sign_msg.data.peer {
+            self.mod_db.ban_peer(&peer);
             return;
         }
 
         if !sign_msg.verify() {
+            self.mod_db.ban_peer(&peer);
             return;
         }
 
         if self.bans.banned.contains(&sign_msg.address) {
-            self.ban_cache.insert(from.to_owned());
+            self.mod_db.ban_peer(&peer);
             return;
         }
 
-        self.trusted
-            .insert(from.to_owned(), (msg.origin.link, sign_msg.address));
-
-        self.process_msg(&sign_msg.address, msg).await;
+        self.process_msg(&peer, msg).await
     }
 
-    async fn process_msg(&mut self, address: &Address, msg: Message) {
+    async fn process_msg(&mut self, peer: &str, msg: Message) {
         match msg.msg_type {
             MessageType::Unsigned(unmsg) => self.mint_and_archive(unmsg).await,
-            MessageType::Ban(ban) => self.update_bans(address, ban),
+            MessageType::Ban(ban) => self.update_bans(peer, ban),
         }
     }
 
@@ -204,15 +190,16 @@ impl ChatAggregator {
         }
     }
 
-    fn update_bans(&mut self, address: &Address, ban: Ban) {
+    fn update_bans(&mut self, peer: &str, ban: Ban) {
+        let address = self.mod_db.get_address(peer).unwrap();
+
         if !self.mods.mods.contains(address) {
             return;
         }
 
-        self.ban_cache.insert(ban.peer_id);
-
+        self.mod_db.ban_peer(&ban.peer_id);
         self.bans.banned.insert(ban.address);
 
-        self.ban_count += 1;
+        self.new_ban_count += 1;
     }
 }

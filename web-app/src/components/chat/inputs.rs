@@ -335,12 +335,12 @@ impl Inputs {
         ConsoleService::info("Name Submitted");
 
         let address = self.address.expect("Invalid Address");
-        let peer_id = self.peer_id.take().expect("Invalid Peer Id");
+        let peer = self.peer_id.take().expect("Invalid Peer Id");
         let name = self.name.take().expect("Invalid Name");
 
         let cb = self.link.callback_once(Msg::Signed);
         let web3 = self.web3.clone();
-        let data = Content { name, peer_id };
+        let data = Content { name, peer };
 
         self.sign_msg_content = Some(data.clone());
 
