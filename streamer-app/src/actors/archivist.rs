@@ -1,5 +1,7 @@
 use crate::utils::dag_nodes::ipfs_dag_put_node_async;
 
+use std::collections::VecDeque;
+
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use ipfs_api::IpfsClient;
@@ -19,7 +21,7 @@ pub struct Archivist {
 
     archive_rx: UnboundedReceiver<Archive>,
 
-    video_chat_buffer: Option<SecondNode>,
+    video_chat_buffer: VecDeque<SecondNode>,
 
     minute_node: MinuteNode,
     hour_node: HourNode,
@@ -33,7 +35,7 @@ impl Archivist {
 
             archive_rx,
 
-            video_chat_buffer: None,
+            video_chat_buffer: VecDeque::with_capacity(10),
 
             minute_node: MinuteNode {
                 links_to_seconds: Vec::with_capacity(60),
@@ -54,7 +56,7 @@ impl Archivist {
 
         while let Some(event) = self.archive_rx.recv().await {
             match event {
-                Archive::Chat(cid) => self.archive_chat_message(cid),
+                Archive::Chat(cid) => self.archive_chat_message(cid).await,
                 Archive::Video(cid) => self.archive_video_segment(cid).await,
                 Archive::Finalize => self.finalize().await,
             }
@@ -64,8 +66,8 @@ impl Archivist {
     }
 
     /// Link chat message to SecondNodes.
-    fn archive_chat_message(&mut self, msg_cid: Cid) {
-        let node = match self.video_chat_buffer.as_mut() {
+    async fn archive_chat_message(&mut self, msg_cid: Cid) {
+        let node = match self.video_chat_buffer.front_mut() {
             Some(node) => node,
             None => return,
         };
@@ -80,15 +82,9 @@ impl Archivist {
             links_to_chat: Vec::with_capacity(5),
         };
 
-        let node = self.video_chat_buffer.take();
+        self.video_chat_buffer.push_back(second_node);
 
-        self.video_chat_buffer = Some(second_node);
-
-        if node.is_none() {
-            return;
-        }
-
-        self.collect_second(node.unwrap()).await;
+        self.collect_second().await;
 
         if self.minute_node.links_to_seconds.len() < 60 {
             return;
@@ -105,7 +101,12 @@ impl Archivist {
 
     /// Create DAG node containing a link to video segment and all chat messages.
     /// MinuteNode is then appended with the CID.
-    async fn collect_second(&mut self, node: SecondNode) {
+    async fn collect_second(&mut self) {
+        let node = match self.video_chat_buffer.pop_front() {
+            Some(node) => node,
+            None => return,
+        };
+
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &node).await {
             Ok(cid) => cid,
             Err(e) => {
@@ -153,8 +154,16 @@ impl Archivist {
 
         println!("Collecting Nodes...");
 
-        if let Some(node) = self.video_chat_buffer.take() {
-            self.collect_second(node).await;
+        while !self.video_chat_buffer.is_empty() {
+            self.collect_second().await;
+
+            if self.minute_node.links_to_seconds.len() >= 60 {
+                self.collect_minute().await;
+            }
+
+            if self.hour_node.links_to_minutes.len() >= 60 {
+                self.collect_hour().await;
+            }
         }
 
         if !self.minute_node.links_to_seconds.is_empty() {
