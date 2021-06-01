@@ -14,7 +14,7 @@ Protocols are used in prototypes but are not final yet.
 - Live chat using GossipSub, IPFS, IPLD, and ENS.
 - Moderation tools using GossipSub, IPFS, IPLD, and ENS.
 - Mutable multimedia content using IPNS.
- - Videos.
+  - Videos.
 
 [Linked Data](https://github.com/SionoiS/dit/blob/develop/linked-data/README.md)
 
@@ -26,6 +26,7 @@ Most features are untested but fonctionnal.
 - Stream pre-recorded videos & past live streams with adaptative birate.
 
 [Streamer CLI](https://github.com/SionoiS/dit/blob/develop/streamer-app/README.md)
+
 [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
 
 ### Libraries
