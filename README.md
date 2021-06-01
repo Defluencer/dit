@@ -1,18 +1,35 @@
 # Decentralized Influencer Toolkit
-This project is 3 things; protocols, prototypes and libraries.
-The current focus is on protocols and prototypes. Once protocols crystalize, libraries will be created.
+Decentralize the means of communications by decentralizing the data itself. Once the data is decentralized anyone can build upon it without restriction. New platforms & apps with the same data underneat.
 
 ## Project Status
-Most features are untested but fonctionnal.
-- Adaptative birate live streaming video.
-- Live chat with ethereum address as identity.
-- Ban chat user & manage moderator list.
-- Pre-recorded videos & past live streams on demand.
+Names for things are W.I.P.
 
-## Details
-- [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
-- [Streamer App](https://github.com/SionoiS/dit/blob/develop/streamer-app/README.md)
-- [Data](https://github.com/SionoiS/dit/blob/develop/linked-data/README.md)
+### Protocols
+Protocols are used in prototypes but are not final yet.
+- Video addressing using IPLD.
+  - Allow fetching video by timecode & quality.
+  - Handle live video by linking data together in a chain.
+  - Share clips without data duplication.
+- Live video streaming using GossipSub, IPFS, and IPLD.
+- Live chat using GossipSub, IPFS, IPLD, and ENS.
+- Moderation tools using GossipSub, IPFS, IPLD, and ENS.
+- Mutable multimedia content using IPNS.
+ - Videos.
+
+[Linked Data](https://github.com/SionoiS/dit/blob/develop/linked-data/README.md)
+
+### Prototypes
+Most features are untested but fonctionnal.
+- Streaming live video with adaptative birate.
+- Chat live with ethereum address as identity and custom display names.
+- Ban chat users & appoint moderators.
+- Stream pre-recorded videos & past live streams with adaptative birate.
+
+[Streamer CLI](https://github.com/SionoiS/dit/blob/develop/streamer-app/README.md)
+[Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
+
+### Libraries
+TODO
 
 ## License
 Licensed under either of

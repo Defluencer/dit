@@ -2,13 +2,16 @@
 Most of the code is annotated but here's the overview.
 
 ## Beacon
-Metadata and lists of links to content. By broadcasting this, other peers can access your latest content.
+Mostly metadata and IPNS links. Lists of videos, past streams, banned users, moderators, etc...
 
-## Stream
-As video play, new nodes are created and linked to previous ones. A node contain data required to play a segment of video. A special node contains the stream setup data; codecs, qualities, initialization segments, etc...
+## Streams
+A video node contains links to segments of videos of all quality. As video is streamed, new video nodes are created and linked to previous ones. A special node contains the stream setup data; codecs, qualities, initialization segments, etc...
 
-## Video
-Nodes are created at specific intervals and linked together to form a structure around the video allowing it to be addressable by timecode.
+## Videos
+Timecode nodes are created at specific intervals and linked together to form a structure around the video allowing it to be addressable by timecode. Video clips are subgraph of the whole. 
 
 ## Chat
-Display Name and GossipSub Peer ID are signed using Ethereum Keys then the address, name, id and signature are minted as a node on IPFS. When sending or receiving a message the link is used to verify that IDs matches and signature is correct.
+Display Name and GossipSub Peer ID are signed using Ethereum Keys then the address, name, id, and signature are added to IPFS returning a CID. When receiving a message the CID is used to fetch and verify that IDs matches and signature is correct.
+
+## Moderation
+Moderator send ban message to users via GossipSub. The message is signed as if a chat message. The beacon is updated with the new lists.
