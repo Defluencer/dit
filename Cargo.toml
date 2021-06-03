@@ -1,7 +1,11 @@
 [workspace]
 
 members = [
-    "streamer-app",
+    "streamer-cli",
     "web-app",
     "linked-data"
 ]
+
+[profile.release]
+lto = true
+opt-level = 's'

@@ -3,41 +3,41 @@ IPFS daemon must be running first. Command: ```ipfs daemon --enable-pubsub-exper
 
 ## Beacon
 A beacon make your content discoverable and updateable.
-- Command: ```streamer-app beacon --help``` for more info.
+- Command: ```streamer-cli beacon --help``` for more info.
 
 ## Videos
 Video metadata can be created, updated and deleted using commands. 
-- Command: ```streamer-app video --help``` for more info.
+- Command: ```streamer-cli video --help``` for more info.
 
 ## Moderation
 Ban & moderator lists can be managed using commands.
-- Command: ```streamer-app moderation --help``` for more info.
+- Command: ```streamer-cli moderation --help``` for more info.
 
 ## Availability
 The beacon and all your content must be reachable at all times. To achieve this you should leave your IPFS daemon running 24/7 and others can also help you by pinning some or all your content, the more the better. Because of the decentralized nature of IPFS, it does not matter who has your data or how much of it, it cannot be modified and everyone will help redistribute it.
 
 ## Ethereum Name Service
-If you already have a domain, the beacon CID can be used with ENS to associate your name to your content.
+If you already have a domain, the beacon CID can be used with ENS to associate your name to your content. Link the beacon CID to a subdomain called "defluencer".
 
 # How To
 
 ## Video Live Streaming
 - Start IPFS with PubSub enabled. Command: ```ipfs daemon --enable-pubsub-experiment```
-- Start DIT in live streaming mode. Command: ```streamer-app stream```
-- Run example or custom ffmpeg script.
+- Start DIT in live streaming mode. Command: ```streamer-cli stream```
+- Run ```ffmpeg_live.sh``` or custom ffmpeg script.
 - With your broadcast software output set to ffmpeg. Default: ```rtmp://localhost:2525```
 - Start Streaming!
 - When done streaming stop your broadcast software.
-- Press Ctrl-c in streamer-app window to save.
-- Use the CLI to create metadata. Command: ```streamer-app video --help``` for more info.
+- Press Ctrl-c in streamer-cli window to save.
+- Use the CLI to create metadata. Command: ```streamer-cli video --help``` for more info.
 
 ## Pre-recorded Video
 - Start IPFS. ```Command: ipfs daemon```
-- Start DIT in file mode. Command: ```streamer-app file```
-- Run example or custom ffmpeg script.
+- Start DIT in file mode. Command: ```streamer-cli file```
+- Run ```ffmpeg_file.sh``` or custom ffmpeg script.
 - Wait until the video is processed.
-- Press Ctrl-c in streamer-app window to save.
-- Use the CLI to create metadata. Command: ```streamer-app video --help``` for more info.
+- Press Ctrl-c in streamer-cli window to save.
+- Use the CLI to create metadata. Command: ```streamer-cli video --help``` for more info.
 
 # Technical
 
@@ -61,3 +61,4 @@ config.json will be created automatically or can be created manually.
 
 Due to a bug in FFMPEG, original videos cannot be in .mkv containers, missing metadata will cause missing tracks in HLS master playlist.
 
+Refer to my scripts for inspiration in creating your own.

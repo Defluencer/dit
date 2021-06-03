@@ -61,7 +61,7 @@ pub async fn start_server(
         .http1_half_close(true) //FFMPEG requirement
         .serve(service);
 
-    println!("Ingess Server Online");
+    println!("✅ Ingess Server Online");
 
     let graceful = server.with_graceful_shutdown(shutdown_signal(ipfs_clone, topic, archive_tx));
 
@@ -69,5 +69,5 @@ pub async fn start_server(
         eprintln!("Server: {}", e);
     }
 
-    println!("Ingess Server Offline");
+    println!("❌ Ingess Server Offline");
 }

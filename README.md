@@ -12,7 +12,7 @@ Protocols are used in prototypes but are not final yet.
   - Share clips without data duplication.
 - Live video streaming using GossipSub, IPFS, and IPLD.
 - Live chat using GossipSub, IPFS, IPLD, and ENS.
-- Moderation tools using GossipSub, IPFS, IPLD, and ENS.
+- Moderation tools using GossipSub, IPFS, and IPLD.
 - Mutable multimedia content using IPNS.
   - Videos.
 
@@ -25,7 +25,7 @@ Most features are untested but fonctionnal.
 - Ban chat users & appoint moderators.
 - Stream pre-recorded videos & past live streams with adaptative birate.
 
-[Streamer CLI](https://github.com/SionoiS/dit/blob/develop/streamer-app/README.md)
+[Streamer CLI](https://github.com/SionoiS/dit/blob/develop/streamer-cli/README.md)
 
 [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
 

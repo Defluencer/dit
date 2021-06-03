@@ -18,5 +18,5 @@ ffmpeg -listen 1 -i rtmp://localhost:2525 -rtmp_live live -rtmp_buffer 8000 \
 -map a:0 -c:a:0 copy \
 -f hls -var_stream_map "v:0,name:1080p60 v:1,name:720p60 v:2,name:720p30 v:3,name:480p30 a:0,name:audio" \
 -hls_init_time 1 -hls_time 1 -hls_flags independent_segments -master_pl_name master.m3u8 \
--hls_segment_type fmp4 -hls_segment_filename http://192.168.1.152:2526/%v/%d.m4s \
--http_persistent 0 -ignore_io_errors 1 -method PUT http://192.168.1.152:2526/%v/index.m3u8
+-hls_segment_type fmp4 -hls_segment_filename http://localhost:2526/%v/%d.m4s \
+-http_persistent 0 -ignore_io_errors 1 -method PUT http://localhost:2526/%v/index.m3u8

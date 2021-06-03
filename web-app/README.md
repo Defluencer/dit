@@ -6,6 +6,7 @@
 
 ## Web-App
 - Customize as needed.
+- Change ENS name in app.rs
 - Compile with this command: trunk build --release
 - Add and Pin the www folder to IPFS using this command: ipfs add --recursive --cid-version=1 www
 - Upload CID to Pinata Cloud, Temporal and/or host it yourself.
@@ -37,7 +38,7 @@ with this
       "http://localhost:45005",
       "http://127.0.0.1:45005",
       "https://webui.ipfs.io",
-      "http://<INSERT_CID_HERE>.ipfs.localhost:48084""
+      "http://<INSERT_CID_HERE>.ipfs.localhost:48084"
     ]
   }
 },
