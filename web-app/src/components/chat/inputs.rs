@@ -148,7 +148,7 @@ impl Component for Inputs {
                 </div> }
             }
             DisplayState::Connect => {
-                html! { <button class="connect_button" onclick=self.link.callback_once(|_| Msg::Connect)>{ "Connect" }</button> }
+                html! { <button class="connect_button" onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button> }
             }
             DisplayState::NameOk(name) => {
                 html! {

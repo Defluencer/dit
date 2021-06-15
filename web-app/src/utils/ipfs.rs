@@ -222,10 +222,10 @@ impl IpfsService {
             }
 
             match result {
-                Ok(line) => {
-                    let node = serde_json::from_str(&line).expect("Invalid Dag Node");
-                    cb.emit(Ok(node));
-                }
+                Ok(line) => match serde_json::from_str(&line) {
+                    Ok(node) => cb.emit(Ok(node)),
+                    Err(e) => cb.emit(Err(e.into())),
+                },
                 Err(e) => {
                     cb.emit(Err(e));
                     return;
