@@ -13,9 +13,11 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
-use linked_data::chat::{LocalModerationDB, PeerId, SignedMessage, UnsignedMessage};
+use linked_data::chat::{ChatId, ChatModerationCache, UnsignedMessage};
+use linked_data::messaging::{Message, MessageType};
 use linked_data::moderation::{Ban, Bans, Moderators};
-use linked_data::{Message, MessageType};
+use linked_data::signature::SignedMessage;
+use linked_data::PeerId;
 
 use reqwest::Error;
 
@@ -27,7 +29,7 @@ pub struct Display {
     ipfs: IpfsService,
     img_gen: Ethereum,
 
-    mod_db: LocalModerationDB,
+    mod_db: ChatModerationCache,
 
     bans: Option<Bans>,
     mods: Option<Moderators>,
@@ -41,7 +43,7 @@ pub struct Display {
 #[allow(clippy::large_enum_variant)]
 pub enum Msg {
     PubSub(Result<PubsubSubResponse, std::io::Error>),
-    Origin((PeerId, Message, Result<SignedMessage, Error>)),
+    Origin((PeerId, Message, Result<SignedMessage<ChatId>, Error>)),
     BanList(Result<(Cid, Bans), Error>),
     ModList(Result<(Cid, Moderators), Error>),
 }
@@ -103,7 +105,7 @@ impl Component for Display {
             ipfs,
             img_gen,
 
-            mod_db: LocalModerationDB::new(100, 100),
+            mod_db: ChatModerationCache::new(100, 100),
 
             bans: None,
             mods: None,
@@ -179,7 +181,7 @@ impl Display {
             }
         };
 
-        if !self.mod_db.verified(&from, &msg.origin.link) {
+        if !self.mod_db.is_verified(&from, &msg.origin.link) {
             self.get_origin(from, msg);
             return false;
         }
@@ -202,7 +204,7 @@ impl Display {
         &mut self,
         peer: String,
         msg: Message,
-        response: Result<SignedMessage, Error>,
+        response: Result<SignedMessage<ChatId>, Error>,
     ) -> bool {
         let sign_msg = match response {
             Ok(m) => m,
@@ -255,6 +257,7 @@ impl Display {
         match msg.msg_type {
             MessageType::Unsigned(msg) => self.update_display(&peer, &msg),
             MessageType::Ban(ban) => self.update_bans(&peer, ban),
+            MessageType::Mod(_) => false,
         }
     }
 

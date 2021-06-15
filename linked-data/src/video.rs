@@ -15,10 +15,13 @@ pub struct VideoList {
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
     pub title: String,
+    /// Video Duration in seconds.
     pub duration: f64,
-    pub image: IPLDLink, // Raw node of image
-    pub video: IPLDLink, // TimecodeNode
-                         //TODO creator identity whatever that may be
+    /// Link to Raw node of thumbnail image.
+    pub image: IPLDLink,
+    /// Link to TimecodeNode.
+    pub video: IPLDLink,
+    //TODO creator identity whatever that may be
 }
 
 /// Root CID.

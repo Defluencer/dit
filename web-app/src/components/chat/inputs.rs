@@ -18,8 +18,9 @@ use yew::InputData;
 
 use cid::Cid;
 
-use linked_data::chat::{Content, SignedMessage, UnsignedMessage};
-use linked_data::{Message, MessageType};
+use linked_data::chat::{ChatId, UnsignedMessage};
+use linked_data::messaging::{Message, MessageType};
+use linked_data::signature::SignedMessage;
 
 use web3::types::Address;
 
@@ -49,7 +50,7 @@ pub struct Inputs {
     address: Option<Address>,
     peer_id: Option<String>,
     name: Option<String>,
-    sign_msg_content: Option<Content>,
+    sign_msg_content: Option<ChatId>,
     sign_msg_cid: Option<Cid>,
 
     text_area: Option<HtmlTextAreaElement>,
@@ -340,7 +341,7 @@ impl Inputs {
 
         let cb = self.link.callback_once(Msg::Signed);
         let web3 = self.web3.clone();
-        let data = Content { name, peer };
+        let data = ChatId { name, peer };
 
         self.sign_msg_content = Some(data.clone());
 

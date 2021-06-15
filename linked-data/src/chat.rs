@@ -1,83 +1,27 @@
+use crate::{Address, PeerId};
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use secp256k1::recover;
-use secp256k1::{Message, RecoveryId, Signature};
-
 use cid::Cid;
 
-/// Ethereum address
-pub type Address = [u8; 20];
-
-/// GossipSub Peer ID
-pub type PeerId = String;
-
-/// Unsigned chat message with verifiable origin.
+/// Unsigned chat message.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UnsignedMessage {
     pub message: String,
 }
 
+/// Chat identifiers.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Content {
+pub struct ChatId {
     pub name: String,
 
     pub peer: PeerId,
 }
 
-/// Crypto-signed message origin.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SignedMessage {
-    pub address: Address,
-
-    pub data: Content,
-
-    pub signature: Vec<u8>, // Should be [u8; 65] but serde can't deal with big arrays.
-}
-
-impl SignedMessage {
-    pub fn verify(&self) -> bool {
-        if self.signature.len() != 65 {
-            return false;
-        }
-
-        let message = serde_json::to_vec(&self.data).expect("Cannot Serialize");
-
-        let mut eth_message =
-            format!("\x19Ethereum Signed Message:\n{}", message.len()).into_bytes();
-        eth_message.extend_from_slice(&message);
-
-        let hash = keccak256(&eth_message);
-
-        let msg = Message::parse_slice(&hash).expect("Invalid Message");
-        let sig = Signature::parse_slice(&self.signature[0..64]).expect("Invalid Signature");
-        let rec_id = RecoveryId::parse_rpc(self.signature[64]).expect("Invalid Recovery Id");
-
-        let public_key = match recover(&msg, &sig, &rec_id) {
-            Ok(data) => data.serialize(),
-            Err(_) => return false,
-        };
-
-        // The public key returned is 65 bytes long, that is because it is prefixed by `0x04` to indicate an uncompressed public key.
-        let hash = keccak256(&public_key[1..]);
-
-        // The public address is defined as the low 20 bytes of the keccak hash of the public key.
-        hash[12..] == self.address
-    }
-}
-
-/// Compute the Keccak-256 hash of input bytes.
-fn keccak256(bytes: &[u8]) -> [u8; 32] {
-    use tiny_keccak::{Hasher, Keccak};
-    let mut output = [0u8; 32];
-    let mut hasher = Keccak::v256();
-    hasher.update(bytes);
-    hasher.finalize(&mut output);
-    output
-}
-
-pub struct LocalModerationDB {
+/// Local cache of who is verified and/or banned.
+pub struct ChatModerationCache {
     verified: HashMap<PeerId, usize>, // Map peer IDs to indices.
 
     peers: Vec<PeerId>,      // sync
@@ -88,7 +32,7 @@ pub struct LocalModerationDB {
     ban_index: usize, // Lower than this users are banned.
 }
 
-impl LocalModerationDB {
+impl ChatModerationCache {
     pub fn new(capacity: usize, name_cap: usize) -> Self {
         Self {
             verified: HashMap::with_capacity(capacity),
@@ -113,7 +57,7 @@ impl LocalModerationDB {
     }
 
     /// Check if this peer is verified.
-    pub fn verified(&self, peer: &str, origin: &Cid) -> bool {
+    pub fn is_verified(&self, peer: &str, origin: &Cid) -> bool {
         let index = match self.verified.get(peer) {
             Some(i) => *i,
             None => return false,
@@ -138,6 +82,7 @@ impl LocalModerationDB {
         Some(name)
     }
 
+    /// Add as verified user.
     pub fn add_peer(&mut self, peer: &str, cid: Cid, addrs: Address, name: Option<String>) {
         if self.verified.contains_key(peer) {
             return;

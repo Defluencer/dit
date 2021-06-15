@@ -84,11 +84,12 @@ impl Archivist {
 
         self.video_chat_buffer = Some(second_node);
 
-        if node.is_none() {
-            return;
-        }
+        let node = match node {
+            Some(node) => node,
+            None => return,
+        };
 
-        self.collect_second(node.unwrap()).await;
+        self.collect_second(node).await;
 
         if self.minute_node.links_to_seconds.len() < 60 {
             return;
