@@ -13,9 +13,9 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
-use linked_data::chat::{ChatId, ChatModerationCache, UnsignedMessage};
+use linked_data::chat::{ChatId, UnsignedMessage};
 use linked_data::messaging::{Message, MessageType};
-use linked_data::moderation::{Ban, Bans, Moderators};
+use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
 use linked_data::signature::SignedMessage;
 use linked_data::PeerId;
 

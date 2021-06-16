@@ -8,9 +8,9 @@ use web3::{Error, Web3};
 
 use yew::services::ConsoleService;
 
-use cid::Cid;
+use serde::Serialize;
 
-use linked_data::chat::ChatId;
+use cid::Cid;
 
 #[derive(Clone)]
 pub struct Web3Service {
@@ -66,7 +66,10 @@ impl Web3Service {
     }
 
     //https://docs.rs/web3/0.15.0/web3/api/struct.Eth.html#method.sign
-    pub async fn eth_sign(&self, addrs: Address, content: ChatId) -> Result<[u8; 65], Error> {
+    pub async fn eth_sign<T>(&self, addrs: Address, content: T) -> Result<[u8; 65], Error>
+    where
+        T: Serialize,
+    {
         let data = serde_json::to_vec(&content).expect("Cannot Serialize");
 
         let sign = self.client.personal().sign(addrs, data.into()).await?;
