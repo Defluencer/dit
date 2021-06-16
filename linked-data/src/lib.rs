@@ -1,7 +1,6 @@
 pub mod beacon;
 pub mod blog;
 pub mod chat;
-pub mod config;
 pub mod messaging;
 pub mod moderation;
 pub mod signature;

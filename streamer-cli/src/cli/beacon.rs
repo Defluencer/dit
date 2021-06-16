@@ -1,6 +1,6 @@
 use crate::cli::moderation::{BANS_KEY, MODS_KEY};
 use crate::cli::video::VIDEOS_KEY;
-use crate::utils::config::{get_config, set_config};
+use crate::utils::config::Configuration;
 use crate::utils::dag_nodes::{ipfs_dag_put_node_async, search_keypairs, update_ipns};
 
 use ipfs_api::response::Error;
@@ -98,7 +98,10 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     println!("Creating Beacon...");
 
-    let mut config = get_config().await;
+    let mut config = match Configuration::from_file().await {
+        Ok(conf) => conf,
+        Err(_) => Configuration::default(),
+    };
 
     config.chat.topic = args.chat_topic;
     config.chat.mods = mods.clone();
@@ -106,7 +109,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     config.video.pubsub_topic = args.video_topic;
 
-    set_config(&config).await;
+    config.save_to_file().await?;
 
     let topics = Topics {
         live_video: config.video.pubsub_topic,

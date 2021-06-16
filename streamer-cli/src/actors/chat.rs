@@ -1,5 +1,6 @@
 use crate::actors::archivist::Archive;
 use crate::cli::moderation::BANS_KEY;
+use crate::utils::config::ChatConfig;
 use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async, update_ipns};
 
 use tokio::sync::mpsc::UnboundedSender;
@@ -9,7 +10,6 @@ use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
 use linked_data::chat::{ChatId, UnsignedMessage};
-use linked_data::config::ChatConfig;
 use linked_data::messaging::{Message, MessageType};
 use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
 use linked_data::signature::SignedMessage;

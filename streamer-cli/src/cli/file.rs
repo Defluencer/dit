@@ -1,12 +1,10 @@
 use crate::actors::{Archivist, SetupAggregator, VideoAggregator};
 use crate::server::start_server;
-use crate::utils::config::get_config;
+use crate::utils::config::Configuration;
 
 use tokio::sync::mpsc::unbounded_channel;
 
 use ipfs_api::IpfsClient;
-
-use linked_data::config::Configuration;
 
 use structopt::StructOpt;
 
@@ -16,14 +14,20 @@ pub struct File {}
 pub async fn file_cli(_file: File) {
     let ipfs = IpfsClient::default();
 
-    if ipfs.id(None).await.is_err() {
-        eprintln!("❗ IPFS must be started beforehand. Aborting...");
+    if let Err(e) = ipfs.id(None).await {
+        eprintln!("❗ IPFS must be started beforehand. {}", e);
         return;
     }
 
     println!("Initialization...");
 
-    let config = get_config().await;
+    let config = match Configuration::from_file().await {
+        Ok(conf) => conf,
+        Err(e) => {
+            eprintln!("❗ Configuration file not found. {}", e);
+            return;
+        }
+    };
 
     let Configuration {
         input_socket_addr,
