@@ -14,11 +14,15 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 
 use linked_data::beacon::Beacon;
-use linked_data::video::{VideoList, VideoMetadata};
+use linked_data::feed::Feed;
+use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
 use reqwest::Error;
+
+// Maintaining an updated content feed should be a different component.
+// Specialized component just refer to feed then dag get & deserialize (videos, blog post, etc...).
 
 pub struct Videos {
     link: ComponentLink<Self>,
@@ -33,7 +37,7 @@ pub struct Videos {
     searching: bool,
 
     list_cid: Option<Cid>,
-    video_list: Option<VideoList>,
+    feed: Option<Feed>,
 
     call_count: usize,
     metadata_map: HashMap<Cid, VideoMetadata>,
@@ -42,8 +46,8 @@ pub struct Videos {
 pub enum Msg {
     ResolveName(Result<Cid, web3::contract::Error>),
     Beacon(Result<Beacon, Error>),
-    List((Cid, Result<VideoList, Error>)),
-    ResolveList(Result<(Cid, VideoList), Error>),
+    List((Cid, Result<Feed, Error>)),
+    ResolveList(Result<(Cid, Feed), Error>),
     Metadata((Cid, Result<VideoMetadata, Error>)),
 }
 
@@ -85,7 +89,7 @@ impl Component for Videos {
             beacon: None,
             searching: true,
             list_cid: None,
-            video_list: None,
+            feed: None,
             storage,
             call_count: 0,
             metadata_map: HashMap::with_capacity(10),
@@ -96,8 +100,8 @@ impl Component for Videos {
         match msg {
             Msg::ResolveName(result) => self.on_name_resolved(result),
             Msg::Beacon(result) => self.on_beacon_update(result),
-            Msg::List((cid, result)) => self.on_video_list_update(cid, result),
-            Msg::ResolveList(result) => self.on_video_list_resolved(result),
+            Msg::List((cid, result)) => self.on_feed_update(cid, result),
+            Msg::ResolveList(result) => self.on_feed_resolved(result),
             Msg::Metadata((cid, result)) => self.on_video_metadata_update(cid, result),
         }
     }
@@ -110,12 +114,12 @@ impl Component for Videos {
         let content = if self.searching {
             html! { <div class="center_text">  {"Loading..."} </div> }
         } else {
-            let video_list = self.video_list.as_ref().unwrap();
+            let feed = self.feed.as_ref().unwrap();
 
             html! {
-                <div class="video_list">
+                <div class="feed">
                 {
-                    for video_list.metadata.iter().rev().map(|ipld| {
+                    for feed.content.iter().rev().map(|ipld| {
                         let cid = ipld.link;
                         let mt = &self.metadata_map[&cid];
                         html! {
@@ -129,7 +133,7 @@ impl Component for Videos {
         };
 
         html! {
-            <div class="videos_page">
+            <div class="content_feed_page">
                 <Navbar />
                 { content }
             </div>
@@ -182,7 +186,7 @@ impl Videos {
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
-        if let Some(cid) = get_cid(&beacon.videos, self.storage.as_ref()) {
+        if let Some(cid) = get_cid(&beacon.content_feed, self.storage.as_ref()) {
             self.list_cid = Some(cid);
 
             let cb = self.link.callback_once(Msg::List);
@@ -195,7 +199,7 @@ impl Videos {
 
         let cb = self.link.callback_once(Msg::ResolveList);
         let client = self.ipfs.clone();
-        let ipns = beacon.videos.clone();
+        let ipns = beacon.content_feed.clone();
 
         spawn_local(async move { cb.emit(client.resolve_and_dag_get(ipns).await) });
 
@@ -204,22 +208,22 @@ impl Videos {
         false
     }
 
-    /// Callback when IPFS dag get return VideoList node.
-    fn on_video_list_resolved(&mut self, res: Result<(Cid, VideoList), Error>) -> bool {
-        let (cid, list) = match res {
-            Ok((cid, list)) => (cid, list),
+    /// Callback when IPFS dag get return Feed node.
+    fn on_feed_resolved(&mut self, res: Result<(Cid, Feed), Error>) -> bool {
+        let (cid, feed) = match res {
+            Ok((cid, feed)) => (cid, feed),
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
                 return false;
             }
         };
 
-        self.on_video_list_update(cid, Ok(list))
+        self.on_feed_update(cid, Ok(feed))
     }
 
-    /// Callback when IPFS resolve and dag get VideoList node.
-    fn on_video_list_update(&mut self, list_cid: Cid, res: Result<VideoList, Error>) -> bool {
-        let list = match res {
+    /// Callback when IPFS resolve and dag get Feed node.
+    fn on_feed_update(&mut self, list_cid: Cid, res: Result<Feed, Error>) -> bool {
+        let feed = match res {
             Ok(l) => l,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -228,7 +232,7 @@ impl Videos {
         };
 
         if let Some(old_list_cid) = self.list_cid.as_ref() {
-            if *old_list_cid == list_cid && self.video_list.is_some() {
+            if *old_list_cid == list_cid && self.feed.is_some() {
                 return false;
             }
         }
@@ -239,25 +243,25 @@ impl Videos {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info("Video List Update");
+        ConsoleService::info("Content Feed Update");
 
         if let Some(old_list_cid) = self.list_cid.as_ref() {
             if *old_list_cid != list_cid {
                 self.list_cid = Some(list_cid);
-                set_cid(&beacon.videos, &list_cid, self.storage.as_ref());
+                set_cid(&beacon.content_feed, &list_cid, self.storage.as_ref());
             }
         } else {
             self.list_cid = Some(list_cid);
-            set_cid(&beacon.videos, &list_cid, self.storage.as_ref());
+            set_cid(&beacon.content_feed, &list_cid, self.storage.as_ref());
         }
 
-        if list.metadata.is_empty() {
-            self.video_list = Some(list);
+        if feed.content.is_empty() {
+            self.feed = Some(feed);
             self.searching = false;
             return true;
         }
 
-        for metadata in list.metadata.iter().rev() {
+        for metadata in feed.content.iter().rev() {
             let cb = self.link.callback_once(Msg::Metadata);
             let client = self.ipfs.clone();
             let cid = metadata.link;
@@ -267,9 +271,9 @@ impl Videos {
             });
         }
 
-        self.call_count += list.metadata.len();
+        self.call_count += feed.content.len();
 
-        self.video_list = Some(list);
+        self.feed = Some(feed);
         self.searching = false;
 
         false

@@ -9,8 +9,7 @@ use tokio_stream::StreamExt;
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
-use linked_data::chat::{ChatId, UnsignedMessage};
-use linked_data::messaging::{Message, MessageType};
+use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
 use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
 use linked_data::signature::SignedMessage;
 use linked_data::PeerId;
@@ -173,7 +172,7 @@ impl ChatAggregator {
         match msg.msg_type {
             MessageType::Unsigned(unmsg) => self.mint_and_archive(unmsg).await,
             MessageType::Ban(ban) => self.update_bans(peer, ban),
-            MessageType::Mod(_) => return,
+            MessageType::Mod(_) => {}
         }
     }
 

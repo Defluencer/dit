@@ -1,15 +1,16 @@
+use crate::cli::content::FEED_KEY;
 use crate::cli::moderation::{BANS_KEY, MODS_KEY};
-use crate::cli::video::VIDEOS_KEY;
 use crate::utils::config::Configuration;
 use crate::utils::dag_nodes::{ipfs_dag_put_node_async, search_keypairs, update_ipns};
+use serde::Serialize;
 
 use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
 use ipfs_api::KeyType;
 
 use linked_data::beacon::Topics;
+use linked_data::feed::Feed;
 use linked_data::moderation::{Bans, Moderators};
-use linked_data::video::VideoList;
 
 use structopt::StructOpt;
 
@@ -28,12 +29,16 @@ enum Command {
 #[derive(Debug, StructOpt)]
 pub struct Create {
     /// GossipSub topic for live chat.
-    #[structopt(short, long)]
-    chat_topic: String,
+    #[structopt(long)]
+    chat: String,
 
     /// GossipSub topic for video broadcasting.
-    #[structopt(short, long)]
-    video_topic: String,
+    #[structopt(long)]
+    videos: String,
+
+    /// GossipSub topic for comments.
+    #[structopt(long)]
+    comments: String,
 }
 
 pub async fn beacon_cli(cli: Beacon) {
@@ -49,52 +54,13 @@ pub async fn beacon_cli(cli: Beacon) {
 async fn create_beacon(args: Create) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let mut res = ipfs.key_list().await?;
+    let mut key_list = ipfs.key_list().await?;
 
-    let videos = match search_keypairs(&VIDEOS_KEY, &mut res) {
-        Some(kp) => kp.id,
-        None => {
-            println!("Generating Key...");
-
-            let key = generate_key(&ipfs, &VIDEOS_KEY).await?;
-
-            update_ipns(&ipfs, &VIDEOS_KEY, &VideoList::default()).await?;
-
-            key
-        }
-    };
-
-    println!("✅ Videos IPNS Link => {}", &videos);
-
-    let bans = match search_keypairs(&BANS_KEY, &mut res) {
-        Some(kp) => kp.id,
-        None => {
-            println!("Generating Key...");
-
-            let key = generate_key(&ipfs, &BANS_KEY).await?;
-
-            update_ipns(&ipfs, &BANS_KEY, &Bans::default()).await?;
-
-            key
-        }
-    };
-
-    println!("✅ Bans IPNS Link => {}", &bans);
-
-    let mods = match search_keypairs(&MODS_KEY, &mut res) {
-        Some(kp) => kp.id,
-        None => {
-            println!("Generating Key...");
-
-            let key = generate_key(&ipfs, &MODS_KEY).await?;
-
-            update_ipns(&ipfs, &MODS_KEY, &Moderators::default()).await?;
-
-            key
-        }
-    };
-
-    println!("✅ Mods IPNS Link => {}", &mods);
+    let bans = create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &mut key_list).await?;
+    let mods = create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &mut key_list).await?;
+    let content_feed =
+        create_ipns_link::<Feed>(&ipfs, "Content Feed", FEED_KEY, &mut key_list).await?;
+    //let comments = create_ipns_link(&ipfs, "Comments", COMMENT_KEY, &mut key_list).await?;
 
     println!("Creating Beacon...");
 
@@ -103,17 +69,18 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
         Err(_) => Configuration::default(),
     };
 
-    config.chat.topic = args.chat_topic;
+    config.chat.topic = args.chat;
     config.chat.mods = mods.clone();
     config.chat.bans = bans.clone();
 
-    config.video.pubsub_topic = args.video_topic;
+    config.video.pubsub_topic = args.videos;
 
     config.save_to_file().await?;
 
     let topics = Topics {
         live_video: config.video.pubsub_topic,
         live_chat: config.chat.topic,
+        comments: args.comments,
     };
 
     let res = ipfs.id(None).await?;
@@ -125,9 +92,10 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let beacon = linked_data::beacon::Beacon {
         topics,
         peer_id,
-        videos,
         bans,
         mods,
+        content_feed,
+        //comments,
     };
 
     let cid = ipfs_dag_put_node_async(&ipfs, &beacon).await?;
@@ -137,6 +105,33 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     println!("✅ Beacon Created => ipfs://{}", &cid.to_string());
 
     Ok(())
+}
+
+async fn create_ipns_link<T>(
+    ipfs: &IpfsClient,
+    name: &str,
+    key: &str,
+    key_list: &mut ipfs_api::response::KeyPairList,
+) -> Result<String, Error>
+where
+    T: Default + Serialize,
+{
+    let link = match search_keypairs(key, key_list) {
+        Some(kp) => kp.id,
+        None => {
+            println!("Generating Key...");
+
+            let key = generate_key(ipfs, key).await?;
+
+            update_ipns(ipfs, &key, &T::default()).await?;
+
+            key
+        }
+    };
+
+    println!("✅ {} IPNS Link => {}", name, &link);
+
+    Ok(link)
 }
 
 async fn generate_key(ipfs: &IpfsClient, key: &str) -> Result<String, Error> {

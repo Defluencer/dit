@@ -1,7 +1,8 @@
 pub mod beacon;
 pub mod blog;
 pub mod chat;
-pub mod messaging;
+pub mod comments;
+pub mod feed;
 pub mod moderation;
 pub mod signature;
 pub mod video;
@@ -18,7 +19,7 @@ pub type Address = [u8; 20];
 /// GossipSub Peer ID
 pub type PeerId = String;
 
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct IPLDLink {
     #[serde(rename = "/")]
     #[serde(serialize_with = "serialize_cid")]

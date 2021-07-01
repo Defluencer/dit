@@ -4,24 +4,23 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-/// List of all video metadata links.
-#[derive(Deserialize, Serialize, Default)]
-pub struct VideoList {
-    /// Oldest to newest videos metadata.
-    pub metadata: Vec<IPLDLink>,
-}
-
 /// Metadata for video thumbnail and playback.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct VideoMetadata {
+    /// Title of this video.
     pub title: String,
-    /// Video Duration in seconds.
+
+    /// Duration in seconds.
     pub duration: f64,
+
     /// Link to Raw node of thumbnail image.
     pub image: IPLDLink,
+
     /// Link to TimecodeNode.
     pub video: IPLDLink,
-    //TODO creator identity whatever that may be
+
+    /// Timestamp at the time of publication in Unix time.
+    pub timestamp: u64,
 }
 
 /// Root CID.

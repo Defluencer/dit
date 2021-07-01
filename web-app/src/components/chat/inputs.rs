@@ -18,8 +18,7 @@ use yew::InputData;
 
 use cid::Cid;
 
-use linked_data::chat::{ChatId, UnsignedMessage};
-use linked_data::messaging::{Message, MessageType};
+use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
 use linked_data::signature::SignedMessage;
 
 use web3::types::Address;

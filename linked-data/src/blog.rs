@@ -2,37 +2,27 @@ use crate::IPLDLink;
 
 use serde::{Deserialize, Serialize};
 
-/// Twitter style short message in raw text.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ShortMessageNode {
-    pub message: String, //TODO switch to text with more characters.
-}
+/// Metadata for a long blog post.
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
+pub struct FullPost {
+    /// The title of this blog post
+    pub title: String,
 
-//TODO Blog/Forum style long message with formatting.
+    /// Link to thumbnail image.
+    pub image: IPLDLink,
 
-/// A new discussion topic. Sould always be crypto-signed.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TopicStartNode {
-    /// GossipSub Topic used to broadcast replies.
-    pub topic: String,
-    /// Link to the content.
+    /// Link to markdown file
     pub content: IPLDLink,
+
+    /// Timestamp at the time of publication in Unix time.
+    pub timestamp: u64,
 }
 
-/// A reply to a previous message. Sould always be crypto-signed.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ReplyNode {
-    /// Link to the signed message.
-    pub origin: IPLDLink,
-    /// Link to the content.
-    pub content: IPLDLink,
-}
+/// A micro blog post (Twitter-sytle).
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
+pub struct MicroPost {
+    pub content: String,
 
-/// Map node link to each other to form a tree that represent the flow of the conversation.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MapNode {
-    /// Link to a signed topic start or a reply.
-    pub msg_link: IPLDLink,
-    /// Links to map node of all replies.
-    pub reply_links: Vec<IPLDLink>,
+    /// Timestamp at the time of publication in Unix time.
+    pub timestamp: u64,
 }
