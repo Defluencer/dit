@@ -1,8 +1,11 @@
 use crate::IPLDLink;
 
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+
+use cid::Cid;
 
 /// Metadata for video thumbnail and playback.
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
@@ -21,6 +24,52 @@ pub struct VideoMetadata {
 
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
+}
+
+impl VideoMetadata {
+    pub fn create(title: String, duration: f64, image: Cid, video: Cid) -> Self {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        Self {
+            title,
+            duration,
+            image: image.into(),
+            video: video.into(),
+            timestamp,
+        }
+    }
+
+    pub fn update(
+        &mut self,
+        title: Option<String>,
+        image: Option<Cid>,
+        video: Option<Cid>,
+        duration: Option<f64>,
+    ) {
+        if let Some(title) = title {
+            self.title = title;
+        }
+
+        if let Some(img) = image {
+            self.image = img.into();
+        }
+
+        if let Some(vid) = video {
+            self.video = vid.into();
+        }
+
+        if let Some(dur) = duration {
+            self.duration = dur;
+        }
+
+        self.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+    }
 }
 
 /// Root CID.

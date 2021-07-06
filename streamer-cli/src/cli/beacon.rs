@@ -9,7 +9,7 @@ use ipfs_api::IpfsClient;
 use ipfs_api::KeyType;
 
 use linked_data::beacon::Topics;
-use linked_data::feed::Feed;
+use linked_data::feed::FeedStart;
 use linked_data::moderation::{Bans, Moderators};
 
 use structopt::StructOpt;
@@ -59,7 +59,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let bans = create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &mut key_list).await?;
     let mods = create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &mut key_list).await?;
     let content_feed =
-        create_ipns_link::<Feed>(&ipfs, "Content Feed", FEED_KEY, &mut key_list).await?;
+        create_ipns_link::<FeedStart>(&ipfs, "Content Feed", FEED_KEY, &mut key_list).await?;
     //let comments = create_ipns_link(&ipfs, "Comments", COMMENT_KEY, &mut key_list).await?;
 
     println!("Creating Beacon...");

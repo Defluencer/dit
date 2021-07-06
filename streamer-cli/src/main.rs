@@ -11,6 +11,7 @@ use crate::cli::stream::{stream_cli, Stream};
 
 use structopt::StructOpt;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, StructOpt)]
 #[structopt(about)]
 #[structopt(rename_all = "kebab-case")]
