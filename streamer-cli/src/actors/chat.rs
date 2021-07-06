@@ -1,5 +1,6 @@
 use crate::actors::archivist::Archive;
 use crate::cli::moderation::BANS_KEY;
+use crate::utils::config::ChatConfig;
 use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async, update_ipns};
 
 use tokio::sync::mpsc::UnboundedSender;
@@ -8,17 +9,17 @@ use tokio_stream::StreamExt;
 use ipfs_api::response::PubsubSubResponse;
 use ipfs_api::IpfsClient;
 
-use linked_data::chat::{LocalModerationDB, PeerId, SignedMessage, UnsignedMessage};
-use linked_data::config::ChatConfig;
-use linked_data::moderation::{Ban, Bans, Moderators};
-use linked_data::{Message, MessageType};
+use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
+use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
+use linked_data::signature::SignedMessage;
+use linked_data::PeerId;
 
 pub struct ChatAggregator {
     ipfs: IpfsClient,
 
     archive_tx: UnboundedSender<Archive>,
 
-    mod_db: LocalModerationDB,
+    mod_db: ChatModerationCache,
 
     topic: String,
 
@@ -60,7 +61,7 @@ impl ChatAggregator {
 
             archive_tx,
 
-            mod_db: LocalModerationDB::new(100, 0),
+            mod_db: ChatModerationCache::new(100, 0),
 
             topic,
 
@@ -124,12 +125,12 @@ impl ChatAggregator {
         let msg: Message = match serde_json::from_slice(&data) {
             Ok(data) => data,
             Err(e) => {
-                eprintln!("❗ Deserialization failed. {}", e);
+                eprintln!("❗ PubSub Message Deserialization Failed. {}", e);
                 return;
             }
         };
 
-        if !self.mod_db.verified(&peer, &msg.origin.link) {
+        if !self.mod_db.is_verified(&peer, &msg.origin.link) {
             return self.get_origin(peer, msg).await;
         }
 
@@ -137,7 +138,7 @@ impl ChatAggregator {
     }
 
     async fn get_origin(&mut self, peer: PeerId, msg: Message) {
-        let sign_msg: SignedMessage =
+        let sign_msg: SignedMessage<ChatId> =
             match ipfs_dag_get_node_async(&self.ipfs, &msg.origin.link.to_string()).await {
                 Ok(msg) => msg,
                 Err(e) => {
@@ -171,6 +172,7 @@ impl ChatAggregator {
         match msg.msg_type {
             MessageType::Unsigned(unmsg) => self.mint_and_archive(unmsg).await,
             MessageType::Ban(ban) => self.update_bans(peer, ban),
+            MessageType::Mod(_) => {}
         }
     }
 

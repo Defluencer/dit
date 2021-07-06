@@ -8,11 +8,9 @@ use web3::{Error, Web3};
 
 use yew::services::ConsoleService;
 
-//use serde::Serialize;
+use serde::Serialize;
 
 use cid::Cid;
-
-use linked_data::chat::Content;
 
 #[derive(Clone)]
 pub struct Web3Service {
@@ -68,7 +66,10 @@ impl Web3Service {
     }
 
     //https://docs.rs/web3/0.15.0/web3/api/struct.Eth.html#method.sign
-    pub async fn eth_sign(&self, addrs: Address, content: Content) -> Result<[u8; 65], Error> {
+    pub async fn eth_sign<T>(&self, addrs: Address, content: T) -> Result<[u8; 65], Error>
+    where
+        T: Serialize,
+    {
         let data = serde_json::to_vec(&content).expect("Cannot Serialize");
 
         let sign = self.client.personal().sign(addrs, data.into()).await?;
@@ -81,91 +82,3 @@ impl Web3Service {
         self.client.ens().get_canonical_name(addrs).await
     }
 }
-
-/* #[derive(Serialize)]
-struct SignTypedData {
-    domain: Domain,
-
-    message: Content,
-
-    #[serde(rename = "primaryType")]
-    primary_type: String,
-
-    types: Types,
-} */
-
-/* impl SignTypedData {
-    fn new(addrs: Address, content: Content) -> Self {
-        Self {
-            domain: Domain {
-                chain_id: 3,
-                name: "Defluencer".to_owned(),
-                verifying_contract: addrs,
-                version: "0.1".to_owned(),
-            },
-            message: content,
-            primary_type: "Content".to_owned(),
-            types: Types {
-                eip_712_domain: vec![
-                    DomainType {
-                        name: "name".to_owned(),
-                        domain_type: "string".to_owned(),
-                    },
-                    DomainType {
-                        name: "version".to_owned(),
-                        domain_type: "string".to_owned(),
-                    },
-                    DomainType {
-                        name: "chainId".to_owned(),
-                        domain_type: "uint256".to_owned(),
-                    },
-                    DomainType {
-                        name: "verifyingContract".to_owned(),
-                        domain_type: "address".to_owned(),
-                    },
-                ],
-
-                content: vec![
-                    DomainType {
-                        name: "name".to_owned(),
-                        domain_type: "string".to_owned(),
-                    },
-                    DomainType {
-                        name: "peer_id".to_owned(),
-                        domain_type: "string".to_owned(),
-                    },
-                ],
-            },
-        }
-    }
-} */
-
-/* #[derive(Serialize)]
-struct Domain {
-    #[serde(rename = "chainId")]
-    chain_id: usize,
-
-    name: String,
-
-    #[serde(rename = "verifyingContract")]
-    verifying_contract: Address,
-
-    version: String,
-} */
-
-/* #[derive(Serialize)]
-struct Types {
-    #[serde(rename = "EIP712Domain")]
-    eip_712_domain: Vec<DomainType>,
-
-    #[serde(rename = "Content")]
-    content: Vec<DomainType>,
-} */
-
-/* #[derive(Serialize)]
-struct DomainType {
-    name: String,
-
-    #[serde(rename = "type")]
-    domain_type: String,
-} */

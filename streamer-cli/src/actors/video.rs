@@ -1,4 +1,5 @@
 use crate::actors::archivist::Archive;
+use crate::utils::config::VideoConfig;
 use crate::utils::dag_nodes::ipfs_dag_put_node_async;
 
 use std::collections::{HashMap, VecDeque};
@@ -8,7 +9,6 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use ipfs_api::IpfsClient;
 
-use linked_data::config::VideoConfig;
 use linked_data::video::VideoNode;
 use linked_data::IPLDLink;
 

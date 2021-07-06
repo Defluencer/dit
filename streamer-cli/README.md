@@ -5,13 +5,13 @@ IPFS daemon must be running first. Command: ```ipfs daemon --enable-pubsub-exper
 A beacon make your content discoverable and updateable.
 - Command: ```streamer-cli beacon --help``` for more info.
 
-## Videos
-Video metadata can be created, updated and deleted using commands. 
-- Command: ```streamer-cli video --help``` for more info.
-
 ## Moderation
 Ban & moderator lists can be managed using commands.
-- Command: ```streamer-cli moderation --help``` for more info.
+- Command: ```streamer-cli moderation --help ``` for more info.
+
+## Content Feed
+Add, update or delete content from your feed.
+- Command: ```streamer-cli contentfeed --help``` for more info
 
 ## Availability
 The beacon and all your content must be reachable at all times. To achieve this you should leave your IPFS daemon running 24/7 and others can also help you by pinning some or all your content, the more the better. Because of the decentralized nature of IPFS, it does not matter who has your data or how much of it, it cannot be modified and everyone will help redistribute it.
@@ -23,21 +23,21 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 
 ## Video Live Streaming
 - Start IPFS with PubSub enabled. Command: ```ipfs daemon --enable-pubsub-experiment```
-- Start DIT in live streaming mode. Command: ```streamer-cli stream```
+- Start in live streaming mode. Command: ```streamer-cli stream```
 - Run ```ffmpeg_live.sh``` or custom ffmpeg script.
 - With your broadcast software output set to ffmpeg. Default: ```rtmp://localhost:2525```
 - Start Streaming!
 - When done streaming stop your broadcast software.
 - Press Ctrl-c in streamer-cli window to save.
-- Use the CLI to create metadata. Command: ```streamer-cli video --help``` for more info.
+- Use the CLI to create metadata. Command: ```streamer-cli contentfeed --help``` for more info.
 
 ## Pre-recorded Video
-- Start IPFS. ```Command: ipfs daemon```
-- Start DIT in file mode. Command: ```streamer-cli file```
+- Start IPFS. Command: ```ipfs daemon```
+- Start in file mode. Command: ```streamer-cli file```
 - Run ```ffmpeg_file.sh``` or custom ffmpeg script.
 - Wait until the video is processed.
 - Press Ctrl-c in streamer-cli window to save.
-- Use the CLI to create metadata. Command: ```streamer-cli video --help``` for more info.
+- Use the CLI to create metadata. Command: ```streamer-cli contentfeed --help``` for more info.
 
 # Technical
 
@@ -47,9 +47,9 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 - Broadcasting software
 
 ## Configuration
-config.json will be created automatically or can be created manually.
+config.json will be created automatically when creating beacon.
 - Input socket address is the IP and Port the app will listen for FFMPEG on.
-- Topics are used for live stream and chat. Choose some unique names.
+- Topics are used for live stream and chat.
 
 ## FFMPEG
 - Output must be HLS.

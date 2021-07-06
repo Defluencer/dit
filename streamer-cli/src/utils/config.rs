@@ -1,32 +1,80 @@
 use tokio::fs;
 
-use linked_data::config::Configuration;
+use std::io::Error;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
-pub async fn get_config() -> Configuration {
-    match fs::read("config.json").await {
-        Ok(data) => {
-            serde_json::from_slice::<Configuration>(&data).expect("Config serialization failed")
-        }
-        Err(_) => {
-            let config = Configuration::default();
+use serde::{Deserialize, Serialize};
 
-            set_config(&config).await;
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ArchiveConfig {
+    #[serde(skip)]
+    pub archive_live_chat: bool, // get from argument not file
+}
 
-            config
-        }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct VideoConfig {
+    #[serde(skip)]
+    pub pubsub_enable: bool, // get from argument not file
+
+    pub pubsub_topic: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChatConfig {
+    pub topic: String,
+
+    /// IPNS link
+    pub mods: String,
+
+    /// IPNS link
+    pub bans: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Configuration {
+    pub input_socket_addr: SocketAddr,
+    pub archive: ArchiveConfig,
+    pub video: VideoConfig,
+    pub chat: ChatConfig,
+}
+
+const CONFIG_LOCATION: &str = "config.json";
+
+impl Configuration {
+    pub async fn from_file() -> Result<Self, Error> {
+        let config = fs::read(CONFIG_LOCATION).await?;
+        let config = serde_json::from_slice::<Self>(&config)?;
+
+        Ok(config)
+    }
+
+    pub async fn save_to_file(&self) -> Result<(), Error> {
+        let data = serde_json::to_vec_pretty(&self)?;
+
+        fs::write(CONFIG_LOCATION, data).await
     }
 }
 
-pub async fn set_config(config: &Configuration) {
-    let data = match serde_json::to_vec_pretty(config) {
-        Ok(data) => data,
-        Err(e) => {
-            eprintln!("{:#?}", e);
-            return;
-        }
-    };
+impl Default for Configuration {
+    fn default() -> Self {
+        Self {
+            input_socket_addr: SocketAddr::from_str("127.0.0.1:2526").expect("Invalid Address"),
 
-    if let Err(e) = fs::write("config.json", data).await {
-        eprintln!("{:#?}", e);
+            archive: ArchiveConfig {
+                archive_live_chat: true,
+            },
+
+            video: VideoConfig {
+                pubsub_enable: true,
+                pubsub_topic: "defluencer_live_video".into(),
+            },
+
+            chat: ChatConfig {
+                topic: "defluencer_live_chat".into(),
+                mods: String::default(),
+                bans: String::default(),
+            },
+        }
     }
 }

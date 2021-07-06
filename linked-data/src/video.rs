@@ -1,24 +1,75 @@
 use crate::IPLDLink;
 
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-/// List of all video metadata links.
-#[derive(Deserialize, Serialize, Default)]
-pub struct VideoList {
-    /// Oldest to newest videos metadata.
-    pub metadata: Vec<IPLDLink>,
-}
+use cid::Cid;
 
 /// Metadata for video thumbnail and playback.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct VideoMetadata {
+    /// Title of this video.
     pub title: String,
+
+    /// Duration in seconds.
     pub duration: f64,
-    pub image: IPLDLink, // Raw node of image
-    pub video: IPLDLink, // TimecodeNode
-                         //TODO creator identity whatever that may be
+
+    /// Link to Raw node of thumbnail image.
+    pub image: IPLDLink,
+
+    /// Link to TimecodeNode.
+    pub video: IPLDLink,
+
+    /// Timestamp at the time of publication in Unix time.
+    pub timestamp: u64,
+}
+
+impl VideoMetadata {
+    pub fn create(title: String, duration: f64, image: Cid, video: Cid) -> Self {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        Self {
+            title,
+            duration,
+            image: image.into(),
+            video: video.into(),
+            timestamp,
+        }
+    }
+
+    pub fn update(
+        &mut self,
+        title: Option<String>,
+        image: Option<Cid>,
+        video: Option<Cid>,
+        duration: Option<f64>,
+    ) {
+        if let Some(title) = title {
+            self.title = title;
+        }
+
+        if let Some(img) = image {
+            self.image = img.into();
+        }
+
+        if let Some(vid) = video {
+            self.video = vid.into();
+        }
+
+        if let Some(dur) = duration {
+            self.duration = dur;
+        }
+
+        self.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+    }
 }
 
 /// Root CID.
