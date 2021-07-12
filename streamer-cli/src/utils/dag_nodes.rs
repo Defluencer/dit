@@ -62,15 +62,16 @@ where
 }
 
 /// Serialize the new node, pin it then publish it under this IPNS key.
-pub async fn update_ipns<T>(ipfs: &IpfsClient, key: &str, video_list: &T) -> Result<(), Error>
+/// No-recursive pinning.
+pub async fn update_ipns<T>(ipfs: &IpfsClient, key: &str, content: &T) -> Result<(), Error>
 where
     T: ?Sized + Serialize,
 {
-    let cid = ipfs_dag_put_node_async(ipfs, video_list).await?;
+    let cid = ipfs_dag_put_node_async(ipfs, content).await?.to_string();
 
-    ipfs.pin_add(&cid.to_string(), true).await?;
+    ipfs.pin_add(&cid, false).await?;
 
-    ipfs.name_publish(&cid.to_string(), false, None, None, Some(key))
+    ipfs.name_publish(&cid, false, None, None, Some(key))
         .await?;
 
     Ok(())
@@ -95,7 +96,7 @@ where
 
     let cid = Cid::try_from(res.path).expect("Invalid Cid");
 
-    ipfs.pin_rm(&cid.to_string(), true).await?;
+    ipfs.pin_rm(&cid.to_string(), false).await?;
 
     let node = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
 

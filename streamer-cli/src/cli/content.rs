@@ -1,4 +1,6 @@
-use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async, search_keypairs};
+use crate::utils::dag_nodes::{
+    ipfs_dag_get_node_async, ipfs_dag_put_node_async, search_keypairs, update_ipns,
+};
 
 use std::convert::TryFrom;
 
@@ -37,11 +39,11 @@ pub async fn content_feed_cli(cli: ContentFeed) {
     let res = match cli.cmd {
         Command::Add(add) => match add {
             AddContent::Blog(blog) => add_blog(blog).await,
-            AddContent::Videos(video) => add_video(video).await,
+            AddContent::Video(video) => add_video(video).await,
         },
         Command::Update(update) => match update {
             UpdateContent::Blog(blog) => update_blog(blog).await,
-            UpdateContent::Videos(video) => update_video(video).await,
+            UpdateContent::Video(video) => update_video(video).await,
         },
         Command::Delete(delete) => delete_content(delete).await,
     };
@@ -57,20 +59,19 @@ enum AddContent {
     Blog(AddPost),
 
     /// Create new video post.
-    Videos(AddVideo),
+    Video(AddVideo),
 }
 
-async fn add_content_to_feed(ipfs: &IpfsClient, new_cid: Cid) -> Result<(), Error> {
+async fn add_content_to_feed(ipfs: &IpfsClient, new_cid: Cid) -> Result<usize, Error> {
+    let mut feed = get_feed(ipfs).await?;
+
     ipfs.pin_add(&new_cid.to_string(), true).await?;
 
-    let old_feed_cid = get_feed(ipfs).await?;
-    let new_feed = Feed::add(new_cid, old_feed_cid);
-    let new_feed_cid = ipfs_dag_put_node_async(ipfs, &new_feed).await?.to_string();
-    ipfs.pin_add(&new_feed_cid, false).await?; // feed is not pinned recursively, only content metadata
-    ipfs.name_publish(&new_feed_cid, false, None, None, Some(FEED_KEY))
-        .await?;
+    feed.content.push(new_cid.into());
 
-    Ok(())
+    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
+
+    Ok(feed.content.len() - 1)
 }
 
 #[derive(Debug, StructOpt)]
@@ -103,9 +104,9 @@ async fn add_blog(command: AddPost) -> Result<(), Error> {
 
     let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
 
-    add_content_to_feed(&ipfs, new_cid).await?;
+    let index = add_content_to_feed(&ipfs, new_cid).await?;
 
-    println!("✅ Weblog Post Added");
+    println!("✅ Weblog Post Added In Content Feed At Index {}", index);
 
     Ok(())
 }
@@ -142,9 +143,9 @@ async fn add_video(command: AddVideo) -> Result<(), Error> {
 
     let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
 
-    add_content_to_feed(&ipfs, new_cid).await?;
+    let index = add_content_to_feed(&ipfs, new_cid).await?;
 
-    println!("✅ Video Post Added");
+    println!("✅ Video Post Added In Content Feed At Index {}", index);
 
     Ok(())
 }
@@ -155,29 +156,14 @@ enum UpdateContent {
     Blog(UpdatePost),
 
     /// Create new video.
-    Videos(UpdateVideo),
-}
-
-async fn update_content_feed(ipfs: &IpfsClient, old_cid: Cid, new_cid: Cid) -> Result<(), Error> {
-    ipfs.pin_add(&new_cid.to_string(), true).await?;
-
-    ipfs.pin_rm(&old_cid.to_string(), true).await?;
-
-    let old_feed_cid = get_feed(ipfs).await?;
-    let new_feed = Feed::update(new_cid, old_cid, old_feed_cid);
-    let new_feed_cid = ipfs_dag_put_node_async(ipfs, &new_feed).await?.to_string();
-    ipfs.pin_add(&new_feed_cid, false).await?; // feed is not pinned recursively, only content metadata
-    ipfs.name_publish(&new_feed_cid, false, None, None, Some(FEED_KEY))
-        .await?;
-
-    Ok(())
+    Video(UpdateVideo),
 }
 
 #[derive(Debug, StructOpt)]
 pub struct UpdatePost {
-    /// The content identifier of the post metadata to update.
+    /// The content feed index of the post to update.
     #[structopt(long)]
-    cid: Cid,
+    index: usize,
 
     /// The new title.
     #[structopt(short, long)]
@@ -194,34 +180,46 @@ pub struct UpdatePost {
 
 async fn update_blog(command: UpdatePost) -> Result<(), Error> {
     println!("Updating Weblog Post...");
-
     let ipfs = IpfsClient::default();
 
+    let mut feed = get_feed(&ipfs).await?;
+
     let UpdatePost {
-        cid,
+        index,
         title,
         image,
         content,
     } = command;
 
-    let mut metadata: FullPost = ipfs_dag_get_node_async(&ipfs, &cid.to_string()).await?;
+    let old_cid = match feed.content.get(index) {
+        Some(mt) => mt.link,
+        None => return Err(Error::Uncategorized("Blog Post Index Not Found".into())),
+    };
+
+    ipfs.pin_rm(&old_cid.to_string(), true).await?;
+
+    let mut metadata: FullPost = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
 
     metadata.update(title, image, content);
 
     let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
 
-    update_content_feed(&ipfs, cid, new_cid).await?;
+    ipfs.pin_add(&new_cid.to_string(), true).await?;
 
-    println!("✅ Weblog Post Updated");
+    feed.content[index] = new_cid.into();
+
+    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
+
+    println!("✅ Weblog Post Updated In Content Feed At Index {}", index);
 
     Ok(())
 }
 
 #[derive(Debug, StructOpt)]
 pub struct UpdateVideo {
-    /// The content identifier of the video metadata to update.
+    /// The content feed index of the video to update.
     #[structopt(long)]
-    cid: Cid,
+    index: usize,
 
     /// The new video title.
     #[structopt(short, long)]
@@ -238,17 +236,23 @@ pub struct UpdateVideo {
 
 async fn update_video(command: UpdateVideo) -> Result<(), Error> {
     println!("Updating Video Post...");
-
     let ipfs = IpfsClient::default();
 
+    let mut feed = get_feed(&ipfs).await?;
+
     let UpdateVideo {
-        cid,
+        index,
         title,
         image,
         video,
     } = command;
 
-    let mut metadata: VideoMetadata = ipfs_dag_get_node_async(&ipfs, &cid.to_string()).await?;
+    let old_cid = match feed.content.get(index) {
+        Some(mt) => mt.link,
+        None => return Err(Error::Uncategorized("Video Index Not Found".into())),
+    };
+
+    let mut metadata: VideoMetadata = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
 
     let duration = match video {
         Some(cid) => Some(get_video_duration(&ipfs, &cid).await?),
@@ -259,40 +263,40 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
 
     let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
 
-    update_content_feed(&ipfs, cid, new_cid).await?;
+    feed.content[index] = new_cid.into();
 
-    println!("✅ Video Post Updated");
+    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
+
+    println!("✅ Video Post Updated In Content Feed At Index {}", index);
 
     Ok(())
 }
 
 #[derive(Debug, StructOpt)]
 pub struct DeleteContent {
-    /// The identifier of the content to delete.
+    /// The index of the content to delete.
     #[structopt(short, long)]
-    cid: Cid,
+    index: usize,
 }
 
 async fn delete_content(command: DeleteContent) -> Result<(), Error> {
     println!("Deleting Content...");
-
     let ipfs = IpfsClient::default();
 
-    ipfs.pin_rm(&command.cid.to_string(), true).await?;
+    let mut feed = get_feed(&ipfs).await?;
 
-    let old_feed_cid = get_feed(&ipfs).await?;
-    let new_feed = Feed::delete(command.cid, old_feed_cid);
-    let new_feed_cid = ipfs_dag_put_node_async(&ipfs, &new_feed).await?.to_string();
-    ipfs.pin_add(&new_feed_cid, false).await?; // feed is not pinned recursively, only content metadata
-    ipfs.name_publish(&new_feed_cid, false, None, None, Some(FEED_KEY))
-        .await?;
+    let link = feed.content.remove(command.index);
 
-    println!("✅ Content Deleted");
+    ipfs.pin_rm(&link.link.to_string(), true).await?;
+
+    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
+
+    println!("✅ Post In Content Feed At Index {} Deleted", command.index);
 
     Ok(())
 }
 
-async fn get_feed(ipfs: &IpfsClient) -> Result<Cid, Error> {
+async fn get_feed(ipfs: &IpfsClient) -> Result<Feed, Error> {
     let mut res = ipfs.key_list().await?;
 
     let keypair = match search_keypairs(&FEED_KEY, &mut res) {
@@ -307,7 +311,11 @@ async fn get_feed(ipfs: &IpfsClient) -> Result<Cid, Error> {
 
     let cid = Cid::try_from(res.path).expect("Invalid Cid");
 
-    Ok(cid)
+    ipfs.pin_rm(&cid.to_string(), false).await?;
+
+    let node = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
+
+    Ok(node)
 }
 
 async fn get_video_duration(ipfs: &IpfsClient, video: &Cid) -> Result<f64, Error> {
