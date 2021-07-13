@@ -132,10 +132,16 @@ async fn replace_ban_list(args: ReplaceBanList) -> Result<(), Error> {
 
     let _ = get_from_ipns(&ipfs, BANS_KEY).await?;
 
-    ipfs.pin_add(&args.cid.to_string(), true).await?;
+    ipfs.pin_add(&args.cid.to_string(), false).await?;
 
-    ipfs.name_publish(&args.cid.to_string(), false, None, None, Some(BANS_KEY))
-        .await?;
+    ipfs.name_publish(
+        &args.cid.to_string(),
+        true,
+        Some("4320h"), // 6 months
+        None,
+        Some(BANS_KEY),
+    )
+    .await?;
 
     println!(
         "✅ Previous Ban List Replaced with {}",
@@ -238,10 +244,16 @@ async fn replace_mod_list(args: ReplaceModList) -> Result<(), Error> {
 
     let _ = get_from_ipns(&ipfs, MODS_KEY).await?;
 
-    ipfs.pin_add(&args.cid.to_string(), true).await?;
+    ipfs.pin_add(&args.cid.to_string(), false).await?;
 
-    ipfs.name_publish(&args.cid.to_string(), false, None, None, Some(MODS_KEY))
-        .await?;
+    ipfs.name_publish(
+        &args.cid.to_string(),
+        true,
+        Some("4320h"), // 6 months
+        None,
+        Some(MODS_KEY),
+    )
+    .await?;
 
     println!(
         "✅ Previous Moderator List Replaced with {}",

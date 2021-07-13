@@ -11,7 +11,7 @@ Ban & moderator lists can be managed using commands.
 
 ## Content Feed
 Add, update or delete content from your feed.
-- Command: ```streamer-cli contentfeed --help``` for more info
+- Command: ```streamer-cli content-feed --help``` for more info
 
 ## Availability
 The beacon and all your content must be reachable at all times. To achieve this you should leave your IPFS daemon running 24/7 and others can also help you by pinning some or all your content, the more the better. Because of the decentralized nature of IPFS, it does not matter who has your data or how much of it, it cannot be modified and everyone will help redistribute it.
@@ -29,7 +29,7 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 - Start Streaming!
 - When done streaming stop your broadcast software.
 - Press Ctrl-c in streamer-cli window to save.
-- Use the CLI to create metadata. Command: ```streamer-cli contentfeed --help``` for more info.
+- Use the CLI to create metadata. Command: ```streamer-cli content-feed --help``` for more info.
 
 ## Pre-recorded Video
 - Start IPFS. Command: ```ipfs daemon```
@@ -37,7 +37,7 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 - Run ```ffmpeg_file.sh``` or custom ffmpeg script.
 - Wait until the video is processed.
 - Press Ctrl-c in streamer-cli window to save.
-- Use the CLI to create metadata. Command: ```streamer-cli contentfeed --help``` for more info.
+- Use the CLI to create metadata. Command: ```streamer-cli content-feed --help``` for more info.
 
 # Technical
 

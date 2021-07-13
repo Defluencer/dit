@@ -16,8 +16,11 @@ Display Name and GossipSub Peer ID are signed using Ethereum Keys then the addre
 ## Moderation
 Moderator send ban message to users via GossipSub. The message is signed as if a chat message. The beacon is updated with the new lists.
 
+## Blog
+Micro-blogging & long form. Listed in content feed.
+
 ## Content Feed
-Append-only log of new content, updates or deletions.
+Mutable content feed, create, updates or delete media.
 
 <!-- ## Comments
 Comments link to the original content or other comments and form discussion trees. The leaf nodes of the tree are saved to allow discusion traversal.  -->

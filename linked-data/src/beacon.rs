@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 pub struct Topics {
     pub live_video: String,
     pub live_chat: String,
-    pub comments: String,
+    //pub comments: String,
 }
 
 /// Mostly static links to content.
+/// Direct pin.
 #[derive(Deserialize, Serialize)]
 pub struct Beacon {
     /// Broadcaster GossipSub Topics.

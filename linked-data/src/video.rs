@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use cid::Cid;
 
 /// Metadata for video thumbnail and playback.
+/// Recursive pin.
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct VideoMetadata {
     /// Title of this video.
