@@ -62,7 +62,6 @@ where
 }
 
 /// Serialize the new node, pin it then publish it under this IPNS key.
-/// No-recursive pinning.
 pub async fn update_ipns<T>(ipfs: &IpfsClient, key: &str, content: &T) -> Result<(), Error>
 where
     T: ?Sized + Serialize,
@@ -71,7 +70,7 @@ where
 
     ipfs.pin_add(&cid, false).await?;
 
-    ipfs.name_publish(&cid, false, None, None, Some(key))
+    ipfs.name_publish(&cid, true, Some("4320h"), None, Some(key)) // 6 months
         .await?;
 
     Ok(())

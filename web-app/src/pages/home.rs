@@ -31,7 +31,7 @@ impl Component for Home {
                     <p class="home_text"> { "Most web browsers cannot access the decentralized web yet, for now you will need Metamask and IPFS with CORS & PubSub enabled." } </p>
                     <a class="home_text" href="https://docs.ipfs.io/install/ipfs-desktop/#ipfs-desktop"> { "IPFS Desktop" } </a>
                     <a class="home_text" href="https://metamask.io/"> { "Metamask" } </a>
-                    <a class="home_text" href="https://github.com/SionoiS/dit"> { "My Repository" } </a>
+                    <a class="home_text" href="https://github.com/SionoiS/dit"> { "Source Code" } </a>
                 </div>
             </div>
         }

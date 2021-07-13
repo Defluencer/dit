@@ -35,10 +35,9 @@ pub struct Create {
     /// GossipSub topic for video broadcasting.
     #[structopt(long)]
     videos: String,
-
-    /// GossipSub topic for comments.
-    #[structopt(long)]
-    comments: String,
+    // GossipSub topic for comments.
+    //#[structopt(long)]
+    //comments: String,
 }
 
 pub async fn beacon_cli(cli: Beacon) {
@@ -80,7 +79,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let topics = Topics {
         live_video: config.video.pubsub_topic,
         live_chat: config.chat.topic,
-        comments: args.comments,
+        //comments: args.comments,
     };
 
     let res = ipfs.id(None).await?;
@@ -100,7 +99,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     let cid = ipfs_dag_put_node_async(&ipfs, &beacon).await?;
 
-    ipfs.pin_add(&cid.to_string(), true).await?;
+    ipfs.pin_add(&cid.to_string(), false).await?;
 
     println!("✅ Beacon Created => ipfs://{}", &cid.to_string());
 
@@ -116,18 +115,22 @@ async fn create_ipns_link<T>(
 where
     T: Default + Serialize,
 {
-    let link = match search_keypairs(key, key_list) {
+    let mut link = match search_keypairs(key, key_list) {
         Some(kp) => kp.id,
         None => {
             println!("Generating Key...");
 
-            let key = generate_key(ipfs, key).await?;
+            let ipns_link = generate_key(ipfs, key).await?;
+
+            println!("Updating IPNS...");
 
             update_ipns(ipfs, &key, &T::default()).await?;
 
-            key
+            ipns_link
         }
     };
+
+    link.insert_str(0, "/ipns/"); // add this in front to make a path
 
     println!("✅ {} IPNS Link => {}", name, &link);
 
@@ -135,15 +138,13 @@ where
 }
 
 async fn generate_key(ipfs: &IpfsClient, key: &str) -> Result<String, Error> {
-    let mut res = ipfs
+    let res = ipfs
         .key_gen(
             key,
             KeyType::Ed25519,
             64, /* Don't think this does anything... */
         )
         .await?;
-
-    res.id.insert_str(0, "/ipns/"); // add this in front to make a path
 
     Ok(res.id)
 }

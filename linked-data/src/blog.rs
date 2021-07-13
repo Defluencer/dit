@@ -6,7 +6,18 @@ use serde::{Deserialize, Serialize};
 
 use cid::Cid;
 
+/// A micro blog post (Twitter-sytle).
+/// Direct pin.
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
+pub struct MicroPost {
+    pub content: String,
+
+    /// Timestamp at the time of publication in Unix time.
+    pub timestamp: u64,
+}
+
 /// Metadata for a long blog post.
+/// Recursive pin.
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct FullPost {
     /// The title of this blog post
@@ -55,13 +66,4 @@ impl FullPost {
             .expect("SystemTime before UNIX EPOCH!")
             .as_secs();
     }
-}
-
-/// A micro blog post (Twitter-sytle).
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
-pub struct MicroPost {
-    pub content: String,
-
-    /// Timestamp at the time of publication in Unix time.
-    pub timestamp: u64,
 }

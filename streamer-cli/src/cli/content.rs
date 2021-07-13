@@ -63,6 +63,8 @@ enum AddContent {
 }
 
 async fn add_content_to_feed(ipfs: &IpfsClient, new_cid: Cid) -> Result<usize, Error> {
+    println!("Updating Content Feed...");
+
     let mut feed = get_feed(ipfs).await?;
 
     ipfs.pin_add(&new_cid.to_string(), true).await?;
@@ -90,8 +92,6 @@ pub struct AddPost {
 }
 
 async fn add_blog(command: AddPost) -> Result<(), Error> {
-    println!("Adding Weblog Post...");
-
     let ipfs = IpfsClient::default();
 
     let AddPost {
@@ -103,6 +103,8 @@ async fn add_blog(command: AddPost) -> Result<(), Error> {
     let metadata = FullPost::create(title, image, content);
 
     let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+
+    println!("New Post CID => {}", &new_cid.to_string());
 
     let index = add_content_to_feed(&ipfs, new_cid).await?;
 
@@ -127,8 +129,6 @@ pub struct AddVideo {
 }
 
 async fn add_video(command: AddVideo) -> Result<(), Error> {
-    println!("Adding Video Post...");
-
     let ipfs = IpfsClient::default();
 
     let AddVideo {
@@ -142,6 +142,8 @@ async fn add_video(command: AddVideo) -> Result<(), Error> {
     let metadata = VideoMetadata::create(title, duration, image, video);
 
     let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+
+    println!("New Post CID => {}", &new_cid.to_string());
 
     let index = add_content_to_feed(&ipfs, new_cid).await?;
 
@@ -179,7 +181,6 @@ pub struct UpdatePost {
 }
 
 async fn update_blog(command: UpdatePost) -> Result<(), Error> {
-    println!("Updating Weblog Post...");
     let ipfs = IpfsClient::default();
 
     let mut feed = get_feed(&ipfs).await?;
@@ -203,6 +204,10 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
     metadata.update(title, image, content);
 
     let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+
+    println!("New Post CID => {}", &new_cid.to_string());
+
+    println!("Updating Content Feed...");
 
     ipfs.pin_add(&new_cid.to_string(), true).await?;
 
@@ -235,7 +240,6 @@ pub struct UpdateVideo {
 }
 
 async fn update_video(command: UpdateVideo) -> Result<(), Error> {
-    println!("Updating Video Post...");
     let ipfs = IpfsClient::default();
 
     let mut feed = get_feed(&ipfs).await?;
@@ -262,6 +266,10 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
     metadata.update(title, image, video, duration);
 
     let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+
+    println!("New Post CID => {}", &new_cid.to_string());
+
+    println!("Updating Content Feed...");
 
     feed.content[index] = new_cid.into();
 
