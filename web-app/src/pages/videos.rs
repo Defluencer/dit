@@ -19,7 +19,7 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-use reqwest::Error;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 // Maintaining an updated content feed should be a different component.
 // Specialized component just refer to feed then dag get & deserialize (videos, blog post, etc...).
@@ -44,11 +44,11 @@ pub struct Videos {
 }
 
 pub enum Msg {
-    ResolveName(Result<Cid, web3::contract::Error>),
-    Beacon(Result<Beacon, Error>),
-    List((Cid, Result<Feed, Error>)),
-    ResolveList(Result<(Cid, Feed), Error>),
-    Metadata((Cid, Result<VideoMetadata, Error>)),
+    ResolveName(Result<Cid>),
+    Beacon(Result<Beacon>),
+    List((Cid, Result<Feed>)),
+    ResolveList(Result<(Cid, Feed)>),
+    Metadata((Cid, Result<VideoMetadata>)),
 }
 
 #[derive(Properties, Clone)]
@@ -143,7 +143,7 @@ impl Component for Videos {
 
 impl Videos {
     /// Callback when Ethereum Name Service resolve name to beacon Cid.
-    fn on_name_resolved(&mut self, res: Result<Cid, web3::contract::Error>) -> bool {
+    fn on_name_resolved(&mut self, res: Result<Cid>) -> bool {
         let cid = match res {
             Ok(cid) => cid,
             Err(e) => {
@@ -174,7 +174,7 @@ impl Videos {
     }
 
     /// Callback when IPFS dag get return beacon node.
-    fn on_beacon_update(&mut self, res: Result<Beacon, Error>) -> bool {
+    fn on_beacon_update(&mut self, res: Result<Beacon>) -> bool {
         let beacon = match res {
             Ok(b) => b,
             Err(e) => {
@@ -209,7 +209,7 @@ impl Videos {
     }
 
     /// Callback when IPFS dag get return Feed node.
-    fn on_feed_resolved(&mut self, res: Result<(Cid, Feed), Error>) -> bool {
+    fn on_feed_resolved(&mut self, res: Result<(Cid, Feed)>) -> bool {
         let (cid, feed) = match res {
             Ok((cid, feed)) => (cid, feed),
             Err(e) => {
@@ -222,7 +222,7 @@ impl Videos {
     }
 
     /// Callback when IPFS resolve and dag get Feed node.
-    fn on_feed_update(&mut self, list_cid: Cid, res: Result<Feed, Error>) -> bool {
+    fn on_feed_update(&mut self, list_cid: Cid, res: Result<Feed>) -> bool {
         let feed = match res {
             Ok(l) => l,
             Err(e) => {
@@ -280,7 +280,7 @@ impl Videos {
     }
 
     /// Callback when IPFS dag get returns VideoMetadata node.
-    fn on_video_metadata_update(&mut self, cid: Cid, res: Result<VideoMetadata, Error>) -> bool {
+    fn on_video_metadata_update(&mut self, cid: Cid, res: Result<VideoMetadata>) -> bool {
         let metadata = match res {
             Ok(d) => d,
             Err(e) => {

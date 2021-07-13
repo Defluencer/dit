@@ -20,7 +20,7 @@ use linked_data::video::{SetupNode, Track, VideoMetadata};
 
 use cid::Cid;
 
-use reqwest::Error;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -82,10 +82,10 @@ pub enum Msg {
     Seeking,
     UpdateEnd,
     Timeout,
-    SetupNode(Result<SetupNode, Error>),
-    Append(Result<(Vec<u8>, Vec<u8>), Error>),
-    AppendVideo(Result<Vec<u8>, Error>),
-    PubSub(Result<PubsubSubResponse, std::io::Error>),
+    SetupNode(Result<SetupNode>),
+    Append(Result<(Vec<u8>, Vec<u8>)>),
+    AppendVideo(Result<Vec<u8>>),
+    PubSub(Result<PubsubSubResponse>),
 }
 
 #[derive(Clone, Properties)]
@@ -262,7 +262,7 @@ impl VideoPlayer {
     }
 
     /// Callback when GossipSub receive an update.
-    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, std::io::Error>) {
+    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse>) {
         let res = match result {
             Ok(res) => res,
             Err(e) => {
@@ -381,7 +381,7 @@ impl VideoPlayer {
     }
 
     /// Create source buffer then load initialization segment.
-    fn add_source_buffer(&mut self, setup_node: Result<SetupNode, Error>) {
+    fn add_source_buffer(&mut self, setup_node: Result<SetupNode>) {
         let setup_node = match setup_node {
             Ok(n) => n,
             Err(e) => {
@@ -790,7 +790,7 @@ impl VideoPlayer {
     }
 
     /// Append audio and video segments to the buffers.
-    fn append_buffers(&self, response: Result<(Vec<u8>, Vec<u8>), Error>) {
+    fn append_buffers(&self, response: Result<(Vec<u8>, Vec<u8>)>) {
         let (mut aud_seg, mut vid_seg) = match response {
             Ok((a, v)) => (a, v),
             Err(e) => {
@@ -811,7 +811,7 @@ impl VideoPlayer {
     }
 
     /// Append video segments to the buffer.
-    fn append_video_buffer(&self, response: Result<Vec<u8>, Error>) {
+    fn append_video_buffer(&self, response: Result<Vec<u8>>) {
         let mut vid_seg = match response {
             Ok(d) => d,
             Err(e) => {

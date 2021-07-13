@@ -18,7 +18,7 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-use reqwest::Error;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 enum DisplayState {
     Searching,
@@ -39,8 +39,8 @@ pub struct Live {
 }
 
 pub enum Msg {
-    ResolveName(Result<Cid, web3::contract::Error>),
-    Beacon(Result<Beacon, Error>),
+    ResolveName(Result<Cid>),
+    Beacon(Result<Beacon>),
 }
 
 #[derive(Properties, Clone)]
@@ -121,7 +121,7 @@ impl Component for Live {
 
 impl Live {
     /// Callback when Ethereum Name Service resolve name to beacon Cid.
-    fn on_name_resolved(&mut self, res: Result<Cid, web3::contract::Error>) -> bool {
+    fn on_name_resolved(&mut self, res: Result<Cid>) -> bool {
         let cid = match res {
             Ok(cid) => cid,
             Err(e) => {
@@ -152,7 +152,7 @@ impl Live {
     }
 
     /// Callback when IPFS dag get return beacon node.
-    fn on_beacon_update(&mut self, res: Result<Beacon, Error>) -> bool {
+    fn on_beacon_update(&mut self, res: Result<Beacon>) -> bool {
         let beacon = match res {
             Ok(b) => b,
             Err(e) => {

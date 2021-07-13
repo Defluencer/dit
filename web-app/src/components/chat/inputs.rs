@@ -23,9 +23,9 @@ use linked_data::signature::SignedMessage;
 
 use web3::types::Address;
 
-use reqwest::Error;
-
 const SIGN_MSG_KEY: &str = "signed_message";
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 enum DisplayState {
     Connect,
@@ -60,13 +60,13 @@ pub enum Msg {
     SetMsg(String),
     Enter,
     Connect,
-    PeerID(Result<String, Error>),
-    Account(Result<Address, web3::Error>),
-    AccountName(Result<String, web3::contract::Error>),
+    PeerID(Result<String>),
+    Account(Result<Address>),
+    AccountName(Result<String>),
     SetName(String),
     SubmitName,
-    Signed(Result<[u8; 65], web3::Error>),
-    Minted(Result<Cid, Error>),
+    Signed(Result<[u8; 65]>),
+    Minted(Result<Cid>),
 }
 
 #[derive(Properties, Clone)]
@@ -272,7 +272,7 @@ impl Inputs {
     }
 
     /// Callback with response of request accounts.
-    fn on_account_connected(&mut self, response: Result<Address, web3::Error>) -> bool {
+    fn on_account_connected(&mut self, response: Result<Address>) -> bool {
         let address = match response {
             Ok(address) => address,
             Err(e) => {
@@ -295,7 +295,7 @@ impl Inputs {
         false
     }
 
-    fn on_peer_id(&mut self, response: Result<String, Error>) -> bool {
+    fn on_peer_id(&mut self, response: Result<String>) -> bool {
         let id = match response {
             Ok(id) => id,
             Err(e) => {
@@ -313,7 +313,7 @@ impl Inputs {
         false
     }
 
-    fn on_account_name(&mut self, response: Result<String, web3::contract::Error>) -> bool {
+    fn on_account_name(&mut self, response: Result<String>) -> bool {
         #[cfg(debug_assertions)]
         ConsoleService::info("Name Revolved");
 
@@ -349,7 +349,7 @@ impl Inputs {
         false
     }
 
-    fn on_signature(&mut self, reponse: Result<[u8; 65], web3::Error>) -> bool {
+    fn on_signature(&mut self, reponse: Result<[u8; 65]>) -> bool {
         #[cfg(debug_assertions)]
         ConsoleService::info("Signature Received");
 
@@ -387,7 +387,7 @@ impl Inputs {
         false
     }
 
-    fn on_sign_msg_minted(&mut self, response: Result<Cid, Error>) -> bool {
+    fn on_sign_msg_minted(&mut self, response: Result<Cid>) -> bool {
         #[cfg(debug_assertions)]
         ConsoleService::info("Signed Message Minted");
 

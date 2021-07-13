@@ -4,7 +4,7 @@ use wasm_bindgen::JsValue;
 
 use web3::transports::eip_1193::{Eip1193, Provider};
 use web3::types::Address;
-use web3::{Error, Web3};
+use web3::Web3;
 
 use yew::services::ConsoleService;
 
@@ -12,13 +12,15 @@ use serde::Serialize;
 
 use cid::Cid;
 
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 #[derive(Clone)]
 pub struct Web3Service {
     client: Web3<Eip1193>,
 }
 
 impl Web3Service {
-    pub fn new() -> Result<Self, JsValue> {
+    pub fn new() -> std::result::Result<Self, JsValue> {
         let provider = Provider::default()?;
 
         let transport = Eip1193::new(provider);
@@ -28,7 +30,7 @@ impl Web3Service {
         Ok(Self { client })
     }
 
-    pub async fn get_ipfs_content(&self, name: String) -> Result<Cid, web3::contract::Error> {
+    pub async fn get_ipfs_content(&self, name: String) -> Result<Cid> {
         let name = &format!("defluencer.{}.eth", name);
 
         #[cfg(debug_assertions)]
@@ -43,14 +45,11 @@ impl Web3Service {
 
         // IPFS 0xe3, Swarm 0xe4
         if Some(&0xe3) != hash.first() {
-            return Err(Error::InvalidResponse("Not IPFS storage".to_owned()).into());
+            return Err(NotIPFSStorage.into());
         }
 
         // First 2 bytes are protoCode uvarint
-        let cid = match Cid::try_from(&hash[2..]) {
-            Ok(cid) => cid,
-            Err(_) => return Err(Error::InvalidResponse("Invalid CID".to_owned()).into()),
-        };
+        let cid = Cid::try_from(&hash[2..])?;
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Cid => {}", &cid.to_string()));
@@ -59,18 +58,18 @@ impl Web3Service {
     }
 
     //https://docs.rs/web3/0.15.0/web3/api/struct.Eth.html#method.request_accounts
-    pub async fn get_eth_accounts(&self) -> Result<Address, Error> {
+    pub async fn get_eth_accounts(&self) -> Result<Address> {
         let address = self.client.eth().request_accounts().await?;
 
         Ok(address[0])
     }
 
     //https://docs.rs/web3/0.15.0/web3/api/struct.Eth.html#method.sign
-    pub async fn eth_sign<T>(&self, addrs: Address, content: T) -> Result<[u8; 65], Error>
+    pub async fn eth_sign<T>(&self, addrs: Address, content: T) -> Result<[u8; 65]>
     where
         T: Serialize,
     {
-        let data = serde_json::to_vec(&content).expect("Cannot Serialize");
+        let data = serde_json::to_vec(&content)?;
 
         let sign = self.client.personal().sign(addrs, data.into()).await?;
 
@@ -78,7 +77,20 @@ impl Web3Service {
     }
 
     //https://eips.ethereum.org/EIPS/eip-181
-    pub async fn get_name(&self, addrs: Address) -> Result<String, web3::contract::Error> {
-        self.client.ens().get_canonical_name(addrs).await
+    pub async fn get_name(&self, addrs: Address) -> Result<String> {
+        let res = self.client.ens().get_canonical_name(addrs).await?;
+
+        Ok(res)
     }
 }
+
+#[derive(Debug)]
+struct NotIPFSStorage;
+
+impl std::fmt::Display for NotIPFSStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Not IPFS storage")
+    }
+}
+
+impl std::error::Error for NotIPFSStorage {}

@@ -18,9 +18,9 @@ use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
 use linked_data::signature::SignedMessage;
 use linked_data::PeerId;
 
-use reqwest::Error;
-
 use blockies::Ethereum;
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct Display {
     link: ComponentLink<Self>,
@@ -41,10 +41,10 @@ pub struct Display {
 
 #[allow(clippy::large_enum_variant)]
 pub enum Msg {
-    PubSub(Result<PubsubSubResponse, std::io::Error>),
-    Origin((PeerId, Message, Result<SignedMessage<ChatId>, Error>)),
-    BanList(Result<(Cid, Bans), Error>),
-    ModList(Result<(Cid, Moderators), Error>),
+    PubSub(Result<PubsubSubResponse>),
+    Origin((PeerId, Message, Result<SignedMessage<ChatId>>)),
+    BanList(Result<(Cid, Bans)>),
+    ModList(Result<(Cid, Moderators)>),
 }
 
 #[derive(Properties, Clone)]
@@ -151,7 +151,7 @@ impl Component for Display {
 
 impl Display {
     /// Callback when GossipSub receive a message.
-    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, std::io::Error>) -> bool {
+    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse>) -> bool {
         let res = match result {
             Ok(res) => res,
             Err(e) => {
@@ -203,7 +203,7 @@ impl Display {
         &mut self,
         peer: String,
         msg: Message,
-        response: Result<SignedMessage<ChatId>, Error>,
+        response: Result<SignedMessage<ChatId>>,
     ) -> bool {
         let sign_msg = match response {
             Ok(m) => m,
@@ -305,7 +305,7 @@ impl Display {
     }
 
     /// Callback when IPFS dag get ban list node.
-    fn on_ban_list_resolved(&mut self, result: Result<(Cid, Bans), Error>) -> bool {
+    fn on_ban_list_resolved(&mut self, result: Result<(Cid, Bans)>) -> bool {
         let bans = match result {
             Ok((_, bans)) => bans,
             Err(e) => {
@@ -323,7 +323,7 @@ impl Display {
     }
 
     /// Callback when IPFS dag get mod list node.
-    fn on_mod_list_resolved(&mut self, result: Result<(Cid, Moderators), Error>) -> bool {
+    fn on_mod_list_resolved(&mut self, result: Result<(Cid, Moderators)>) -> bool {
         let mods = match result {
             Ok((_, mods)) => mods,
             Err(e) => {
