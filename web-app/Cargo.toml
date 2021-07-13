@@ -6,17 +6,18 @@ edition = "2018"
 licence = "MIT OR Apache-2.0"
 
 [dependencies]
+blockies = "0.3"
 cid = "0.6"
+futures = "0.3"
+futures-util = { version = "0.3", features = ["io"] }
 js-sys = "0.3"
 linked-data = { path = "../linked-data" }
+reqwest = { git = "http://github.com/SionoiS/reqwest", branch = "better_wasm", default-features = false, features = ["json", "multipart", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-wasm-bindgen = { version = "0.2.69", features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.74", features = ["serde-serialize"] }
 wasm-bindgen-futures = "0.4"
-yew = "0.17.4"
-yew-router = "0.14"
-yewtil = "0.3"
-
+web3 = { git = "http://github.com/SionoiS/rust-web3", branch = "ens", default-features = false, features = ["eip-1193"] }
 web-sys = { version = "0.3", features = [
     "MediaSource",
     "MediaSourceReadyState",
@@ -32,4 +33,6 @@ web-sys = { version = "0.3", features = [
     "HtmlTextAreaElement",
     "KeyboardEvent",
 ]}
-
+yew = "0.17.4"
+yew-router = "0.14"
+yewtil = "0.3"

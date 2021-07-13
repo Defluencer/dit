@@ -1,46 +1,34 @@
-use std::collections::HashSet;
+use crate::{IPLDLink, PeerId};
 
-use crate::IPLDLink;
-
+use crate::moderation::{Ban, Moderator};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
-pub struct ChatIdentity {
-    #[serde(rename = "key")]
-    pub public_key: String,
+/// Unsigned chat message.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UnsignedMessage {
+    pub message: String,
 }
 
-/// Chat message optionaly signed with some form of private key
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChatMessage {
-    pub identity: ChatIdentity,
-
-    pub signature: String,
-
-    pub data: ChatContent,
-}
-
-/// User name, message and a link to VideoNode as timestamp
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChatContent {
+/// Chat identifiers.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChatId {
     pub name: String,
 
-    pub message: String,
-
-    pub timestamp: IPLDLink,
+    pub peer: PeerId,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Blacklist {
-    pub blacklist: HashSet<ChatIdentity>,
+#[derive(Deserialize, Serialize)]
+pub enum MessageType {
+    Unsigned(UnsignedMessage),
+    Ban(Ban),
+    Mod(Moderator),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Whitelist {
-    pub whitelist: HashSet<ChatIdentity>,
-}
+/// GossipSub Live Chat Message.
+#[derive(Deserialize, Serialize)]
+pub struct Message {
+    pub msg_type: MessageType,
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Moderators {
-    pub mods: HashSet<ChatIdentity>,
+    /// Link to signed message.
+    pub origin: IPLDLink,
 }

@@ -1,18 +1,31 @@
 # Decentralized Influencer Toolkit
-The project aim is to provide; live streaming, live chat, moderation tools and video on demand on the decentralized web.
+My goal is to build tools that allow anyone to become a defluencer (decentralized influencer). Decentralize the means of communications by decentralizing the data itself. Once the data is decentralized anyone can build upon it without restriction. New platforms & apps with the same data underneat.
 
-## Project Status
-- Live Streaming: Mostly working.
-- VOD: Saved stream only.
-- Live Chat: In progress.
-- Moderation: In design.
-- Community: Some thoughts.
-- Ecosystem: Wild dreams!
+## Protocols
+- Video addressing.
+  - Allow fetching video by timecode & quality.
+  - Handle live video by linking data together in a chain.
+  - Share clips without data duplication.
+- Live streaming.
+- Live chat.
+- Moderation tools.
+- Blog.
+- Multimedia content feed.
 
-## Details
-- [Web App](https://github.com/SionoiS/dit/blob/master/web-app/README.md)
-- [Streamer App](https://github.com/SionoiS/dit/blob/master/streamer-app/README.md)
-- [Data](https://github.com/SionoiS/dit/blob/master/linked-data/README.md)
+For more info -> [Linked Data](https://github.com/SionoiS/dit/blob/develop/linked-data/README.md)
+
+## Prototypes
+Most features are fonctionnal but still require testing.
+- Streaming live video with adaptative birate.
+- Live chat with ethereum address as identity and custom display names.
+- Ban chat users & appoint moderators.
+- Stream pre-recorded videos & past live streams with adaptative birate.
+
+For more info -> [Streamer CLI](https://github.com/SionoiS/dit/blob/develop/streamer-cli/README.md)
+ & [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
+
+## Libraries
+Easy to use javascript librairies are planned.
 
 ## License
 Licensed under either of

@@ -1,7 +1,10 @@
 pub mod beacon;
+pub mod blog;
 pub mod chat;
-pub mod config;
-pub mod stream;
+pub mod comments;
+pub mod feed;
+pub mod moderation;
+pub mod signature;
 pub mod video;
 
 use std::convert::TryFrom;
@@ -10,7 +13,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use cid::Cid;
 
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+/// Ethereum address
+pub type Address = [u8; 20];
+
+/// GossipSub Peer ID
+pub type PeerId = String;
+
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct IPLDLink {
     #[serde(rename = "/")]
     #[serde(serialize_with = "serialize_cid")]
@@ -18,11 +27,9 @@ pub struct IPLDLink {
     pub link: Cid,
 }
 
-impl Default for IPLDLink {
-    fn default() -> Self {
-        Self {
-            link: Cid::default(),
-        }
+impl From<Cid> for IPLDLink {
+    fn from(cid: Cid) -> Self {
+        Self { link: cid }
     }
 }
 
@@ -42,23 +49,4 @@ where
     let cid = Cid::try_from(cid_str).expect("Deserialize string to CID failed");
 
     Ok(cid)
-}
-
-//Hack is needed to get from JsValue to Rust type via js http api
-
-pub const RAW: u64 = 0x55;
-pub const DAG_CBOR: u64 = 0x71;
-
-#[derive(Deserialize)]
-pub struct FakeCid {
-    pub codec: String,
-    pub version: u8,
-    pub hash: Hash,
-}
-
-#[derive(Deserialize)]
-pub struct Hash {
-    #[serde(rename = "type")]
-    pub hash_type: String,
-    pub data: Vec<u8>,
 }

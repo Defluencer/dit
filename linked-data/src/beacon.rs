@@ -1,89 +1,31 @@
-use crate::config::Topics;
-use crate::{FakeCid, IPLDLink, DAG_CBOR, RAW};
-
 use serde::{Deserialize, Serialize};
 
-use cid::Cid;
-use multihash::Multihash;
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Topics {
+    pub live_video: String,
+    pub live_chat: String,
+    //pub comments: String,
+}
 
-/// PubSub topics, Peer ID and IPNS link to video list
+/// Mostly static links to content.
+/// Direct pin.
 #[derive(Deserialize, Serialize)]
 pub struct Beacon {
+    /// Broadcaster GossipSub Topics.
     pub topics: Topics,
 
-    pub peer_id: String,    // base58btc encoded string
-    pub video_list: String, // ipns hash egg. "/ipns/<hash>"
-}
+    /// Broadcaster GossipSub Peer ID.
+    pub peer_id: String, // Base58btc encoded string.
 
-/// List of all video metadata links
-#[derive(Deserialize, Serialize)]
-pub struct VideoList {
-    pub metadata: Vec<IPLDLink>, // oldest to newest
-}
+    /// Link to all banned addresses.
+    pub bans: String, //IPNS path -> "/ipns/<hash>"
 
-/// Title, duration, image link, video link
-#[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
-pub struct VideoMetadata {
-    pub title: String,
-    pub duration: f64,
-    pub image: IPLDLink,
-    pub video: IPLDLink,
-}
+    /// Link to all mods addresses.
+    pub mods: String, //IPNS path -> "/ipns/<hash>"
 
-//Hack is needed to get from JsValue to Rust type via js http api
+    /// Link to all content metadata.
+    pub content_feed: String, //IPNS path -> "/ipns/<hash>"
 
-//TODO fix this hack
-//Maybe work only with cbor as binary might be easier for Js <-> WASM interop
-
-impl From<TempVideoList> for VideoList {
-    fn from(temp: TempVideoList) -> Self {
-        let mut metadata = Vec::with_capacity(temp.metadata.len());
-
-        for fake_cid in temp.metadata.into_iter() {
-            let multihash =
-                Multihash::from_bytes(&fake_cid.hash.data).expect("Can't get multihash");
-
-            let cid = Cid::new_v1(DAG_CBOR, multihash);
-
-            metadata.push(IPLDLink { link: cid });
-        }
-
-        Self { metadata }
-    }
-}
-
-impl From<TempVideoMetadata> for VideoMetadata {
-    fn from(temp: TempVideoMetadata) -> Self {
-        let multihash = Multihash::from_bytes(&temp.image.hash.data).expect("Can't get multihash");
-
-        let cid = Cid::new_v1(RAW, multihash);
-
-        let image = IPLDLink { link: cid };
-
-        let multihash = Multihash::from_bytes(&temp.video.hash.data).expect("Can't get multihash");
-
-        let cid = Cid::new_v1(DAG_CBOR, multihash);
-
-        let video = IPLDLink { link: cid };
-
-        Self {
-            title: temp.title,
-            duration: temp.duration,
-            image,
-            video,
-        }
-    }
-}
-
-#[derive(Deserialize)]
-pub struct TempVideoList {
-    pub metadata: Vec<FakeCid>,
-}
-
-#[derive(Deserialize)]
-pub struct TempVideoMetadata {
-    pub title: String,
-    pub duration: f64,
-    pub image: FakeCid,
-    pub video: FakeCid,
+                              // Link to all archived comments.
+                              //pub comments: String, //IPNS path -> "/ipns/<hash>"
 }

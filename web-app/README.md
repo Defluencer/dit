@@ -6,8 +6,9 @@
 
 ## Web-App
 - Customize as needed.
+- Change ENS name in the app.rs file.
 - Compile with this command: trunk build --release
-- Add and Pin the www folder to IPFS using this command: ipfs add --recursive --cid-version=1 www
+- Add and Pin the www folder to IPFS. Command: ```ipfs add --recursive --cid-version=1 www```
 - Upload CID to Pinata Cloud, Temporal and/or host it yourself.
 - Upload CID to ENS or other DNS.
 
@@ -37,7 +38,7 @@ with this
       "http://localhost:45005",
       "http://127.0.0.1:45005",
       "https://webui.ipfs.io",
-      "http://<INSERT_CID_HERE>.ipfs.localhost:48084""
+      "http://<INSERT_CID_HERE>.ipfs.localhost:48084"
     ]
   }
 },
@@ -54,4 +55,4 @@ IPFS + any browser
 - [Start IPFS Daemon](https://docs.ipfs.io/reference/cli/#ipfs-daemon) with PubSub enabled using this command: ipfs daemon --enable-pubsub-experiment
 
 ### Dev Build
-Checkout defluencer.eth on Ropsten testnet.
+Checkout defluencer.eth on Ropsten testnet for a live example.

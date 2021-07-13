@@ -58,8 +58,6 @@ impl Component for Settings {
                             onchange=self.link.callback(Msg::Addrs)
                             placeholder="IPFS API address" />
                     </div>
-                    <p> { "Your IPFS node config must also allow cross origin resource sharing and PubSub for live streaming." } </p>
-                    <a href="https://github.com/SionoiS/dit/blob/master/web-app/README.md"> { "Go to my Github for more info" } </a>
                 </div>
             </div>
         }

@@ -1,19 +1,18 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-
 use yew::services::ConsoleService;
 
 use web_sys::{Performance, Window};
 
-const MOVING_AVERAGE_P: f64 = 0.20;
+/// P value dictate the weigth given to newer value.
+/// [0.0 <= P <= 1.0]
+const MOVING_AVERAGE_P: f64 = 0.15;
 
 #[derive(Clone)]
 pub struct ExponentialMovingAverage {
     performance: Performance,
 
-    download_time: Arc<AtomicUsize>,
+    download_time: f64,
 
-    moving_average: Arc<AtomicUsize>,
+    moving_average: f64,
 }
 
 impl ExponentialMovingAverage {
@@ -21,46 +20,42 @@ impl ExponentialMovingAverage {
         Self {
             performance: window.performance().expect("Can't get perf"),
 
-            download_time: Arc::new(AtomicUsize::new(0)),
-            moving_average: Arc::new(AtomicUsize::new(0)),
+            download_time: 0.0,
+            moving_average: 0.0,
         }
     }
 
-    pub fn start_timer(&self) {
-        let time_stamp = self.performance.now() as usize;
-
-        self.download_time.store(time_stamp, Ordering::Relaxed);
+    pub fn start_timer(&mut self) {
+        self.download_time = self.performance.now();
     }
 
     /// Returns the newly calculated average if start_timer() was previously called
-    pub fn recalculate_average(&self) -> Option<f64> {
-        let old_time_stamp = self.download_time.swap(0, Ordering::Relaxed);
-
-        if old_time_stamp == 0 {
+    pub fn recalculate_average_speed(&mut self, bandwidth: f64) -> Option<f64> {
+        if self.download_time <= 0.0 {
             return None;
         }
 
-        let new_time_stamp = self.performance.now() as usize;
+        let time = self.performance.now() - self.download_time;
 
-        let time = (new_time_stamp - old_time_stamp) as f64;
+        self.download_time = 0.0;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Last Download {}ms", time));
+        ConsoleService::info(&format!("Last Download {:.0}ms", time));
 
-        let mut moving_average = self.moving_average.load(Ordering::Relaxed) as f64;
+        let new_bitrate = bandwidth / time * 1000.0;
 
-        if moving_average > 0.0 {
-            moving_average += (time - moving_average) * MOVING_AVERAGE_P;
+        if self.moving_average >= 0.0 {
+            self.moving_average += (new_bitrate - self.moving_average) * MOVING_AVERAGE_P;
         } else {
-            moving_average = time;
+            self.moving_average = new_bitrate; // the first entry
         }
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Moving Average {}ms", moving_average));
+        ConsoleService::info(&format!(
+            "Average Download Speed {:.0} kbps",
+            self.moving_average / 1000.0
+        ));
 
-        self.moving_average
-            .store(moving_average as usize, Ordering::Relaxed);
-
-        Some(moving_average)
+        Some(self.moving_average)
     }
 }
