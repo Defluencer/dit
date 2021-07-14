@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::utils::local_storage::{get_local_ipfs_addrs, get_local_storage, set_local_ipfs_addrs};
+use crate::utils::local_storage::LocalStorage;
 
 use futures::join;
 use futures_util::{AsyncBufReadExt, StreamExt, TryStreamExt};
@@ -31,26 +31,26 @@ pub struct IpfsService {
 }
 
 impl IpfsService {
-    pub fn new() -> Self {
-        let window = web_sys::window().expect("Can't get window");
-        let storage = get_local_storage(&window);
+    pub fn new(storage: &LocalStorage) -> Self {
+        let result = match storage.get_local_ipfs_addrs() {
+            Some(addrs) => Url::parse(&addrs),
+            None => {
+                storage.set_local_ipfs_addrs(DEFAULT_URI);
 
-        let mut url = None;
-
-        if let Some(addrs) = get_local_ipfs_addrs(storage.as_ref()) {
-            if let Ok(url_from_str) = Url::parse(&addrs) {
-                url = Some(url_from_str);
+                Url::parse(DEFAULT_URI)
             }
-        }
+        };
 
-        if url.is_none() {
-            set_local_ipfs_addrs(DEFAULT_URI, storage.as_ref());
-
-            url = Some(Url::parse(DEFAULT_URI).expect("Invalid Url"));
-        }
+        let url = match result {
+            Ok(url) => url,
+            Err(e) => {
+                ConsoleService::error(&format!("{:#?}", e));
+                std::process::abort();
+            }
+        };
 
         let client = Client::new();
-        let base_url = Rc::from(url.unwrap());
+        let base_url = Rc::from(url);
 
         Self { client, base_url }
     }
@@ -197,7 +197,7 @@ impl IpfsService {
     pub async fn pubsub_sub<U>(
         &self,
         topic: U,
-        cb: Callback<Result<PubsubSubResponse>>,
+        cb: Callback<Result<(String, Vec<u8>)>>,
         drop_sig: Rc<AtomicBool>,
     ) where
         U: Into<Cow<'static, str>>,
@@ -233,8 +233,8 @@ impl IpfsService {
             }
 
             match result {
-                Ok(line) => match serde_json::from_str(&line) {
-                    Ok(node) => cb.emit(Ok(node)),
+                Ok(line) => match serde_json::from_str::<PubsubSubResponse>(&line) {
+                    Ok(node) => cb.emit(Ok((node.from, node.data))),
                     Err(e) => cb.emit(Err(e.into())),
                 },
                 Err(e) => {
@@ -276,7 +276,7 @@ impl IpfsService {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PubsubSubResponse {
+struct PubsubSubResponse {
     #[serde(deserialize_with = "deserialize_from_field")]
     pub from: String,
 
@@ -288,9 +288,9 @@ fn deserialize_from_field<'de, D>(deserializer: D) -> std::result::Result<String
 where
     D: Deserializer<'de>,
 {
-    let from: Option<&str> = Deserialize::deserialize(deserializer)?;
+    let from: &str = Deserialize::deserialize(deserializer)?;
 
-    let from = Base::decode(&Base::Base64Pad, from.unwrap()).expect("Multibase decoding failed");
+    let from = Base::decode(&Base::Base64Pad, from).expect("Multibase decoding failed");
 
     //This is the most common encoding for PeerIds
     let from = Base::encode(&Base::Base58Btc, from);
@@ -302,34 +302,34 @@ fn deserialize_data_field<'de, D>(deserializer: D) -> std::result::Result<Vec<u8
 where
     D: Deserializer<'de>,
 {
-    let data: Option<&str> = Deserialize::deserialize(deserializer)?;
+    let data: &str = Deserialize::deserialize(deserializer)?;
 
-    let data = Base::decode(&Base::Base64Pad, data.unwrap()).expect("Multibase decoding failed");
+    let data = Base::decode(&Base::Base64Pad, data).expect("Multibase decoding failed");
 
     Ok(data)
 }
 
 #[derive(Debug, Deserialize)]
-pub struct DagPutResponse {
+struct DagPutResponse {
     #[serde(rename = "Cid")]
     pub cid: CidString,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CidString {
+struct CidString {
     #[serde(rename = "/")]
     pub cid_string: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct NameResolveResponse {
+struct NameResolveResponse {
     pub path: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct IdResponse {
+struct IdResponse {
     #[serde(rename = "ID")]
     pub id: String,
 }
