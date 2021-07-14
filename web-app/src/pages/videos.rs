@@ -2,13 +2,9 @@ use std::collections::HashMap;
 
 use crate::app::ENS_NAME;
 use crate::components::{Navbar, VideoThumbnail};
-use crate::utils::ipfs::IpfsService;
-use crate::utils::local_storage::{get_cid, get_local_storage, set_cid, set_local_beacon};
-use crate::utils::web3::Web3Service;
+use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use wasm_bindgen_futures::spawn_local;
-
-use web_sys::Storage;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
@@ -19,42 +15,46 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-use reqwest::Error;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 // Maintaining an updated content feed should be a different component.
 // Specialized component just refer to feed then dag get & deserialize (videos, blog post, etc...).
+
+enum DisplayState {
+    Searching,
+    Feed(Feed),
+}
 
 pub struct Videos {
     link: ComponentLink<Self>,
 
     ipfs: IpfsService,
 
-    storage: Option<Storage>,
+    storage: LocalStorage,
 
     beacon_cid: Option<Cid>,
     beacon: Option<Beacon>,
 
-    searching: bool,
-
-    list_cid: Option<Cid>,
-    feed: Option<Feed>,
+    feed_cid: Option<Cid>,
+    display_state: DisplayState,
 
     call_count: usize,
     metadata_map: HashMap<Cid, VideoMetadata>,
 }
 
 pub enum Msg {
-    ResolveName(Result<Cid, web3::contract::Error>),
-    Beacon(Result<Beacon, Error>),
-    List((Cid, Result<Feed, Error>)),
-    ResolveList(Result<(Cid, Feed), Error>),
-    Metadata((Cid, Result<VideoMetadata, Error>)),
+    ResolveName(Result<Cid>),
+    Beacon(Result<Beacon>),
+    Feed((Cid, Result<Feed>)),
+    ResolveList(Result<(Cid, Feed)>),
+    Metadata((Cid, Result<VideoMetadata>)),
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub ipfs: IpfsService, // From app.
-    pub web3: Web3Service, // From app.
+    pub ipfs: IpfsService,     // From app.
+    pub web3: Web3Service,     // From app.
+    pub storage: LocalStorage, // From app.
 }
 
 impl Component for Videos {
@@ -62,12 +62,13 @@ impl Component for Videos {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let Props { ipfs, web3 } = props;
+        let Props {
+            ipfs,
+            web3,
+            storage,
+        } = props;
 
-        let window = web_sys::window().expect("Can't get window");
-        let storage = get_local_storage(&window);
-
-        let beacon_cid = get_cid(ENS_NAME, storage.as_ref());
+        let beacon_cid = storage.get_cid(ENS_NAME);
 
         if let Some(cid) = beacon_cid {
             let cb = link.callback_once(Msg::Beacon);
@@ -87,9 +88,8 @@ impl Component for Videos {
             ipfs,
             beacon_cid,
             beacon: None,
-            searching: true,
-            list_cid: None,
-            feed: None,
+            display_state: DisplayState::Searching,
+            feed_cid: None,
             storage,
             call_count: 0,
             metadata_map: HashMap::with_capacity(10),
@@ -100,7 +100,7 @@ impl Component for Videos {
         match msg {
             Msg::ResolveName(result) => self.on_name_resolved(result),
             Msg::Beacon(result) => self.on_beacon_update(result),
-            Msg::List((cid, result)) => self.on_feed_update(cid, result),
+            Msg::Feed((cid, result)) => self.on_feed_update(cid, result),
             Msg::ResolveList(result) => self.on_feed_resolved(result),
             Msg::Metadata((cid, result)) => self.on_video_metadata_update(cid, result),
         }
@@ -111,12 +111,9 @@ impl Component for Videos {
     }
 
     fn view(&self) -> Html {
-        let content = if self.searching {
-            html! { <div class="center_text">  {"Loading..."} </div> }
-        } else {
-            let feed = self.feed.as_ref().unwrap();
-
-            html! {
+        let content = match &self.display_state {
+            DisplayState::Searching => html! { <div class="center_text">  {"Loading..."} </div> },
+            DisplayState::Feed(feed) => html! {
                 <div class="feed">
                 {
                     for feed.content.iter().rev().map(|ipld| {
@@ -129,7 +126,7 @@ impl Component for Videos {
                     )
                 }
                 </div>
-            }
+            },
         };
 
         html! {
@@ -143,7 +140,7 @@ impl Component for Videos {
 
 impl Videos {
     /// Callback when Ethereum Name Service resolve name to beacon Cid.
-    fn on_name_resolved(&mut self, res: Result<Cid, web3::contract::Error>) -> bool {
+    fn on_name_resolved(&mut self, res: Result<Cid>) -> bool {
         let cid = match res {
             Ok(cid) => cid,
             Err(e) => {
@@ -166,7 +163,7 @@ impl Videos {
         #[cfg(debug_assertions)]
         ConsoleService::info("Name Update");
 
-        set_local_beacon(ENS_NAME, &cid, self.storage.as_ref());
+        self.storage.set_local_beacon(ENS_NAME, &cid);
 
         self.beacon_cid = Some(cid);
 
@@ -174,7 +171,7 @@ impl Videos {
     }
 
     /// Callback when IPFS dag get return beacon node.
-    fn on_beacon_update(&mut self, res: Result<Beacon, Error>) -> bool {
+    fn on_beacon_update(&mut self, res: Result<Beacon>) -> bool {
         let beacon = match res {
             Ok(b) => b,
             Err(e) => {
@@ -186,10 +183,10 @@ impl Videos {
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
-        if let Some(cid) = get_cid(&beacon.content_feed, self.storage.as_ref()) {
-            self.list_cid = Some(cid);
+        if let Some(cid) = self.storage.get_cid(&beacon.content_feed) {
+            self.feed_cid = Some(cid);
 
-            let cb = self.link.callback_once(Msg::List);
+            let cb = self.link.callback_once(Msg::Feed);
             let client = self.ipfs.clone();
 
             spawn_local(async move {
@@ -209,7 +206,7 @@ impl Videos {
     }
 
     /// Callback when IPFS dag get return Feed node.
-    fn on_feed_resolved(&mut self, res: Result<(Cid, Feed), Error>) -> bool {
+    fn on_feed_resolved(&mut self, res: Result<(Cid, Feed)>) -> bool {
         let (cid, feed) = match res {
             Ok((cid, feed)) => (cid, feed),
             Err(e) => {
@@ -222,7 +219,7 @@ impl Videos {
     }
 
     /// Callback when IPFS resolve and dag get Feed node.
-    fn on_feed_update(&mut self, list_cid: Cid, res: Result<Feed, Error>) -> bool {
+    fn on_feed_update(&mut self, feed_cid: Cid, res: Result<Feed>) -> bool {
         let feed = match res {
             Ok(l) => l,
             Err(e) => {
@@ -231,33 +228,39 @@ impl Videos {
             }
         };
 
-        if let Some(old_list_cid) = self.list_cid.as_ref() {
-            if *old_list_cid == list_cid && self.feed.is_some() {
+        if let Some(old_feed_cid) = self.feed_cid.as_ref() {
+            if *old_feed_cid == feed_cid
+            // && self.feed.is_some()
+            {
                 return false;
             }
         }
 
         let beacon = match self.beacon.as_ref() {
             Some(b) => b,
-            None => return false,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Beacon");
+                return false;
+            }
         };
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Content Feed Update");
 
-        if let Some(old_list_cid) = self.list_cid.as_ref() {
-            if *old_list_cid != list_cid {
-                self.list_cid = Some(list_cid);
-                set_cid(&beacon.content_feed, &list_cid, self.storage.as_ref());
+        if let Some(old_feed_cid) = self.feed_cid.as_ref() {
+            if *old_feed_cid != feed_cid {
+                self.feed_cid = Some(feed_cid);
+                self.storage.set_cid(&beacon.content_feed, &feed_cid);
             }
         } else {
-            self.list_cid = Some(list_cid);
-            set_cid(&beacon.content_feed, &list_cid, self.storage.as_ref());
+            self.feed_cid = Some(feed_cid);
+            self.storage.set_cid(&beacon.content_feed, &feed_cid);
         }
 
         if feed.content.is_empty() {
-            self.feed = Some(feed);
-            self.searching = false;
+            //self.feed = Some(feed);
+            self.display_state = DisplayState::Feed(feed);
             return true;
         }
 
@@ -273,14 +276,14 @@ impl Videos {
 
         self.call_count += feed.content.len();
 
-        self.feed = Some(feed);
-        self.searching = false;
+        //self.feed = Some(feed);
+        self.display_state = DisplayState::Feed(feed);
 
         false
     }
 
     /// Callback when IPFS dag get returns VideoMetadata node.
-    fn on_video_metadata_update(&mut self, cid: Cid, res: Result<VideoMetadata, Error>) -> bool {
+    fn on_video_metadata_update(&mut self, cid: Cid, res: Result<VideoMetadata>) -> bool {
         let metadata = match res {
             Ok(d) => d,
             Err(e) => {

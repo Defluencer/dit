@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::utils::local_storage::{get_local_ipfs_addrs, get_local_storage, set_local_ipfs_addrs};
+use crate::utils::local_storage::LocalStorage;
 
 use futures::join;
 use futures_util::{AsyncBufReadExt, StreamExt, TryStreamExt};
@@ -18,9 +18,11 @@ use cid::multibase::Base;
 use cid::Cid;
 
 use reqwest::multipart::Form;
-use reqwest::{Client, Error, Url};
+use reqwest::{Client, Url};
 
 const DEFAULT_URI: &str = "http://localhost:5001/api/v0/";
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Clone)]
 pub struct IpfsService {
@@ -29,33 +31,33 @@ pub struct IpfsService {
 }
 
 impl IpfsService {
-    pub fn new() -> Self {
-        let window = web_sys::window().expect("Can't get window");
-        let storage = get_local_storage(&window);
+    pub fn new(storage: &LocalStorage) -> Self {
+        let result = match storage.get_local_ipfs_addrs() {
+            Some(addrs) => Url::parse(&addrs),
+            None => {
+                storage.set_local_ipfs_addrs(DEFAULT_URI);
 
-        let mut url = None;
-
-        if let Some(addrs) = get_local_ipfs_addrs(storage.as_ref()) {
-            if let Ok(url_from_str) = Url::parse(&addrs) {
-                url = Some(url_from_str);
+                Url::parse(DEFAULT_URI)
             }
-        }
+        };
 
-        if url.is_none() {
-            set_local_ipfs_addrs(DEFAULT_URI, storage.as_ref());
-
-            url = Some(Url::parse(DEFAULT_URI).expect("Invalid Url"));
-        }
+        let url = match result {
+            Ok(url) => url,
+            Err(e) => {
+                ConsoleService::error(&format!("{:#?}", e));
+                std::process::abort();
+            }
+        };
 
         let client = Client::new();
-        let base_url = Rc::from(url.unwrap());
+        let base_url = Rc::from(url);
 
         Self { client, base_url }
     }
 
     /// Download content from block with this CID.
-    pub async fn cid_cat(&self, cid: Cid) -> Result<Vec<u8>, Error> {
-        let url = self.base_url.join("cat").expect("Invalid URL");
+    pub async fn cid_cat(&self, cid: Cid) -> Result<Vec<u8>> {
+        let url = self.base_url.join("cat")?;
 
         let bytes = self
             .client
@@ -74,11 +76,11 @@ impl IpfsService {
         &self,
         audio_path: U,
         video_path: U,
-    ) -> Result<(Vec<u8>, Vec<u8>), Error>
+    ) -> Result<(Vec<u8>, Vec<u8>)>
     where
         U: Into<Cow<'static, str>>,
     {
-        let url = self.base_url.join("cat").expect("Invalid URL");
+        let url = self.base_url.join("cat")?;
 
         let (audio_res, video_res) = join!(
             self.client
@@ -103,7 +105,7 @@ impl IpfsService {
     }
 
     /// Serialize then add dag node to IPFS. Return a CID.
-    pub async fn dag_put<T>(&self, node: &T) -> Result<Cid, Error>
+    pub async fn dag_put<T>(&self, node: &T) -> Result<Cid>
     where
         T: ?Sized + Serialize,
     {
@@ -113,12 +115,12 @@ impl IpfsService {
             serde_json::to_string_pretty(node).unwrap()
         ));
 
-        let data = serde_json::to_string(node).expect("Serialization failed");
+        let data = serde_json::to_string(node)?;
 
         //Reqwest was hacked to properly format multipart request with text ONLY
         let form = Form::new().text("object data", data);
 
-        let url = self.base_url.join("dag/put").expect("Invalid URL");
+        let url = self.base_url.join("dag/put")?;
 
         let response: DagPutResponse = self
             .client
@@ -129,7 +131,7 @@ impl IpfsService {
             .json()
             .await?;
 
-        let cid = Cid::try_from(response.cid.cid_string).expect("Invalid Cid");
+        let cid = Cid::try_from(response.cid.cid_string)?;
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("IPFS: dag put => {}", &cid));
@@ -138,7 +140,7 @@ impl IpfsService {
     }
 
     /// Deserialize dag node from IPFS path. Return dag node.
-    pub async fn dag_get<U, T>(&self, cid: Cid, path: Option<U>) -> Result<T, Error>
+    pub async fn dag_get<U, T>(&self, cid: Cid, path: Option<U>) -> Result<T>
     where
         U: Into<Cow<'static, str>>,
         T: ?Sized + DeserializeOwned,
@@ -152,23 +154,26 @@ impl IpfsService {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("IPFS: dag get => {}", origin));
 
-        let url = self.base_url.join("dag/get").expect("Invalid URL");
+        let url = self.base_url.join("dag/get")?;
 
-        self.client
+        let res = self
+            .client
             .post(url)
             .query(&[("arg", &origin)])
             .send()
-            .await?
-            .json::<T>()
-            .await
+            .await?;
+
+        let node = res.json::<T>().await?;
+
+        Ok(node)
     }
 
-    pub async fn resolve_and_dag_get<U, T>(&self, ipns: U) -> Result<(Cid, T), reqwest::Error>
+    pub async fn resolve_and_dag_get<U, T>(&self, ipns: U) -> Result<(Cid, T)>
     where
         U: Into<Cow<'static, str>>,
         T: ?Sized + DeserializeOwned,
     {
-        let url = self.base_url.join("name/resolve").expect("Invalid URL");
+        let url = self.base_url.join("name/resolve")?;
 
         let res: NameResolveResponse = self
             .client
@@ -179,7 +184,7 @@ impl IpfsService {
             .json()
             .await?;
 
-        let cid = Cid::try_from(res.path).expect("Invalid Cid");
+        let cid = Cid::try_from(res.path)?;
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("IPFS: name resolve => {}", cid.to_string()));
@@ -192,12 +197,18 @@ impl IpfsService {
     pub async fn pubsub_sub<U>(
         &self,
         topic: U,
-        cb: Callback<Result<PubsubSubResponse, std::io::Error>>,
+        cb: Callback<Result<(String, Vec<u8>)>>,
         drop_sig: Rc<AtomicBool>,
     ) where
         U: Into<Cow<'static, str>>,
     {
-        let url = self.base_url.join("pubsub/sub").expect("Invalid URL");
+        let url = match self.base_url.join("pubsub/sub") {
+            Ok(url) => url,
+            Err(e) => {
+                cb.emit(Err(e.into()));
+                return;
+            }
+        };
 
         let result = self
             .client
@@ -222,23 +233,23 @@ impl IpfsService {
             }
 
             match result {
-                Ok(line) => match serde_json::from_str(&line) {
-                    Ok(node) => cb.emit(Ok(node)),
+                Ok(line) => match serde_json::from_str::<PubsubSubResponse>(&line) {
+                    Ok(node) => cb.emit(Ok((node.from, node.data))),
                     Err(e) => cb.emit(Err(e.into())),
                 },
                 Err(e) => {
-                    cb.emit(Err(e));
+                    cb.emit(Err(e.into()));
                     return;
                 }
             }
         }
     }
 
-    pub async fn pubsub_pub<U>(&self, topic: U, msg: U) -> Result<(), Error>
+    pub async fn pubsub_pub<U>(&self, topic: U, msg: U) -> Result<()>
     where
         U: Into<Cow<'static, str>>,
     {
-        let url = self.base_url.join("pubsub/pub").expect("Invalid URL");
+        let url = self.base_url.join("pubsub/pub")?;
 
         self.client
             .post(url)
@@ -249,8 +260,8 @@ impl IpfsService {
         Ok(())
     }
 
-    pub async fn ipfs_node_id(&self) -> Result<String, Error> {
-        let url = self.base_url.join("id").expect("Invalid URL");
+    pub async fn ipfs_node_id(&self) -> Result<String> {
+        let url = self.base_url.join("id")?;
 
         let response = self
             .client
@@ -265,7 +276,7 @@ impl IpfsService {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PubsubSubResponse {
+struct PubsubSubResponse {
     #[serde(deserialize_with = "deserialize_from_field")]
     pub from: String,
 
@@ -273,13 +284,13 @@ pub struct PubsubSubResponse {
     pub data: Vec<u8>,
 }
 
-fn deserialize_from_field<'de, D>(deserializer: D) -> Result<String, D::Error>
+fn deserialize_from_field<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let from: Option<&str> = Deserialize::deserialize(deserializer)?;
+    let from: &str = Deserialize::deserialize(deserializer)?;
 
-    let from = Base::decode(&Base::Base64Pad, from.unwrap()).expect("Multibase decoding failed");
+    let from = Base::decode(&Base::Base64Pad, from).expect("Multibase decoding failed");
 
     //This is the most common encoding for PeerIds
     let from = Base::encode(&Base::Base58Btc, from);
@@ -287,38 +298,38 @@ where
     Ok(from)
 }
 
-fn deserialize_data_field<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+fn deserialize_data_field<'de, D>(deserializer: D) -> std::result::Result<Vec<u8>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let data: Option<&str> = Deserialize::deserialize(deserializer)?;
+    let data: &str = Deserialize::deserialize(deserializer)?;
 
-    let data = Base::decode(&Base::Base64Pad, data.unwrap()).expect("Multibase decoding failed");
+    let data = Base::decode(&Base::Base64Pad, data).expect("Multibase decoding failed");
 
     Ok(data)
 }
 
 #[derive(Debug, Deserialize)]
-pub struct DagPutResponse {
+struct DagPutResponse {
     #[serde(rename = "Cid")]
     pub cid: CidString,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CidString {
+struct CidString {
     #[serde(rename = "/")]
     pub cid_string: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct NameResolveResponse {
+struct NameResolveResponse {
     pub path: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct IdResponse {
+struct IdResponse {
     #[serde(rename = "ID")]
     pub id: String,
 }

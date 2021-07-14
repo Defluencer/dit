@@ -1,5 +1,5 @@
 use crate::components::{Navbar, VideoPlayer};
-use crate::utils::ipfs::IpfsService;
+use crate::utils::IpfsService;
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -9,13 +9,13 @@ use linked_data::video::VideoMetadata;
 
 use cid::Cid;
 
-use reqwest::Error;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[allow(clippy::large_enum_variant)]
 enum State {
     Loading,
     Ready(VideoMetadata),
-    Error(Error),
+    Error(Box<dyn std::error::Error>),
 }
 
 pub struct Video {
@@ -30,7 +30,7 @@ pub struct Props {
 }
 
 pub enum Msg {
-    Metadata(Result<VideoMetadata, Error>),
+    Metadata(Result<VideoMetadata>),
 }
 
 impl Component for Video {
@@ -82,7 +82,7 @@ impl Component for Video {
 }
 
 impl Video {
-    fn update_metadata(&mut self, response: Result<VideoMetadata, Error>) -> bool {
+    fn update_metadata(&mut self, response: Result<VideoMetadata>) -> bool {
         self.state = match response {
             Ok(md) => State::Ready(md),
             Err(e) => State::Error(e),
