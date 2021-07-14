@@ -1,5 +1,5 @@
 use crate::components::{Navbar, VideoPlayer};
-use crate::utils::ipfs::IpfsService;
+use crate::utils::IpfsService;
 
 use wasm_bindgen_futures::spawn_local;
 

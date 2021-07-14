@@ -27,7 +27,7 @@ impl Component for VideoThumbnail {
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
-        unimplemented!()
+        false
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {

@@ -1,7 +1,5 @@
 use std::convert::TryFrom;
 
-use wasm_bindgen::JsValue;
-
 use web3::transports::eip_1193::{Eip1193, Provider};
 use web3::types::Address;
 use web3::Web3;
@@ -20,14 +18,20 @@ pub struct Web3Service {
 }
 
 impl Web3Service {
-    pub fn new() -> std::result::Result<Self, JsValue> {
-        let provider = Provider::default()?;
+    pub fn new() -> Self {
+        let provider = match Provider::default() {
+            Ok(provider) => provider,
+            Err(e) => {
+                ConsoleService::error(&format!("{:#?}", e));
+                std::process::abort();
+            }
+        };
 
         let transport = Eip1193::new(provider);
 
         let client = Web3::new(transport);
 
-        Ok(Self { client })
+        Self { client }
     }
 
     pub async fn get_ipfs_content(&self, name: String) -> Result<Cid> {

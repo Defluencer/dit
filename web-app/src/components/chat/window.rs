@@ -3,8 +3,7 @@ use std::str;
 
 use crate::components::chat::display::Display;
 use crate::components::chat::inputs::Inputs;
-use crate::utils::ipfs::IpfsService;
-use crate::utils::web3::Web3Service;
+use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
@@ -14,12 +13,14 @@ pub struct ChatWindow {
     mod_list: Rc<str>,
     web3: Web3Service,
     ipfs: IpfsService,
+    storage: LocalStorage,
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
     pub web3: Web3Service,
     pub ipfs: IpfsService,
+    pub storage: LocalStorage,
     pub topic: Rc<str>,
     pub ban_list: Rc<str>,
     pub mod_list: Rc<str>,
@@ -33,6 +34,7 @@ impl Component for ChatWindow {
         let Props {
             ipfs,
             web3,
+            storage,
             topic,
             ban_list,
             mod_list,
@@ -44,6 +46,7 @@ impl Component for ChatWindow {
             mod_list,
             web3,
             ipfs,
+            storage,
         }
     }
 
@@ -59,7 +62,7 @@ impl Component for ChatWindow {
         html! {
         <div class="chat_window">
             <Display ipfs=self.ipfs.clone() topic=self.topic.clone() ban_list=self.ban_list.clone() mod_list=self.mod_list.clone() />
-            <Inputs ipfs=self.ipfs.clone() topic=self.topic.clone() web3=self.web3.clone() />
+            <Inputs ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone()  topic=self.topic.clone() />
         </div>
         }
     }

@@ -1,6 +1,5 @@
 use crate::pages::{Home, Live, Settings, Video, Videos};
-use crate::utils::ipfs::IpfsService;
-use crate::utils::web3::Web3Service;
+use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 use yew_router::prelude::{Router, Switch};
@@ -30,6 +29,7 @@ pub enum AppRoute {
 pub struct App {
     web3: Web3Service,
     ipfs: IpfsService,
+    storage: LocalStorage,
 }
 
 impl Component for App {
@@ -37,10 +37,15 @@ impl Component for App {
     type Properties = ();
 
     fn create(_props: Self::Properties, _: ComponentLink<Self>) -> Self {
-        let web3 = Web3Service::new().unwrap();
-        let ipfs = IpfsService::new();
+        let web3 = Web3Service::new();
+        let storage = LocalStorage::new();
+        let ipfs = IpfsService::new(&storage);
 
-        Self { web3, ipfs }
+        Self {
+            web3,
+            ipfs,
+            storage,
+        }
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
@@ -54,6 +59,7 @@ impl Component for App {
     fn view(&self) -> Html {
         let web3 = self.web3.clone();
         let ipfs = self.ipfs.clone();
+        let storage = self.storage.clone();
 
         html! {
             <>
@@ -61,9 +67,9 @@ impl Component for App {
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
                             AppRoute::Video(cid) => html! { <Video ipfs=ipfs.clone() metadata_cid=cid /> },
-                            AppRoute::Settings => html! { <Settings /> },
-                            AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() /> },
-                            AppRoute::Videos => html! { <Videos ipfs=ipfs.clone() web3=web3.clone() /> },
+                            AppRoute::Settings => html! { <Settings storage=storage.clone() /> },
+                            AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() /> },
+                            AppRoute::Videos => html! { <Videos ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() /> },
                             AppRoute::Home => html! { <Home /> },
                         }
                     })

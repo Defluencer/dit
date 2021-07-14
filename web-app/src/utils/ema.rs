@@ -1,6 +1,6 @@
 use yew::services::ConsoleService;
 
-use web_sys::{Performance, Window};
+use web_sys::Performance;
 
 /// P value dictate the weigth given to newer value.
 /// [0.0 <= P <= 1.0]
@@ -16,9 +16,25 @@ pub struct ExponentialMovingAverage {
 }
 
 impl ExponentialMovingAverage {
-    pub fn new(window: &Window) -> Self {
+    pub fn new() -> Self {
+        let window = match web_sys::window() {
+            Some(window) => window,
+            None => {
+                ConsoleService::error("Cannot Access Window Aborting...");
+                std::process::abort();
+            }
+        };
+
+        let performance = match window.performance() {
+            Some(window) => window,
+            None => {
+                ConsoleService::error("Cannot Access Performance Aborting...");
+                std::process::abort();
+            }
+        };
+
         Self {
-            performance: window.performance().expect("Can't get perf"),
+            performance,
 
             download_time: 0.0,
             moving_average: 0.0,

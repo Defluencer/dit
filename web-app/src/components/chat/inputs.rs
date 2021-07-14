@@ -1,13 +1,11 @@
 use std::rc::Rc;
 use std::str;
 
-use crate::utils::ipfs::IpfsService;
-use crate::utils::local_storage::{get_cid, get_local_storage, set_cid};
-use crate::utils::web3::Web3Service;
+use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use wasm_bindgen_futures::spawn_local;
 
-use web_sys::{HtmlTextAreaElement, KeyboardEvent, Storage, Window};
+use web_sys::{HtmlTextAreaElement, KeyboardEvent};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -40,8 +38,7 @@ pub struct Inputs {
     topic: Rc<str>,
     state: DisplayState,
 
-    window: Window,
-    storage: Option<Storage>,
+    storage: LocalStorage,
     web3: Web3Service,
 
     temp_msg: Option<String>,
@@ -73,6 +70,7 @@ pub enum Msg {
 pub struct Props {
     pub ipfs: IpfsService,
     pub web3: Web3Service,
+    pub storage: LocalStorage, // From app.
     pub topic: Rc<str>,
 }
 
@@ -81,12 +79,14 @@ impl Component for Inputs {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let Props { ipfs, web3, topic } = props;
+        let Props {
+            ipfs,
+            web3,
+            storage,
+            topic,
+        } = props;
 
-        let window = web_sys::window().expect("Can't get window");
-        let storage = get_local_storage(&window);
-
-        let (sign_msg_cid, state) = match get_cid(SIGN_MSG_KEY, storage.as_ref()) {
+        let (sign_msg_cid, state) = match storage.get_cid(SIGN_MSG_KEY) {
             Some(cid) => (Some(cid), DisplayState::Chatting),
             None => (None, DisplayState::Connect),
         };
@@ -98,7 +98,6 @@ impl Component for Inputs {
             topic,
             state,
 
-            window,
             storage,
             web3,
 
@@ -172,13 +171,28 @@ impl Component for Inputs {
         }
 
         if let DisplayState::Chatting = self.state {
-            let document = self.window.document().expect("Can't get document");
+            let window = match web_sys::window() {
+                Some(window) => window,
+                None => return,
+            };
 
-            let text_area: HtmlTextAreaElement = document
-                .get_element_by_id("input_text")
-                .expect("No element with this Id")
-                .dyn_into()
-                .expect("Not Text Area Element");
+            let document = match window.document() {
+                Some(document) => document,
+                None => return,
+            };
+
+            let element = match document.get_element_by_id("input_text") {
+                Some(document) => document,
+                None => return,
+            };
+
+            let text_area: HtmlTextAreaElement = match element.dyn_into() {
+                Ok(document) => document,
+                Err(e) => {
+                    ConsoleService::error(&format!("{:#?}", e));
+                    return;
+                }
+            };
 
             let cb = self.link.callback(|()| Msg::Enter);
 
@@ -188,9 +202,11 @@ impl Component for Inputs {
                 }
             }) as Box<dyn Fn(KeyboardEvent)>);
 
-            text_area
+            if let Err(e) = text_area
                 .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
-                .expect("Invalid Listener");
+            {
+                ConsoleService::error(&format!("{:#?}", e));
+            }
 
             self.text_area = Some(text_area);
             self.text_closure = Some(closure);
@@ -224,7 +240,10 @@ impl Inputs {
             text_area.set_value("");
         }
 
-        let cid = self.sign_msg_cid.expect("No signed message CID");
+        let cid = match self.sign_msg_cid {
+            Some(cid) => cid,
+            None => return false,
+        };
 
         let msg = Message {
             msg_type: MessageType::Unsigned(UnsignedMessage { message }),
@@ -232,7 +251,13 @@ impl Inputs {
             origin: cid.into(),
         };
 
-        let json_string = serde_json::to_string(&msg).expect("Cannot serialize");
+        let json_string = match serde_json::to_string(&msg) {
+            Ok(json_string) => json_string,
+            Err(e) => {
+                ConsoleService::error(&format!("{:#?}", e));
+                return false;
+            }
+        };
 
         self.temp_msg = None;
 
@@ -243,8 +268,9 @@ impl Inputs {
         ConsoleService::info("Publish Message");
 
         spawn_local(async move {
-            //TODO
-            let _ = client.pubsub_pub(topic, json_string).await;
+            if let Err(e) = client.pubsub_pub(topic, json_string).await {
+                ConsoleService::error(&format!("{:#?}", e));
+            }
         });
 
         false
@@ -317,7 +343,14 @@ impl Inputs {
         #[cfg(debug_assertions)]
         ConsoleService::info("Name Revolved");
 
-        let name = response.unwrap_or_default();
+        let name = match response {
+            Ok(string) => string,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+
+                String::new()
+            }
+        };
 
         self.state = DisplayState::NameOk(name);
 
@@ -334,9 +367,20 @@ impl Inputs {
         #[cfg(debug_assertions)]
         ConsoleService::info("Name Submitted");
 
-        let address = self.address.expect("Invalid Address");
-        let peer = self.peer_id.take().expect("Invalid Peer Id");
-        let name = self.name.take().expect("Invalid Name");
+        let address = match self.address {
+            Some(addrs) => addrs,
+            None => return false,
+        };
+
+        let peer = match self.peer_id.take() {
+            Some(peer) => peer,
+            None => return false,
+        };
+
+        let name = match self.name.take() {
+            Some(name) => name,
+            None => return false,
+        };
 
         let cb = self.link.callback_once(Msg::Signed);
         let web3 = self.web3.clone();
@@ -362,13 +406,15 @@ impl Inputs {
             }
         };
 
-        let address = self
-            .address
-            .take()
-            .expect("Invalid Address")
-            .to_fixed_bytes();
+        let address = match self.address.take() {
+            Some(addrs) => addrs.to_fixed_bytes(),
+            None => return false,
+        };
 
-        let data = self.sign_msg_content.take().expect("No signed msg content");
+        let data = match self.sign_msg_content.take() {
+            Some(data) => data,
+            None => return false,
+        };
 
         let signed_msg = SignedMessage {
             address,
@@ -400,7 +446,7 @@ impl Inputs {
             }
         };
 
-        set_cid(SIGN_MSG_KEY, &cid, self.storage.as_ref());
+        self.storage.set_cid(SIGN_MSG_KEY, &cid);
 
         self.sign_msg_cid = Some(cid);
         self.state = DisplayState::Chatting;
