@@ -18,7 +18,7 @@ impl LocalStorage {
         let window = match web_sys::window() {
             Some(window) => window,
             None => {
-                ConsoleService::error("Cannot Access Window Aborting...");
+                ConsoleService::error("Cannot Access Window Object Aborting...");
                 std::process::abort();
             }
         };
@@ -34,7 +34,7 @@ impl LocalStorage {
         let storage = match storage {
             Some(storage) => storage,
             None => {
-                ConsoleService::error("Cannot Access Local Storage Aborting...");
+                ConsoleService::error("No Local Storage Object Aborting...");
                 std::process::abort();
             }
         };

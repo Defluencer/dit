@@ -9,7 +9,7 @@ use cid::Cid;
 
 /// Metadata for video thumbnail and playback.
 /// Recursive pin.
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
     /// Title of this video.
     pub title: String,

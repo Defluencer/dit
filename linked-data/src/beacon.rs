@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
 pub struct Topics {
     pub live_video: String,
     pub live_chat: String,
@@ -9,7 +9,7 @@ pub struct Topics {
 
 /// Mostly static links to content.
 /// Direct pin.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]
 pub struct Beacon {
     /// Broadcaster GossipSub Topics.
     pub topics: Topics,

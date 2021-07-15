@@ -23,14 +23,14 @@ pub struct Moderator {
 
 /// List of banned users.
 /// Direct pin.
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Bans {
     pub banned: HashSet<Address>,
 }
 
 /// List of moderators.
 /// Direct pin.
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Moderators {
     pub mods: HashSet<Address>,
 }

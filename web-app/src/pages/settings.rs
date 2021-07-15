@@ -21,7 +21,7 @@ pub enum Msg {
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub storage: LocalStorage, // From app.
+    pub storage: LocalStorage,
 }
 
 impl Component for Settings {

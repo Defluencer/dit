@@ -9,7 +9,7 @@ use futures::join;
 use futures_util::{AsyncBufReadExt, StreamExt, TryStreamExt};
 
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 use yew::services::ConsoleService;
 use yew::Callback;
@@ -168,6 +168,7 @@ impl IpfsService {
         Ok(node)
     }
 
+    /// Resolve IPNS link then dag get. Return CID and Node.
     pub async fn resolve_and_dag_get<U, T>(&self, ipns: U) -> Result<(Cid, T)>
     where
         U: Into<Cow<'static, str>>,
@@ -194,6 +195,7 @@ impl IpfsService {
         Ok((cid, node))
     }
 
+    /// Subscribe to a topic then deserialize output.
     pub async fn pubsub_sub<U>(
         &self,
         topic: U,
@@ -229,19 +231,48 @@ impl IpfsService {
 
         while let Some(result) = line_stream.next().await {
             if drop_sig.load(Ordering::Relaxed) {
+                // Hacky way I found to clone the stream
                 return;
             }
 
-            match result {
-                Ok(line) => match serde_json::from_str::<PubsubSubResponse>(&line) {
-                    Ok(node) => cb.emit(Ok((node.from, node.data))),
-                    Err(e) => cb.emit(Err(e.into())),
-                },
+            let line = match result {
+                Ok(line) => line,
                 Err(e) => {
                     cb.emit(Err(e.into()));
                     return;
                 }
-            }
+            };
+
+            let response = match serde_json::from_str::<PubsubSubResponse>(&line) {
+                Ok(node) => node,
+                Err(e) => {
+                    cb.emit(Err(e.into()));
+                    return;
+                }
+            };
+
+            let PubsubSubResponse { from, data } = response;
+
+            let from = match Base::decode(&Base::Base64Pad, from) {
+                Ok(from) => from,
+                Err(e) => {
+                    cb.emit(Err(e.into()));
+                    return;
+                }
+            };
+
+            //This is the most common encoding for PeerIds
+            let from = Base::encode(&Base::Base58Btc, from);
+
+            let data = match Base::decode(&Base::Base64Pad, data) {
+                Ok(from) => from,
+                Err(e) => {
+                    cb.emit(Err(e.into()));
+                    return;
+                }
+            };
+
+            cb.emit(Ok((from, data)))
         }
     }
 
@@ -275,60 +306,31 @@ impl IpfsService {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct PubsubSubResponse {
-    #[serde(deserialize_with = "deserialize_from_field")]
     pub from: String,
-
-    #[serde(deserialize_with = "deserialize_data_field")]
-    pub data: Vec<u8>,
+    pub data: String,
 }
 
-fn deserialize_from_field<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let from: &str = Deserialize::deserialize(deserializer)?;
-
-    let from = Base::decode(&Base::Base64Pad, from).expect("Multibase decoding failed");
-
-    //This is the most common encoding for PeerIds
-    let from = Base::encode(&Base::Base58Btc, from);
-
-    Ok(from)
-}
-
-fn deserialize_data_field<'de, D>(deserializer: D) -> std::result::Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let data: &str = Deserialize::deserialize(deserializer)?;
-
-    let data = Base::decode(&Base::Base64Pad, data).expect("Multibase decoding failed");
-
-    Ok(data)
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct DagPutResponse {
     #[serde(rename = "Cid")]
     pub cid: CidString,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct CidString {
     #[serde(rename = "/")]
     pub cid_string: String,
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
 struct NameResolveResponse {
+    #[serde(rename = "Path")]
     pub path: String,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Deserialize)]
 struct IdResponse {
     #[serde(rename = "ID")]
     pub id: String,
