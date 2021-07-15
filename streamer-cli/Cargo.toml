@@ -7,13 +7,13 @@ licence = "MIT OR Apache-2.0"
 description = "Defluencer toolkit command line interface."
 
 [dependencies]
-cid = "0.6"
+cid = "0.7"
 futures-util = "0.3"
 hex = "0.4"
 hyper = { version = "0.14", features = ["http1", "server", "runtime", "stream"] }
 ipfs-api = { git = "https://github.com/sionois/rust-ipfs-api", branch = "pubsub-reqwest", features = ["with-reqwest"] }
 linked-data = { path = "../linked-data" }
-m3u8-rs = "1.0"
+m3u8-rs = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"

@@ -15,6 +15,7 @@ use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
+use linked_data::beacon::Beacon;
 use linked_data::video::{SetupNode, Track, VideoMetadata};
 
 use cid::Cid;
@@ -43,7 +44,7 @@ struct MediaBuffers {
 }
 
 struct LiveStream {
-    streamer_peer_id: String,
+    beacon: Rc<Beacon>,
 
     buffer: VecDeque<Cid>,
 
@@ -90,8 +91,7 @@ pub enum Msg {
 pub struct Props {
     pub ipfs: IpfsService,
     pub metadata: Option<VideoMetadata>,
-    pub topic: Option<String>,
-    pub streamer_peer_id: Option<String>,
+    pub beacon: Option<Rc<Beacon>>,
 }
 
 impl Component for VideoPlayer {
@@ -102,8 +102,7 @@ impl Component for VideoPlayer {
         let Props {
             ipfs,
             metadata,
-            topic,
-            streamer_peer_id,
+            beacon,
         } = props;
 
         let ema = ExponentialMovingAverage::new();
@@ -138,27 +137,18 @@ impl Component for VideoPlayer {
         media_source.set_onsourceopen(Some(closure.as_ref().unchecked_ref()));
         let source_open_closure = Some(closure);
 
-        let live_stream = match topic {
-            Some(topic) => {
+        let live_stream = match beacon {
+            Some(beacon) => {
                 let client = ipfs.clone();
+                let topic = beacon.topics.live_video.clone();
                 let cb = link.callback(Msg::PubSub);
                 let drop_sig = Rc::from(AtomicBool::new(false));
                 let sig = drop_sig.clone();
 
                 spawn_local(async move { client.pubsub_sub(topic, cb, sig).await });
 
-                let streamer_peer_id = match streamer_peer_id {
-                    Some(id) => id,
-                    None => {
-                        #[cfg(debug_assertions)]
-                        ConsoleService::error("No Streamer Peer Id");
-
-                        std::process::abort();
-                    }
-                };
-
                 Some(LiveStream {
-                    streamer_peer_id,
+                    beacon,
                     buffer: VecDeque::with_capacity(5),
                     drop_sig,
                 })
@@ -212,7 +202,7 @@ impl Component for VideoPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video class="video_player" id="video_player" autoplay=true controls=true poster=self.poster_link />
+            <video class="video_player" id="video_player" autoplay="true" controls=true poster=self.poster_link.clone() />
         }
     }
 
@@ -340,7 +330,7 @@ impl VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
 
-        if from != live.streamer_peer_id {
+        if from != live.beacon.peer_id {
             #[cfg(debug_assertions)]
             ConsoleService::warn("Unauthorized Sender");
             return;

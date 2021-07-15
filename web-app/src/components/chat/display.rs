@@ -113,7 +113,7 @@ impl Component for Display {
         <div class="chat_display">
         {
         for self.chat_messages.iter().map(|cm| html! {
-            <UIMessage key=cm.id.to_string() message_data=cm />
+            <UIMessage key=cm.id.to_string() message_data=cm.clone() />
         })
         }
         </div>
