@@ -231,7 +231,7 @@ impl IpfsService {
 
         while let Some(result) = line_stream.next().await {
             if drop_sig.load(Ordering::Relaxed) {
-                // Hacky way I found to clone the stream
+                // Hacky way I found to close the stream
                 return;
             }
 

@@ -7,7 +7,6 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 
 use linked_data::beacon::Beacon;
 use linked_data::moderation::{Bans, Moderators};
-use linked_data::video::VideoMetadata;
 
 #[derive(Properties, Clone)]
 pub struct Live {
@@ -46,7 +45,7 @@ impl Component for Live {
             <div class="live_page">
                 <Navbar />
                 <div class="live_stream">
-                    <VideoPlayer ipfs=self.ipfs.clone() metadata=Option::<VideoMetadata>::None topic=Some(self.beacon.topics.live_video.clone()) streamer_peer_id=Some(self.beacon.peer_id.clone()) />
+                    <VideoPlayer ipfs=self.ipfs.clone() beacon=self.beacon.clone() />
                     <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() beacon=self.beacon.clone() bans=self.bans.clone() mods=self.mods.clone() />
                 </div>
             </div>

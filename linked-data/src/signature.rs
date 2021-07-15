@@ -2,8 +2,8 @@ use crate::Address;
 
 use serde::{Deserialize, Serialize};
 
-use secp256k1::recover;
-use secp256k1::{Message, RecoveryId, Signature};
+use libsecp256k1::recover;
+use libsecp256k1::{Message, RecoveryId, Signature};
 
 /// Generic crypto-signed message.
 #[derive(Serialize, Deserialize, Debug)]
@@ -27,7 +27,10 @@ where
             return false;
         }
 
-        let message = serde_json::to_vec(&self.data).expect("Cannot Serialize");
+        let message = match serde_json::to_vec(&self.data) {
+            Ok(msg) => msg,
+            Err(_) => return false,
+        };
 
         let mut eth_message =
             format!("\x19Ethereum Signed Message:\n{}", message.len()).into_bytes();
@@ -35,9 +38,20 @@ where
 
         let hash = keccak256(&eth_message);
 
-        let msg = Message::parse_slice(&hash).expect("Invalid Message");
-        let sig = Signature::parse_slice(&self.signature[0..64]).expect("Invalid Signature");
-        let rec_id = RecoveryId::parse_rpc(self.signature[64]).expect("Invalid Recovery Id");
+        let msg = match Message::parse_slice(&hash) {
+            Ok(msg) => msg,
+            Err(_) => return false,
+        };
+
+        let sig = match Signature::parse_standard_slice(&self.signature[0..64]) {
+            Ok(sig) => sig,
+            Err(_) => return false,
+        };
+
+        let rec_id = match RecoveryId::parse_rpc(self.signature[64]) {
+            Ok(id) => id,
+            Err(_) => return false,
+        };
 
         let public_key = match recover(&msg, &sig, &rec_id) {
             Ok(data) => data.serialize(),

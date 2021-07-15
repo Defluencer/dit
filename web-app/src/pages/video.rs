@@ -70,7 +70,7 @@ impl Component for Video {
             {
                 match &self.state {
                     State::Loading => html! { <div class="center_text"> {"Loading..."} </div> },
-                    State::Ready(md) => html! { <VideoPlayer ipfs=self.ipfs.clone() metadata=Some(md.clone()) topic=Option::<String>::None streamer_peer_id=Option::<String>::None /> },
+                    State::Ready(md) => html! { <VideoPlayer ipfs=self.ipfs.clone() metadata=md.clone() /> },
                     State::Error(e) => html! { <div class="center_text"> { format!("{:#?}", e) } </div> },
                 }
             }

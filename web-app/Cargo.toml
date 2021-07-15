@@ -7,7 +7,7 @@ licence = "MIT OR Apache-2.0"
 
 [dependencies]
 blockies = "0.3"
-cid = "0.6"
+cid = "0.7"
 futures = "0.3"
 futures-util = { version = "0.3", features = ["io"] }
 js-sys = "0.3"
@@ -33,6 +33,6 @@ web-sys = { version = "0.3", features = [
     "HtmlTextAreaElement",
     "KeyboardEvent",
 ]}
-yew = "0.17.4"
-yew-router = "0.14"
-yewtil = "0.3"
+yew = "0.18"
+yew-router = "0.15"
+yewtil = "0.4"
