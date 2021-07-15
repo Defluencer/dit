@@ -11,8 +11,7 @@ use wasm_bindgen_futures::spawn_local;
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use cid::Cid;
-
+use linked_data::beacon::Beacon;
 use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
 use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
 use linked_data::signature::SignedMessage;
@@ -23,15 +22,12 @@ use blockies::Ethereum;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct Display {
+    props: Props,
     link: ComponentLink<Self>,
 
-    ipfs: IpfsService,
     img_gen: Ethereum,
 
     mod_db: ChatModerationCache,
-
-    bans: Option<Bans>,
-    mods: Option<Moderators>,
 
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
@@ -43,16 +39,14 @@ pub struct Display {
 pub enum Msg {
     PubSub(Result<(String, Vec<u8>)>),
     Origin((PeerId, Message, Result<SignedMessage<ChatId>>)),
-    BanList(Result<(Cid, Bans)>),
-    ModList(Result<(Cid, Moderators)>),
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
     pub ipfs: IpfsService,
-    pub topic: Rc<str>,
-    pub ban_list: Rc<str>,
-    pub mod_list: Rc<str>,
+    pub beacon: Rc<Beacon>,
+    pub mods: Rc<Moderators>,
+    pub bans: Rc<Bans>,
 }
 
 impl Component for Display {
@@ -60,33 +54,14 @@ impl Component for Display {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let Props {
-            ipfs,
-            topic,
-            ban_list,
-            mod_list,
-        } = props;
-
-        let client = ipfs.clone();
+        let client = props.ipfs.clone();
         let cb = link.callback(Msg::PubSub);
-        let sub_topic = topic.to_string();
+        let sub_topic = props.beacon.topics.live_chat.clone();
 
         let drop_sig = Rc::from(AtomicBool::new(false));
         let sig = drop_sig.clone();
 
         spawn_local(async move { client.pubsub_sub(sub_topic, cb, sig).await });
-
-        let cb = link.callback_once(Msg::BanList);
-        let client = ipfs.clone();
-        let ipns = ban_list.to_string();
-
-        spawn_local(async move { cb.emit(client.resolve_and_dag_get(ipns).await) });
-
-        let cb = link.callback_once(Msg::ModList);
-        let client = ipfs.clone();
-        let ipns = mod_list.to_string();
-
-        spawn_local(async move { cb.emit(client.resolve_and_dag_get(ipns).await) });
 
         //https://github.com/ethereum/blockies
         //https://docs.rs/blockies/0.3.0/blockies/struct.Ethereum.html
@@ -99,15 +74,12 @@ impl Component for Display {
         };
 
         Self {
+            props,
             link,
 
-            ipfs,
             img_gen,
 
             mod_db: ChatModerationCache::new(100, 100),
-
-            bans: None,
-            mods: None,
 
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
@@ -120,12 +92,19 @@ impl Component for Display {
         match msg {
             Msg::PubSub(result) => self.on_pubsub_update(result),
             Msg::Origin((peer, msg, result)) => self.on_signed_msg(peer, msg, result),
-            Msg::BanList(result) => self.on_ban_list_resolved(result),
-            Msg::ModList(result) => self.on_mod_list_resolved(result),
         }
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if props.beacon != self.props.beacon
+            || props.bans != self.props.bans
+            || props.mods != self.props.mods
+        {
+            self.props = props;
+
+            return true;
+        }
+
         false
     }
 
@@ -190,7 +169,7 @@ impl Display {
 
     fn get_origin(&mut self, from: String, msg: Message) {
         let cb = self.link.callback_once(Msg::Origin);
-        let client = self.ipfs.clone();
+        let client = self.props.ipfs.clone();
         let cid = msg.origin.link;
 
         spawn_local(async move {
@@ -242,11 +221,9 @@ impl Display {
         #[cfg(debug_assertions)]
         ConsoleService::info("Verifiable => true");
 
-        if let Some(bans) = self.bans.as_ref() {
-            if bans.banned.contains(&sign_msg.address) {
-                self.mod_db.ban_peer(&peer);
-                return false;
-            }
+        if self.props.bans.banned.contains(&sign_msg.address) {
+            self.mod_db.ban_peer(&peer);
+            return false;
         }
 
         self.process_msg(peer, msg)
@@ -302,15 +279,6 @@ impl Display {
     }
 
     fn update_bans(&mut self, peer: &str, ban: Ban) -> bool {
-        let mods = match self.mods.as_ref() {
-            Some(mods) => mods,
-            None => {
-                #[cfg(debug_assertions)]
-                ConsoleService::error("No Moderators");
-                return false;
-            }
-        };
-
         let address = match self.mod_db.get_address(peer) {
             Some(addrs) => addrs,
             None => {
@@ -320,51 +288,11 @@ impl Display {
             }
         };
 
-        if !mods.mods.contains(address) {
+        if !self.props.mods.mods.contains(address) {
             return false;
         }
 
         self.mod_db.ban_peer(&ban.peer_id);
-
-        if let Some(list) = self.bans.as_mut() {
-            list.banned.insert(ban.address);
-        }
-
-        false
-    }
-
-    /// Callback when IPFS dag get ban list node.
-    fn on_ban_list_resolved(&mut self, result: Result<(Cid, Bans)>) -> bool {
-        let bans = match result {
-            Ok((_, bans)) => bans,
-            Err(e) => {
-                ConsoleService::error(&format!("{:?}", e));
-                return false;
-            }
-        };
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Chat Ban List Received");
-
-        self.bans = Some(bans);
-
-        false
-    }
-
-    /// Callback when IPFS dag get mod list node.
-    fn on_mod_list_resolved(&mut self, result: Result<(Cid, Moderators)>) -> bool {
-        let mods = match result {
-            Ok((_, mods)) => mods,
-            Err(e) => {
-                ConsoleService::error(&format!("{:?}", e));
-                return false;
-            }
-        };
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Chat Moderator List Received");
-
-        self.mods = Some(mods);
 
         false
     }

@@ -6,7 +6,7 @@
 
 ## Web-App
 - Customize as needed.
-- Change ENS name in the app.rs file.
+- Change ENS name in the main.rs file.
 - Compile with this command: trunk build --release
 - Add and Pin the www folder to IPFS. Command: ```ipfs add --recursive --cid-version=1 www```
 - Upload CID to Pinata Cloud, Temporal and/or host it yourself.

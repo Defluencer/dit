@@ -16,6 +16,7 @@ use yew::InputData;
 
 use cid::Cid;
 
+use linked_data::beacon::Beacon;
 use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
 use linked_data::signature::SignedMessage;
 
@@ -26,20 +27,19 @@ const SIGN_MSG_KEY: &str = "signed_message";
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 enum DisplayState {
+    /// Before anything, ask user to connect account.
     Connect,
+    /// Has use reverse resolution to get a name from an address.
     NameOk(String),
+    /// The signature is ready and can be use for messages.
     Chatting,
 }
 
 pub struct Inputs {
+    props: Props,
     link: ComponentLink<Self>,
 
-    ipfs: IpfsService,
-    topic: Rc<str>,
     state: DisplayState,
-
-    storage: LocalStorage,
-    web3: Web3Service,
 
     temp_msg: Option<String>,
 
@@ -70,8 +70,8 @@ pub enum Msg {
 pub struct Props {
     pub ipfs: IpfsService,
     pub web3: Web3Service,
-    pub storage: LocalStorage, // From app.
-    pub topic: Rc<str>,
+    pub storage: LocalStorage,
+    pub beacon: Rc<Beacon>,
 }
 
 impl Component for Inputs {
@@ -79,27 +79,18 @@ impl Component for Inputs {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let Props {
-            ipfs,
-            web3,
-            storage,
-            topic,
-        } = props;
-
-        let (sign_msg_cid, state) = match storage.get_cid(SIGN_MSG_KEY) {
+        let (sign_msg_cid, state) = match props.storage.get_cid(SIGN_MSG_KEY) {
             Some(cid) => (Some(cid), DisplayState::Chatting),
             None => (None, DisplayState::Connect),
         };
 
+        //TODO should verify that the node has not been garbage collected in between session.
+
         Self {
+            props,
             link,
 
-            ipfs,
-            topic,
             state,
-
-            storage,
-            web3,
 
             temp_msg: None,
 
@@ -129,7 +120,13 @@ impl Component for Inputs {
         }
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if props.beacon != self.props.beacon {
+            self.props = props;
+
+            return true;
+        }
+
         false
     }
 
@@ -279,10 +276,8 @@ impl Inputs {
             }
         };
 
-        self.temp_msg = None;
-
-        let client = self.ipfs.clone();
-        let topic = self.topic.to_string();
+        let client = self.props.ipfs.clone();
+        let topic = self.props.beacon.topics.live_chat.clone();
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Publish Message");
@@ -299,7 +294,7 @@ impl Inputs {
     /// Trigger ethereum request accounts.
     fn connect_account(&self) -> bool {
         let cb = self.link.callback(Msg::Account);
-        let web3 = self.web3.clone();
+        let web3 = self.props.web3.clone();
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Get Address");
@@ -307,7 +302,7 @@ impl Inputs {
         spawn_local(async move { cb.emit(web3.get_eth_accounts().await) });
 
         let cb = self.link.callback(Msg::PeerID);
-        let client = self.ipfs.clone();
+        let client = self.props.ipfs.clone();
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Get Peer ID");
@@ -334,7 +329,7 @@ impl Inputs {
         self.address = Some(address);
 
         let cb = self.link.callback(Msg::AccountName);
-        let web3 = self.web3.clone();
+        let web3 = self.props.web3.clone();
 
         spawn_local(async move { cb.emit(web3.get_name(address).await) });
 
@@ -415,7 +410,7 @@ impl Inputs {
         };
 
         let cb = self.link.callback_once(Msg::Signed);
-        let web3 = self.web3.clone();
+        let web3 = self.props.web3.clone();
         let data = ChatId { name, peer };
 
         self.sign_msg_content = Some(data.clone());
@@ -425,11 +420,11 @@ impl Inputs {
         false
     }
 
-    fn on_signature(&mut self, reponse: Result<[u8; 65]>) -> bool {
+    fn on_signature(&mut self, response: Result<[u8; 65]>) -> bool {
         #[cfg(debug_assertions)]
         ConsoleService::info("Signature Received");
 
-        let signature = match reponse {
+        let signature = match response {
             Ok(sig) => sig.to_vec(),
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
@@ -466,7 +461,7 @@ impl Inputs {
         ConsoleService::info(&format!("Verifiable => {}", &signed_msg.verify()));
 
         let cb = self.link.callback_once(Msg::Minted);
-        let client = self.ipfs.clone();
+        let client = self.props.ipfs.clone();
 
         spawn_local(async move { cb.emit(client.dag_put(&signed_msg).await) });
 
@@ -486,7 +481,7 @@ impl Inputs {
             }
         };
 
-        self.storage.set_cid(SIGN_MSG_KEY, &cid);
+        self.props.storage.set_cid(SIGN_MSG_KEY, &cid);
 
         self.sign_msg_cid = Some(cid);
         self.state = DisplayState::Chatting;

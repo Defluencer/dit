@@ -1,169 +1,55 @@
 use std::rc::Rc;
 
-use crate::app::ENS_NAME;
 use crate::components::{ChatWindow, Navbar, VideoPlayer};
 use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
-use wasm_bindgen_futures::spawn_local;
-
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
-use yew::services::ConsoleService;
 
 use linked_data::beacon::Beacon;
+use linked_data::moderation::{Bans, Moderators};
 use linked_data::video::VideoMetadata;
 
-use cid::Cid;
-
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-enum DisplayState {
-    Searching,
-    Beacon(Beacon),
-}
-
-pub struct Live {
-    link: ComponentLink<Self>,
-
-    ipfs: IpfsService,
-    web3: Web3Service,
-
-    storage: LocalStorage,
-
-    beacon_cid: Option<Cid>,
-
-    state: DisplayState,
-}
-
-pub enum Msg {
-    ResolveName(Result<Cid>),
-    Beacon(Result<Beacon>),
-}
-
 #[derive(Properties, Clone)]
-pub struct Props {
-    pub ipfs: IpfsService,     // From app.
-    pub web3: Web3Service,     // From app.
-    pub storage: LocalStorage, // From app.
+pub struct Live {
+    pub ipfs: IpfsService,
+    pub web3: Web3Service,
+    pub storage: LocalStorage,
+    pub beacon: Rc<Beacon>,
+    pub mods: Rc<Moderators>,
+    pub bans: Rc<Bans>,
 }
 
 impl Component for Live {
-    type Message = Msg;
-    type Properties = Props;
+    type Message = ();
+    type Properties = Self;
 
-    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let Props {
-            ipfs,
-            web3,
-            storage,
-        } = props;
-
-        let beacon_cid = storage.get_cid(ENS_NAME);
-
-        if let Some(cid) = beacon_cid {
-            let cb = link.callback_once(Msg::Beacon);
-            let client = ipfs.clone();
-
-            spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
-        }
-
-        // Check for beacon updates by resolving name.
-        let cb = link.callback_once(Msg::ResolveName);
-        let client = web3.clone();
-        let name = ENS_NAME.to_owned();
-
-        spawn_local(async move { cb.emit(client.get_ipfs_content(name).await) });
-
-        Self {
-            link,
-
-            ipfs,
-            web3,
-            storage,
-
-            beacon_cid,
-
-            state: DisplayState::Searching,
-        }
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        props
     }
 
-    fn update(&mut self, msg: Self::Message) -> ShouldRender {
-        match msg {
-            Msg::ResolveName(result) => self.on_name_resolved(result),
-            Msg::Beacon(result) => self.on_beacon_update(result),
-        }
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
+        false
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if props.beacon != self.beacon || props.bans != self.bans || props.mods != self.mods {
+            *self = props;
+
+            return true;
+        }
+
         false
     }
 
     fn view(&self) -> Html {
-        let content = match &self.state {
-            DisplayState::Searching => html! { <div class="center_text">  {"Loading..."} </div> },
-            DisplayState::Beacon(beacon) => html! {
-                <div class="live_stream">
-                    <VideoPlayer ipfs=self.ipfs.clone() metadata=Option::<VideoMetadata>::None topic=Some(beacon.topics.live_video.clone()) streamer_peer_id=Some(beacon.peer_id.clone()) />
-                    <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone()  topic=Rc::from(beacon.topics.live_chat.clone()) ban_list=Rc::from(beacon.bans.clone()) mod_list=Rc::from(beacon.mods.clone())/>
-                </div>
-            },
-        };
-
         html! {
             <div class="live_page">
                 <Navbar />
-                { content }
+                <div class="live_stream">
+                    <VideoPlayer ipfs=self.ipfs.clone() metadata=Option::<VideoMetadata>::None topic=Some(self.beacon.topics.live_video.clone()) streamer_peer_id=Some(self.beacon.peer_id.clone()) />
+                    <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() beacon=self.beacon.clone() bans=self.bans.clone() mods=self.mods.clone() />
+                </div>
             </div>
         }
-    }
-}
-
-impl Live {
-    /// Callback when Ethereum Name Service resolve name to beacon Cid.
-    fn on_name_resolved(&mut self, res: Result<Cid>) -> bool {
-        let cid = match res {
-            Ok(cid) => cid,
-            Err(e) => {
-                ConsoleService::error(&format!("{:?}", e));
-                return false;
-            }
-        };
-
-        if let Some(beacon_cid) = self.beacon_cid.as_ref() {
-            if *beacon_cid == cid {
-                return false;
-            }
-        }
-
-        let cb = self.link.callback_once(Msg::Beacon);
-        let client = self.ipfs.clone();
-
-        spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Name Update");
-
-        self.storage.set_local_beacon(&ENS_NAME, &cid);
-
-        self.beacon_cid = Some(cid);
-
-        false
-    }
-
-    /// Callback when IPFS dag get return beacon node.
-    fn on_beacon_update(&mut self, res: Result<Beacon>) -> bool {
-        let beacon = match res {
-            Ok(b) => b,
-            Err(e) => {
-                ConsoleService::error(&format!("{:?}", e));
-                return false;
-            }
-        };
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Beacon Update");
-
-        self.state = DisplayState::Beacon(beacon);
-
-        true
     }
 }

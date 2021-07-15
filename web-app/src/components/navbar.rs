@@ -31,11 +31,11 @@ impl Component for Navbar {
                     <Anchor route=AppRoute::Home classes="navbar_tab">
                         <div>{"Home"}</div>
                     </Anchor>
+                    <Anchor route=AppRoute::Feed classes="navbar_tab">
+                        <div>{"Content Feed"}</div>
+                    </Anchor>
                     <Anchor route=AppRoute::Live classes="navbar_tab">
                         <div>{"Live"}</div>
-                    </Anchor>
-                    <Anchor route=AppRoute::Videos classes="navbar_tab">
-                        <div>{"Videos"}</div>
                     </Anchor>
                     <Anchor route=AppRoute::Settings classes="navbar_tab">
                         <div>{"Settings"}</div>
