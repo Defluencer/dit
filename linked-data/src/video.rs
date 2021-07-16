@@ -11,20 +11,20 @@ use cid::Cid;
 /// Recursive pin.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct VideoMetadata {
-    /// Title of this video.
-    pub title: String,
+    /// Timestamp at the time of publication in Unix time.
+    pub timestamp: u64,
 
     /// Duration in seconds.
     pub duration: f64,
 
-    /// Link to Raw node of thumbnail image.
-    pub image: IPLDLink,
-
     /// Link to TimecodeNode.
     pub video: IPLDLink,
 
-    /// Timestamp at the time of publication in Unix time.
-    pub timestamp: u64,
+    /// Link to Raw node of thumbnail image.
+    pub image: IPLDLink,
+
+    /// Title of this video.
+    pub title: String,
 }
 
 impl VideoMetadata {

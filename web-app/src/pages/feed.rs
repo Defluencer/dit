@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::components::{Navbar, VideoThumbnail};
+use crate::components::{Navbar, Thumbnail};
 use crate::utils::{IpfsService, LocalStorage};
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
@@ -44,7 +44,7 @@ impl Component for ContentFeed {
                 {
                     for self.feed.content.iter().rev().map(|ipld| {
                         html! {
-                            <VideoThumbnail ipfs=self.ipfs.clone()  metadata_cid=ipld.link />
+                            <Thumbnail ipfs=self.ipfs.clone()  metadata_cid=ipld.link />
                         }
                     }
                     )
