@@ -1,12 +1,14 @@
 mod ema;
 mod ipfs;
 mod local_storage;
+mod markdown;
 mod web3;
 
 pub use self::web3::Web3Service;
 pub use ema::ExponentialMovingAverage;
 pub use ipfs::IpfsService;
 pub use local_storage::LocalStorage;
+pub use markdown::render_markdown;
 
 /// Translate total number of seconds to timecode.
 pub fn seconds_to_timecode(seconds: f64) -> (u8, u8, u8) {

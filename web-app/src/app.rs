@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::pages::{ContentFeed, Home, Live, Settings, Video};
+use crate::pages::{Blog, ContentFeed, Home, Live, Settings, Video};
 use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use wasm_bindgen_futures::spawn_local;
@@ -22,6 +22,9 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub enum AppRoute {
     #[to = "/#/video/{cid}"]
     Video(Cid),
+
+    #[to = "/#/weblog/{cid}"]
+    Blog(Cid),
 
     #[to = "/#/settings"]
     Settings,
@@ -134,6 +137,7 @@ impl Component for App {
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
                             AppRoute::Video(cid) => html! { <Video ipfs=ipfs.clone() metadata_cid=cid /> },
+                            AppRoute::Blog(cid) => html! { <Blog ipfs=ipfs.clone() metadata_cid=cid /> },
                             AppRoute::Settings => html! { <Settings storage=storage.clone() /> },
                             AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() beacon=beacon.clone() bans=bans.clone() mods=mods.clone() /> },
                             AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() feed=feed.clone() /> },

@@ -107,7 +107,7 @@ impl Thumbnail {
         html! {
             <div class="thumbnail">
                 <Anchor route=AppRoute::Video(self.props.metadata_cid) classes="thumbnail_link">
-                    <div class="video_thumbnail_title"> { metadata.title.clone() } </div>
+                    <div class="video_thumbnail_title"> { &metadata.title } </div>
                     <div class="video_thumbnail_image">
                         <img src=format!("ipfs://{}", metadata.image.link.to_string()) alt="This image require IPFS native browser" />
                     </div>
@@ -117,16 +117,23 @@ impl Thumbnail {
         }
     }
 
-    fn render_blog(&self, _metadata: &FullPost) -> Html {
+    fn render_blog(&self, metadata: &FullPost) -> Html {
         html! {
             <div class="thumbnail">
+                <Anchor route=AppRoute::Blog(self.props.metadata_cid) classes="thumbnail_link">
+                    <div class="post_thumbnail_title"> { &metadata.title } </div>
+                    <div class="post_thumbnail_image">
+                        <img src=format!("ipfs://{}", metadata.image.link.to_string()) alt="This image require IPFS native browser" />
+                    </div>
+                </Anchor>
             </div>
         }
     }
 
-    fn render_statement(&self, _metadata: &MicroPost) -> Html {
+    fn render_statement(&self, metadata: &MicroPost) -> Html {
         html! {
             <div class="thumbnail">
+                <div class="statement_text"> { &metadata.content } </div>
             </div>
         }
     }

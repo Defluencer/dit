@@ -56,7 +56,7 @@ pub struct VideoPlayer {
     link: ComponentLink<Self>,
 
     ipfs: IpfsService,
-    metadata: Option<VideoMetadata>,
+    metadata: Option<Rc<VideoMetadata>>,
     live_stream: Option<LiveStream>,
 
     media_element: Option<HtmlMediaElement>,
@@ -91,7 +91,7 @@ pub enum Msg {
 #[derive(Clone, Properties)]
 pub struct Props {
     pub ipfs: IpfsService,
-    pub metadata: Option<VideoMetadata>,
+    pub metadata: Option<Rc<VideoMetadata>>,
     pub beacon: Option<Rc<Beacon>>,
 }
 
