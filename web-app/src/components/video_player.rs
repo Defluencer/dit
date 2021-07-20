@@ -4,23 +4,24 @@ use std::str;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::utils::ema::ExponentialMovingAverage;
-use crate::utils::ipfs::{IpfsService, PubsubSubResponse};
+use crate::utils::seconds_to_timecode;
+use crate::utils::{ExponentialMovingAverage, IpfsService};
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 
-use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url, Window};
+use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url};
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
+use linked_data::beacon::Beacon;
 use linked_data::video::{SetupNode, Track, VideoMetadata};
 
 use cid::Cid;
 
-use reqwest::Error;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const FORWARD_BUFFER_LENGTH: f64 = 16.0;
 const BACK_BUFFER_LENGTH: f64 = 8.0;
@@ -44,7 +45,7 @@ struct MediaBuffers {
 }
 
 struct LiveStream {
-    streamer_peer_id: String,
+    beacon: Rc<Beacon>,
 
     buffer: VecDeque<Cid>,
 
@@ -55,10 +56,9 @@ pub struct VideoPlayer {
     link: ComponentLink<Self>,
 
     ipfs: IpfsService,
-    metadata: Option<VideoMetadata>,
+    metadata: Option<Rc<VideoMetadata>>,
     live_stream: Option<LiveStream>,
 
-    window: Window,
     media_element: Option<HtmlMediaElement>,
     media_source: MediaSource,
     media_buffers: Option<MediaBuffers>,
@@ -82,18 +82,17 @@ pub enum Msg {
     Seeking,
     UpdateEnd,
     Timeout,
-    SetupNode(Result<SetupNode, Error>),
-    Append(Result<(Vec<u8>, Vec<u8>), Error>),
-    AppendVideo(Result<Vec<u8>, Error>),
-    PubSub(Result<PubsubSubResponse, std::io::Error>),
+    SetupNode(Result<SetupNode>),
+    Append(Result<(Vec<u8>, Vec<u8>)>),
+    AppendVideo(Result<Vec<u8>>),
+    PubSub(Result<(String, Vec<u8>)>),
 }
 
 #[derive(Clone, Properties)]
 pub struct Props {
     pub ipfs: IpfsService,
-    pub metadata: Option<VideoMetadata>,
-    pub topic: Option<String>,
-    pub streamer_peer_id: Option<String>,
+    pub metadata: Option<Rc<VideoMetadata>>,
+    pub beacon: Option<Rc<Beacon>>,
 }
 
 impl Component for VideoPlayer {
@@ -104,18 +103,26 @@ impl Component for VideoPlayer {
         let Props {
             ipfs,
             metadata,
-            topic,
-            streamer_peer_id,
+            beacon,
         } = props;
 
-        let window = web_sys::window().expect("Can't get window");
+        let ema = ExponentialMovingAverage::new();
 
-        let ema = ExponentialMovingAverage::new(&window);
+        let media_source = match MediaSource::new() {
+            Ok(media_source) => media_source,
+            Err(e) => {
+                ConsoleService::error(&format!("{:#?}", e));
+                std::process::abort();
+            }
+        };
 
-        let media_source = MediaSource::new().expect("Can't create media source");
-
-        let object_url = Url::create_object_url_with_source(&media_source)
-            .expect("Can't create url from source");
+        let object_url = match Url::create_object_url_with_source(&media_source) {
+            Ok(object_url) => object_url,
+            Err(e) => {
+                ConsoleService::error(&format!("{:#?}", e));
+                std::process::abort();
+            }
+        };
 
         let mut poster_link = String::from("ipfs://");
 
@@ -131,9 +138,10 @@ impl Component for VideoPlayer {
         media_source.set_onsourceopen(Some(closure.as_ref().unchecked_ref()));
         let source_open_closure = Some(closure);
 
-        let live_stream = match topic {
-            Some(topic) => {
+        let live_stream = match beacon {
+            Some(beacon) => {
                 let client = ipfs.clone();
+                let topic = beacon.topics.live_video.clone();
                 let cb = link.callback(Msg::PubSub);
                 let drop_sig = Rc::from(AtomicBool::new(false));
                 let sig = drop_sig.clone();
@@ -141,7 +149,7 @@ impl Component for VideoPlayer {
                 spawn_local(async move { client.pubsub_sub(topic, cb, sig).await });
 
                 Some(LiveStream {
-                    streamer_peer_id: streamer_peer_id.unwrap(),
+                    beacon,
                     buffer: VecDeque::with_capacity(5),
                     drop_sig,
                 })
@@ -156,7 +164,6 @@ impl Component for VideoPlayer {
             metadata,
             live_stream,
 
-            window,
             media_element: None,
             media_source,
             media_buffers: None,
@@ -196,19 +203,46 @@ impl Component for VideoPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video class="video_player" id="video_player" autoplay=true controls=true poster=self.poster_link />
+            <video class="video_player" id="video_player" autoplay="true" controls=true poster=self.poster_link.clone() />
         }
     }
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            let document = self.window.document().expect("Can't get document");
+            let window = match web_sys::window() {
+                Some(window) => window,
+                None => {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::error("No Window Object");
+                    return;
+                }
+            };
 
-            let media_element: HtmlMediaElement = document
-                .get_element_by_id("video_player")
-                .expect("No element with this Id")
-                .dyn_into()
-                .expect("Not Media Element");
+            let document = match window.document() {
+                Some(document) => document,
+                None => {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::error("No Document Object");
+                    return;
+                }
+            };
+
+            let element = match document.get_element_by_id("video_player") {
+                Some(document) => document,
+                None => {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::error("No Element by Id");
+                    return;
+                }
+            };
+
+            let media_element: HtmlMediaElement = match element.dyn_into() {
+                Ok(document) => document,
+                Err(e) => {
+                    ConsoleService::error(&format!("{:#?}", e));
+                    return;
+                }
+            };
 
             media_element.set_src(&self.object_url);
 
@@ -235,8 +269,17 @@ impl Component for VideoPlayer {
             live.drop_sig.store(true, Ordering::Relaxed);
         }
 
+        let window = match web_sys::window() {
+            Some(window) => window,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Window Object");
+                return;
+            }
+        };
+
         if self.handle != 0 {
-            self.window.clear_timeout_with_handle(self.handle);
+            window.clear_timeout_with_handle(self.handle);
         }
     }
 }
@@ -262,7 +305,7 @@ impl VideoPlayer {
     }
 
     /// Callback when GossipSub receive an update.
-    fn on_pubsub_update(&mut self, result: Result<PubsubSubResponse, std::io::Error>) {
+    fn on_pubsub_update(&mut self, result: Result<(String, Vec<u8>)>) {
         let res = match result {
             Ok(res) => res,
             Err(e) => {
@@ -274,14 +317,21 @@ impl VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info("PubSub Message Received");
 
-        let PubsubSubResponse { from, data } = res;
+        let (from, data) = res;
 
-        let live = self.live_stream.as_mut().unwrap();
+        let live = match self.live_stream.as_mut() {
+            Some(live) => live,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Live Stream");
+                return;
+            }
+        };
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
 
-        if from != live.streamer_peer_id {
+        if from != live.beacon.peer_id {
             #[cfg(debug_assertions)]
             ConsoleService::warn("Unauthorized Sender");
             return;
@@ -290,7 +340,6 @@ impl VideoPlayer {
         let data = match str::from_utf8(&data) {
             Ok(data) => data,
             Err(e) => {
-                #[cfg(debug_assertions)]
                 ConsoleService::error(&format!("{:?}", e));
                 return;
             }
@@ -302,7 +351,6 @@ impl VideoPlayer {
         let cid = match Cid::from_str(data) {
             Ok(cid) => cid,
             Err(e) => {
-                #[cfg(debug_assertions)]
                 ConsoleService::error(&format!("{:?}", e));
                 return;
             }
@@ -367,12 +415,19 @@ impl VideoPlayer {
 
         let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
 
-        match self
-            .window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                closure.as_ref().unchecked_ref(),
-                1000,
-            ) {
+        let window = match web_sys::window() {
+            Some(window) => window,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Window Object");
+                return;
+            }
+        };
+
+        match window.set_timeout_with_callback_and_timeout_and_arguments_0(
+            closure.as_ref().unchecked_ref(),
+            1000,
+        ) {
             Ok(handle) => self.handle = handle,
             Err(e) => ConsoleService::error(&format!("{:?}", e)),
         }
@@ -381,7 +436,7 @@ impl VideoPlayer {
     }
 
     /// Create source buffer then load initialization segment.
-    fn add_source_buffer(&mut self, setup_node: Result<SetupNode, Error>) {
+    fn add_source_buffer(&mut self, setup_node: Result<SetupNode>) {
         let setup_node = match setup_node {
             Ok(n) => n,
             Err(e) => {
@@ -446,9 +501,27 @@ impl VideoPlayer {
             }
         }
 
+        let audio = match audio_buffer {
+            Some(audio) => audio,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Audio Buffer");
+                return;
+            }
+        };
+
+        let video = match video_buffer {
+            Some(video) => video,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Video Buffer");
+                return;
+            }
+        };
+
         let media_buffer = MediaBuffers {
-            audio: audio_buffer.unwrap(),
-            video: video_buffer.unwrap(),
+            audio,
+            video,
             tracks: setup_node.tracks,
         };
 
@@ -460,14 +533,23 @@ impl VideoPlayer {
 
         self.update_end_closure = Some(closure);
 
-        let audio_path = media_buffer.tracks[0]
-            .initialization_segment
-            .link
-            .to_string();
-        let video_path = media_buffer.tracks[1]
-            .initialization_segment
-            .link
-            .to_string();
+        let audio_path = match media_buffer.tracks.get(0) {
+            Some(track) => track.initialization_segment.link.to_string(),
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Track Index 0");
+                return;
+            }
+        };
+
+        let video_path = match media_buffer.tracks.get(1) {
+            Some(track) => track.initialization_segment.link.to_string(),
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Track Index 1");
+                return;
+            }
+        };
 
         self.media_buffers = Some(media_buffer);
         self.state = MachineState::Load;
@@ -489,20 +571,41 @@ impl VideoPlayer {
 
     /// Try get cid from live buffer then fetch video data from ipfs.
     fn load_live_segment(&mut self) {
-        let live = self.live_stream.as_mut().unwrap();
+        let live = match self.live_stream.as_mut() {
+            Some(live) => live,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Live Stream");
+                return;
+            }
+        };
 
-        let cid = match live.buffer.pop_front() {
-            Some(cid) => cid,
+        let cid_string = match live.buffer.pop_front() {
+            Some(cid) => cid.to_string(),
             None => return self.set_timeout(),
         };
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Loading Live Media Segments");
 
-        let track_name = &self.media_buffers.as_ref().unwrap().tracks[self.level].name;
+        let track_name = match self.media_buffers.as_ref() {
+            Some(buf) => match buf.tracks.get(self.level) {
+                Some(track) => &track.name,
+                None => {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::error("No Track");
+                    return;
+                }
+            },
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Media Buffers");
+                return;
+            }
+        };
 
-        let audio_path = format!("{}/track/audio", cid.to_string());
-        let video_path = format!("{}/track/{}", cid.to_string(), track_name);
+        let audio_path = format!("{}/track/audio", cid_string);
+        let video_path = format!("{}/track/{}", cid_string, track_name);
 
         self.state = MachineState::AdaptativeBitrate;
         self.ema.start_timer();
@@ -515,10 +618,14 @@ impl VideoPlayer {
 
     /// Get CID from timecode then fetch video data from ipfs.
     fn load_vod_segment(&mut self) {
-        let metadata = self.metadata.as_ref().unwrap();
-        let buffers = self.media_buffers.as_ref().unwrap();
-
-        let track_name = &buffers.tracks[self.level].name;
+        let buffers = match self.media_buffers.as_ref() {
+            Some(buf) => buf,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Media Buffers");
+                return;
+            }
+        };
 
         let time_ranges = match buffers.video.buffered() {
             Ok(tm) => tm,
@@ -563,21 +670,32 @@ impl VideoPlayer {
             hours, minutes, seconds
         ));
 
+        let cid_string = match self.metadata.as_ref() {
+            Some(metadata) => metadata.video.link.to_string(),
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Metadata");
+                return;
+            }
+        };
+
         let audio_path = format!(
             "{}/time/hour/{}/minute/{}/second/{}/video/track/audio",
-            metadata.video.link.to_string(),
-            hours,
-            minutes,
-            seconds,
+            cid_string, hours, minutes, seconds,
         );
+
+        let track_name = match buffers.tracks.get(self.level) {
+            Some(track) => &track.name,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Track");
+                return;
+            }
+        };
 
         let video_path = format!(
             "{}/time/hour/{}/minute/{}/second/{}/video/track/{}",
-            metadata.video.link.to_string(),
-            hours,
-            minutes,
-            seconds,
-            track_name,
+            cid_string, hours, minutes, seconds, track_name,
         );
 
         self.state = MachineState::AdaptativeBitrate;
@@ -591,9 +709,23 @@ impl VideoPlayer {
 
     /// Recalculate download speed then set quality level.
     fn check_abr(&mut self) {
-        let buffers = self.media_buffers.as_ref().unwrap();
+        let buffers = match self.media_buffers.as_ref() {
+            Some(buf) => buf,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Media Buffers");
+                return;
+            }
+        };
 
-        let bandwidth = buffers.tracks[self.level].bandwidth as f64;
+        let bandwidth = match buffers.tracks.get(self.level) {
+            Some(track) => track.bandwidth as f64,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Track");
+                return;
+            }
+        };
 
         let avg_bitrate = match self.ema.recalculate_average_speed(bandwidth) {
             Some(at) => at,
@@ -624,7 +756,14 @@ impl VideoPlayer {
 
     /// Check buffers and current time then trigger new action.
     fn check_status(&mut self) {
-        let buffers = self.media_buffers.as_ref().unwrap();
+        let buffers = match self.media_buffers.as_ref() {
+            Some(buf) => buf,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Media Buffers");
+                return;
+            }
+        };
 
         let time_ranges = match buffers.video.buffered() {
             Ok(tm) => tm,
@@ -671,10 +810,14 @@ impl VideoPlayer {
             #[cfg(debug_assertions)]
             ConsoleService::info(&format!("Forward To {}s", new_time));
 
-            self.media_element
-                .as_ref()
-                .unwrap()
-                .set_current_time(new_time);
+            match self.media_element.as_ref() {
+                Some(media_element) => media_element.set_current_time(new_time),
+                None => {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::error("No Media Element");
+                    return;
+                }
+            }
         }
 
         if current_time > buff_start + BACK_BUFFER_LENGTH {
@@ -683,16 +826,18 @@ impl VideoPlayer {
             return self.flush_buffer();
         }
 
-        if self.metadata.is_some() && buff_end >= self.metadata.as_ref().unwrap().duration {
-            #[cfg(debug_assertions)]
-            ConsoleService::info("End Of Video");
-            return;
-        }
+        if let Some(metadata) = self.metadata.as_ref() {
+            if buff_end >= metadata.duration {
+                #[cfg(debug_assertions)]
+                ConsoleService::info("End Of Video");
+                return;
+            }
 
-        if self.metadata.is_some() && current_time + FORWARD_BUFFER_LENGTH < buff_end {
-            #[cfg(debug_assertions)]
-            ConsoleService::info("Forward Buffer Full");
-            return self.set_timeout();
+            if current_time + FORWARD_BUFFER_LENGTH < buff_end {
+                #[cfg(debug_assertions)]
+                ConsoleService::info("Forward Buffer Full");
+                return self.set_timeout();
+            }
         }
 
         self.load_segment()
@@ -703,7 +848,14 @@ impl VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info("Flushing Buffer");
 
-        let buffers = self.media_buffers.as_ref().unwrap();
+        let buffers = match self.media_buffers.as_ref() {
+            Some(buf) => buf,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Media Buffers");
+                return;
+            }
+        };
 
         let time_ranges = match buffers.video.buffered() {
             Ok(tm) => tm,
@@ -731,7 +883,7 @@ impl VideoPlayer {
             Some(media_element) => media_element.current_time(),
             None => {
                 #[cfg(debug_assertions)]
-                ConsoleService::info("No Media Element");
+                ConsoleService::error("No Media Element");
                 return;
             }
         };
@@ -761,11 +913,22 @@ impl VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info("Switching Quality");
 
-        let buffers = self.media_buffers.as_ref().unwrap();
+        let buffers = match self.media_buffers.as_ref() {
+            Some(buf) => buf,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Media Buffers");
+                return;
+            }
+        };
 
         let track = match buffers.tracks.get(self.level) {
             Some(track) => track,
-            None => return,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Track");
+                return;
+            }
         };
 
         if let Err(e) = buffers.video.change_type(&track.codec) {
@@ -790,7 +953,7 @@ impl VideoPlayer {
     }
 
     /// Append audio and video segments to the buffers.
-    fn append_buffers(&self, response: Result<(Vec<u8>, Vec<u8>), Error>) {
+    fn append_buffers(&self, response: Result<(Vec<u8>, Vec<u8>)>) {
         let (mut aud_seg, mut vid_seg) = match response {
             Ok((a, v)) => (a, v),
             Err(e) => {
@@ -799,7 +962,14 @@ impl VideoPlayer {
             }
         };
 
-        let buffers = self.media_buffers.as_ref().unwrap();
+        let buffers = match self.media_buffers.as_ref() {
+            Some(buf) => buf,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Media Buffers");
+                return;
+            }
+        };
 
         if let Err(e) = buffers.audio.append_buffer_with_u8_array(&mut aud_seg) {
             ConsoleService::warn(&format!("{:#?}", e));
@@ -811,7 +981,7 @@ impl VideoPlayer {
     }
 
     /// Append video segments to the buffer.
-    fn append_video_buffer(&self, response: Result<Vec<u8>, Error>) {
+    fn append_video_buffer(&self, response: Result<Vec<u8>>) {
         let mut vid_seg = match response {
             Ok(d) => d,
             Err(e) => {
@@ -820,25 +990,17 @@ impl VideoPlayer {
             }
         };
 
-        let buffers = self.media_buffers.as_ref().unwrap();
+        let buffers = match self.media_buffers.as_ref() {
+            Some(buf) => buf,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Media Buffers");
+                return;
+            }
+        };
 
         if let Err(e) = buffers.video.append_buffer_with_u8_array(&mut vid_seg) {
             ConsoleService::warn(&format!("{:#?}", e));
         }
     }
-}
-
-/// Translate total number of seconds to timecode.
-pub fn seconds_to_timecode(seconds: f64) -> (u8, u8, u8) {
-    let rem_seconds = seconds.round();
-
-    let hours = (rem_seconds / 3600.0) as u8;
-    let rem_seconds = rem_seconds.rem_euclid(3600.0);
-
-    let minutes = (rem_seconds / 60.0) as u8;
-    let rem_seconds = rem_seconds.rem_euclid(60.0);
-
-    let seconds = rem_seconds as u8;
-
-    (hours, minutes, seconds)
 }

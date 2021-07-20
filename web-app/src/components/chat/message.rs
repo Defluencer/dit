@@ -31,7 +31,7 @@ impl MessageData {
     fn render(&self) -> Html {
         html! {
             <div class="chat_message">
-                <img src=self.img_data height="32" width="32" />
+                <img src=self.img_data.to_string() height="32" width="32" />
                 <h3>{ &self.sender_name }</h3>
                 <p>{ &self.message }</p>
             </div>

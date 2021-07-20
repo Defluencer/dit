@@ -1,39 +1,37 @@
 use crate::components::Navbar;
+use crate::utils::LocalStorage;
 
-use web_sys::{HtmlInputElement, Storage, Window};
+use web_sys::HtmlInputElement;
 
 use wasm_bindgen::JsCast;
 
-use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
+use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::services::ConsoleService;
 use yew::ChangeData;
-
-use crate::utils::local_storage::{get_local_ipfs_addrs, get_local_storage, set_local_ipfs_addrs};
 
 pub struct Settings {
     link: ComponentLink<Self>,
 
-    window: Window,
-
-    storage: Option<Storage>,
+    storage: LocalStorage,
 }
 
 pub enum Msg {
     Addrs(ChangeData),
 }
 
+#[derive(Properties, Clone)]
+pub struct Props {
+    pub storage: LocalStorage,
+}
+
 impl Component for Settings {
     type Message = Msg;
-    type Properties = ();
+    type Properties = Props;
 
-    fn create(_props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let window = web_sys::window().expect("Can't get window");
-        let storage = get_local_storage(&window);
+    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let Props { storage } = props;
 
-        Self {
-            link,
-            window,
-            storage,
-        }
+        Self { link, storage }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -65,16 +63,43 @@ impl Component for Settings {
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            let document = self.window.document().expect("Can't get document");
+            let window = match web_sys::window() {
+                Some(window) => window,
+                None => {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::error("No Window Object");
+                    return;
+                }
+            };
 
-            let text_area: HtmlInputElement = document
-                .get_element_by_id("ipfs_addrs")
-                .expect("No element with this Id")
-                .dyn_into()
-                .expect("Not Input Element");
+            let document = match window.document() {
+                Some(document) => document,
+                None => {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::error("No Document Object");
+                    return;
+                }
+            };
 
-            if let Some(addrs) = get_local_ipfs_addrs(self.storage.as_ref()).as_ref() {
-                text_area.set_value(addrs);
+            let element = match document.get_element_by_id("ipfs_addrs") {
+                Some(document) => document,
+                None => {
+                    #[cfg(debug_assertions)]
+                    ConsoleService::error("No Element by Id");
+                    return;
+                }
+            };
+
+            let text_area: HtmlInputElement = match element.dyn_into() {
+                Ok(document) => document,
+                Err(e) => {
+                    ConsoleService::error(&format!("{:#?}", e));
+                    return;
+                }
+            };
+
+            if let Some(addrs) = self.storage.get_local_ipfs_addrs() {
+                text_area.set_value(&addrs);
             }
         }
     }
@@ -83,7 +108,7 @@ impl Component for Settings {
 impl Settings {
     fn addrs(&mut self, msg: ChangeData) -> bool {
         match msg {
-            ChangeData::Value(addrs) => set_local_ipfs_addrs(&addrs, self.storage.as_ref()),
+            ChangeData::Value(addrs) => self.storage.set_local_ipfs_addrs(&addrs),
             ChangeData::Select(_) => {}
             ChangeData::Files(_) => {}
         }

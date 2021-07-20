@@ -8,29 +8,29 @@ use cid::Cid;
 
 /// A micro blog post (Twitter-sytle).
 /// Direct pin.
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Clone, PartialEq)]
 pub struct MicroPost {
-    pub content: String,
-
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
+
+    pub content: String,
 }
 
 /// Metadata for a long blog post.
 /// Recursive pin.
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Clone, PartialEq)]
 pub struct FullPost {
-    /// The title of this blog post
-    pub title: String,
-
-    /// Link to thumbnail image.
-    pub image: IPLDLink,
+    /// Timestamp at the time of publication in Unix time.
+    pub timestamp: u64,
 
     /// Link to markdown file
     pub content: IPLDLink,
 
-    /// Timestamp at the time of publication in Unix time.
-    pub timestamp: u64,
+    /// Link to thumbnail image.
+    pub image: IPLDLink,
+
+    /// The title of this blog post
+    pub title: String,
 }
 
 impl FullPost {

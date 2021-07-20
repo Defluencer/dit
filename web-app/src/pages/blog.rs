@@ -1,6 +1,4 @@
-use std::rc::Rc;
-
-use crate::components::{Error, Loading, Navbar, VideoPlayer};
+use crate::components::{Error, Loading, Markdown, Navbar};
 use crate::utils::IpfsService;
 
 use wasm_bindgen_futures::spawn_local;
@@ -8,19 +6,20 @@ use wasm_bindgen_futures::spawn_local;
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
-use linked_data::video::VideoMetadata;
+use linked_data::blog::FullPost;
 
 use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+#[allow(clippy::large_enum_variant)]
 enum State {
     Loading,
-    Ready(Rc<VideoMetadata>),
+    Ready(FullPost),
     Error,
 }
 
-pub struct Video {
+pub struct Blog {
     ipfs: IpfsService,
     state: State,
 }
@@ -32,10 +31,10 @@ pub struct Props {
 }
 
 pub enum Msg {
-    Metadata(Result<VideoMetadata>),
+    Metadata(Result<FullPost>),
 }
 
-impl Component for Video {
+impl Component for Blog {
     type Message = Msg;
     type Properties = Props;
 
@@ -67,12 +66,12 @@ impl Component for Video {
 
     fn view(&self) -> Html {
         html! {
-            <div class="video_page">
+            <div class="blog_page">
             <Navbar />
             {
                 match &self.state {
                     State::Loading => html! { <Loading /> },
-                    State::Ready(md) => html! { <VideoPlayer ipfs=self.ipfs.clone() metadata=md.clone() /> },
+                    State::Ready(md) => self.render_blog(md),
                     State::Error => html! { <Error /> },
                 }
             }
@@ -81,10 +80,10 @@ impl Component for Video {
     }
 }
 
-impl Video {
-    fn update_metadata(&mut self, response: Result<VideoMetadata>) -> bool {
+impl Blog {
+    fn update_metadata(&mut self, response: Result<FullPost>) -> bool {
         self.state = match response {
-            Ok(md) => State::Ready(Rc::from(md)),
+            Ok(md) => State::Ready(md),
             Err(e) => {
                 ConsoleService::error(&format!("{:#?}", e));
                 State::Error
@@ -92,5 +91,19 @@ impl Video {
         };
 
         true
+    }
+
+    fn render_blog(&self, metadata: &FullPost) -> Html {
+        html! {
+            <div>
+                <div class="post_title"> { &metadata.title } </div>
+                <div class="post_image">
+                    <img src=format!("ipfs://{}", metadata.image.link.to_string()) alt="This image require IPFS native browser" />
+                </div>
+                <div class="post_content">
+                    <Markdown ipfs=self.ipfs.clone() markdown_cid=metadata.content.link />
+                </div>
+            </div>
+        }
     }
 }

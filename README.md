@@ -11,6 +11,7 @@ My goal is to build tools that allow anyone to become a defluencer (decentralize
 - Moderation tools.
 - Blog.
 - Multimedia content feed.
+- Comments (WIP)
 
 For more info -> [Linked Data](https://github.com/SionoiS/dit/blob/develop/linked-data/README.md)
 
@@ -20,12 +21,16 @@ Most features are fonctionnal but still require testing.
 - Live chat with ethereum address as identity and custom display names.
 - Ban chat users & appoint moderators.
 - Stream pre-recorded videos & past live streams with adaptative birate.
+- Display markdown file as blog post.
+- Multimedia content feed.
 
 For more info -> [Streamer CLI](https://github.com/SionoiS/dit/blob/develop/streamer-cli/README.md)
  & [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
 
+Live Demo -> Defluencer.eth on Ropsten test net.
+
 ## Libraries
-Easy to use javascript librairies are planned.
+Easy to use javascript libs are planned.
 
 ## License
 Licensed under either of
