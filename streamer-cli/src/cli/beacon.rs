@@ -9,10 +9,13 @@ use ipfs_api::IpfsClient;
 use ipfs_api::KeyType;
 
 use linked_data::beacon::Topics;
+use linked_data::comments::CommentsAnchor;
 use linked_data::feed::Feed;
 use linked_data::moderation::{Bans, Moderators};
 
 use structopt::StructOpt;
+
+const COMMENTS_KEY: &str = "comments";
 
 #[derive(Debug, StructOpt)]
 pub struct Beacon {
@@ -35,9 +38,10 @@ pub struct Create {
     /// GossipSub topic for video broadcasting.
     #[structopt(long)]
     videos: String,
-    // GossipSub topic for comments.
-    //#[structopt(long)]
-    //comments: String,
+
+    /// GossipSub topic for comments.
+    #[structopt(long)]
+    comments: String,
 }
 
 pub async fn beacon_cli(cli: Beacon) {
@@ -59,7 +63,8 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let mods = create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &mut key_list).await?;
     let content_feed =
         create_ipns_link::<Feed>(&ipfs, "Content Feed", FEED_KEY, &mut key_list).await?;
-    //let comments = create_ipns_link(&ipfs, "Comments", COMMENT_KEY, &mut key_list).await?;
+    let comments =
+        create_ipns_link::<CommentsAnchor>(&ipfs, "Comments", COMMENTS_KEY, &mut key_list).await?;
 
     println!("Creating Beacon...");
 
@@ -79,7 +84,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let topics = Topics {
         live_video: config.video.pubsub_topic,
         live_chat: config.chat.topic,
-        //comments: args.comments,
+        comments: args.comments,
     };
 
     let res = ipfs.id(None).await?;
@@ -94,7 +99,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
         bans,
         mods,
         content_feed,
-        //comments,
+        comments,
     };
 
     let cid = ipfs_dag_put_node_async(&ipfs, &beacon).await?;

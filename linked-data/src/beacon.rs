@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct Topics {
     pub live_video: String,
     pub live_chat: String,
-    //pub comments: String,
+    pub comments: String,
 }
 
 /// Mostly static links to content.
@@ -26,6 +26,6 @@ pub struct Beacon {
     /// Link to all content metadata.
     pub content_feed: String, //IPNS path -> "/ipns/<hash>"
 
-                              // Link to all archived comments.
-                              //pub comments: String, //IPNS path -> "/ipns/<hash>"
+    // Link to all archived comments.
+    pub comments: String, //IPNS path -> "/ipns/<hash>"
 }

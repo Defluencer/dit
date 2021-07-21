@@ -1,24 +1,30 @@
-use std::collections::HashMap;
-
 use crate::IPLDLink;
 
 use serde::{Deserialize, Serialize};
 
-// Comments are linked to content, if content change the comments won't follow to the new version.
+/// List of all comment lists.
+/// Direct Pin.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct CommentsAnchor {
+    /// In sync with content feed. Indexes are the same.
+    pub links: Vec<IPLDLink>,
+}
 
-/// List of all comments.
+/// List of comments of some content.
+/// Recursive Pin.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Comments {
-    /// The keys are links to content.
-    /// The values are links to conversation tree leaf CIDs.
-    pub comments: HashMap<IPLDLink, Vec<IPLDLink>>,
+    comments: Vec<IPLDLink>,
 }
 
 /// A comment signaling node. Sould always be crypto-signed.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct CommentNode {
-    /// Link to the original content or another comment.
+pub struct CommentLink {
+    /// Link to the original content.
     pub origin: IPLDLink,
+
+    /// Link to the comment being replied to.
+    pub reply: Option<IPLDLink>,
 
     /// Link to the comment content itself.
     pub comment: IPLDLink,
