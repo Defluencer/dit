@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// Content feed in chronological order.
 /// Direct pin.
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
-pub struct Feed {
+pub struct FeedAnchor {
     /// In sync with comments. Indexes are the same.
     pub content: Vec<IPLDLink>,
 }

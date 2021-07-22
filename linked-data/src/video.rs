@@ -31,7 +31,7 @@ impl VideoMetadata {
     pub fn create(title: String, duration: f64, image: Cid, video: Cid) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("SystemTime before UNIX EPOCH!")
+            .expect("SystemTime after UNIX EPOCH!")
             .as_secs();
 
         Self {
@@ -68,7 +68,7 @@ impl VideoMetadata {
 
         self.timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("SystemTime before UNIX EPOCH!")
+            .expect("SystemTime after UNIX EPOCH!")
             .as_secs();
     }
 }

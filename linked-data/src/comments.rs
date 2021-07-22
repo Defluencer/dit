@@ -6,18 +6,19 @@ use serde::{Deserialize, Serialize};
 /// Direct Pin.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct CommentsAnchor {
-    /// In sync with content feed. Indexes are the same.
-    pub links: Vec<IPLDLink>,
+    /// Links to list of comments.
+    pub links: Vec<IPLDLink>, // In sync with content feed. Indexes are the same.
 }
 
 /// List of comments of some content.
 /// Recursive Pin.
-#[derive(Serialize, Deserialize, Debug)]
+/// Must be unpinned when updating the content otherwise it will recursive pin the old content.
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Comments {
-    comments: Vec<IPLDLink>,
+    list: Vec<IPLDLink>,
 }
 
-/// A comment signaling node. Sould always be crypto-signed.
+/// A comment signaling node. Must be crypto-signed.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CommentLink {
     /// Link to the original content.

@@ -1,4 +1,4 @@
-use crate::cli::content::FEED_KEY;
+use crate::cli::content::{COMMENTS_KEY, FEED_KEY};
 use crate::cli::moderation::{BANS_KEY, MODS_KEY};
 use crate::utils::config::Configuration;
 use crate::utils::dag_nodes::{ipfs_dag_put_node_async, search_keypairs, update_ipns};
@@ -10,12 +10,10 @@ use ipfs_api::KeyType;
 
 use linked_data::beacon::Topics;
 use linked_data::comments::CommentsAnchor;
-use linked_data::feed::Feed;
+use linked_data::feed::FeedAnchor;
 use linked_data::moderation::{Bans, Moderators};
 
 use structopt::StructOpt;
-
-const COMMENTS_KEY: &str = "comments";
 
 #[derive(Debug, StructOpt)]
 pub struct Beacon {
@@ -50,27 +48,30 @@ pub async fn beacon_cli(cli: Beacon) {
     };
 
     if let Err(e) = res {
-        eprintln!("❗ IPFS: {}", e);
+        eprintln!("❗ IPFS: {:#?}", e);
     }
 }
 
 async fn create_beacon(args: Create) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let mut key_list = ipfs.key_list().await?;
+    let key_list = ipfs.key_list().await?;
 
-    let bans = create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &mut key_list).await?;
-    let mods = create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &mut key_list).await?;
-    let content_feed =
-        create_ipns_link::<Feed>(&ipfs, "Content Feed", FEED_KEY, &mut key_list).await?;
-    let comments =
-        create_ipns_link::<CommentsAnchor>(&ipfs, "Comments", COMMENTS_KEY, &mut key_list).await?;
+    let (bans, mods, content_feed, comments) = tokio::try_join!(
+        create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &key_list),
+        create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &key_list),
+        create_ipns_link::<FeedAnchor>(&ipfs, "Content Feed", FEED_KEY, &key_list),
+        create_ipns_link::<CommentsAnchor>(&ipfs, "Comments", COMMENTS_KEY, &key_list)
+    )?;
 
     println!("Creating Beacon...");
 
     let mut config = match Configuration::from_file().await {
         Ok(conf) => conf,
-        Err(_) => Configuration::default(),
+        Err(e) => {
+            eprintln!("❗ IO: {:#?}", e);
+            Configuration::default()
+        }
     };
 
     config.chat.topic = args.chat;
@@ -106,7 +107,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     ipfs.pin_add(&cid.to_string(), false).await?;
 
-    println!("✅ Beacon Created => ipfs://{}", &cid.to_string());
+    println!("✅ Beacon Created => {:?}", &cid);
 
     Ok(())
 }
@@ -115,19 +116,19 @@ async fn create_ipns_link<T>(
     ipfs: &IpfsClient,
     name: &str,
     key: &str,
-    key_list: &mut ipfs_api::response::KeyPairList,
+    key_list: &ipfs_api::response::KeyPairList,
 ) -> Result<String, Error>
 where
     T: Default + Serialize,
 {
     let mut link = match search_keypairs(key, key_list) {
-        Some(kp) => kp.id,
+        Some(kp) => kp.id.to_owned(),
         None => {
-            println!("Generating Key...");
+            println!("Generating {} IPNS Key...", name);
 
             let ipns_link = generate_key(ipfs, key).await?;
 
-            println!("Updating IPNS...");
+            println!("Updating {} IPNS Link...", name);
 
             update_ipns(ipfs, &key, &T::default()).await?;
 

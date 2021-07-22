@@ -5,13 +5,13 @@ use crate::utils::{IpfsService, LocalStorage};
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use linked_data::feed::Feed;
+use linked_data::feed::FeedAnchor;
 
 #[derive(Properties, Clone)]
 pub struct ContentFeed {
     pub ipfs: IpfsService,
     pub storage: LocalStorage,
-    pub feed: Rc<Feed>,
+    pub feed: Rc<FeedAnchor>,
 }
 
 impl Component for ContentFeed {

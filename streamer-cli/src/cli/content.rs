@@ -1,14 +1,16 @@
 use crate::utils::dag_nodes::{
-    ipfs_dag_get_node_async, ipfs_dag_put_node_async, search_keypairs, update_ipns,
+    get_from_ipns, ipfs_dag_get_node_async, ipfs_dag_put_node_async, update_ipns,
 };
 
-use std::convert::TryFrom;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
 
 use linked_data::blog::{FullPost, MicroPost};
-use linked_data::feed::Feed;
+use linked_data::comments::{Comments, CommentsAnchor};
+use linked_data::feed::FeedAnchor;
 use linked_data::video::{DayNode, HourNode, MinuteNode, VideoMetadata};
 
 use cid::Cid;
@@ -16,6 +18,7 @@ use cid::Cid;
 use structopt::StructOpt;
 
 pub const FEED_KEY: &str = "feed";
+pub const COMMENTS_KEY: &str = "comments";
 
 #[derive(Debug, StructOpt)]
 pub struct ContentFeed {
@@ -51,7 +54,7 @@ pub async fn content_feed_cli(cli: ContentFeed) {
     };
 
     if let Err(e) = res {
-        eprintln!("❗ IPFS: {}", e);
+        eprintln!("❗ IPFS: {:#?}", e);
     }
 }
 
@@ -65,20 +68,6 @@ enum AddContent {
 
     /// Create new video post.
     Video(AddVideo),
-}
-
-async fn add_content_to_feed(ipfs: &IpfsClient, new_cid: Cid) -> Result<usize, Error> {
-    println!("Updating Content Feed...");
-
-    let mut feed = get_feed(ipfs).await?;
-
-    ipfs.pin_add(&new_cid.to_string(), true).await?;
-
-    feed.content.push(new_cid.into());
-
-    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
-
-    Ok(feed.content.len() - 1)
 }
 
 #[derive(Debug, StructOpt)]
@@ -95,13 +84,9 @@ async fn add_micro_blog(command: AddMicroPost) -> Result<(), Error> {
 
     let metadata = MicroPost::create(content);
 
-    let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+    let index = add_content_to_feed(&ipfs, &metadata).await?;
 
-    println!("New Post CID => {}", &new_cid.to_string());
-
-    let index = add_content_to_feed(&ipfs, new_cid).await?;
-
-    println!("✅ Weblog Post Added In Content Feed At Index {}", index);
+    println!("✅ Weblog Added At Index {}", index);
 
     Ok(())
 }
@@ -132,13 +117,9 @@ async fn add_blog(command: AddPost) -> Result<(), Error> {
 
     let metadata = FullPost::create(title, image, content);
 
-    let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+    let index = add_content_to_feed(&ipfs, &metadata).await?;
 
-    println!("New Post CID => {}", &new_cid.to_string());
-
-    let index = add_content_to_feed(&ipfs, new_cid).await?;
-
-    println!("✅ Weblog Post Added In Content Feed At Index {}", index);
+    println!("✅ Weblog Added At Index {}", index);
 
     Ok(())
 }
@@ -168,16 +149,11 @@ async fn add_video(command: AddVideo) -> Result<(), Error> {
     } = command;
 
     let duration = get_video_duration(&ipfs, &video).await?;
-
     let metadata = VideoMetadata::create(title, duration, image, video);
 
-    let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+    let index = add_content_to_feed(&ipfs, &metadata).await?;
 
-    println!("New Post CID => {}", &new_cid.to_string());
-
-    let index = add_content_to_feed(&ipfs, new_cid).await?;
-
-    println!("✅ Video Post Added In Content Feed At Index {}", index);
+    println!("✅ Video Added At Index {}", index);
 
     Ok(())
 }
@@ -208,34 +184,18 @@ pub struct UpdateMicroPost {
 async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let mut feed = get_feed(&ipfs).await?;
-
     let UpdateMicroPost { index, content } = command;
 
-    let old_cid = match feed.content.get(index) {
-        Some(mt) => mt.link,
-        None => return Err(Error::Uncategorized("Index Not Found".into())),
-    };
-
-    ipfs.pin_rm(&old_cid.to_string(), true).await?;
-
-    let mut metadata: MicroPost = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
+    let (mut feed, mut metadata) = unload_feed::<MicroPost>(&ipfs, index).await?;
 
     metadata.update(content);
 
-    let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+    tokio::try_join!(
+        reload_feed(&ipfs, index, &metadata, &mut feed),
+        reset_comments_at(&ipfs, index)
+    )?;
 
-    println!("New Post CID => {}", &new_cid.to_string());
-
-    println!("Updating Content Feed...");
-
-    ipfs.pin_add(&new_cid.to_string(), true).await?;
-
-    feed.content[index] = new_cid.into();
-
-    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
-
-    println!("✅ Weblog Post Updated In Content Feed At Index {}", index);
+    println!("✅ Weblog Updated & Comments Cleared At Index {}", index);
 
     Ok(())
 }
@@ -262,8 +222,6 @@ pub struct UpdatePost {
 async fn update_blog(command: UpdatePost) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let mut feed = get_feed(&ipfs).await?;
-
     let UpdatePost {
         index,
         title,
@@ -271,30 +229,16 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
         content,
     } = command;
 
-    let old_cid = match feed.content.get(index) {
-        Some(mt) => mt.link,
-        None => return Err(Error::Uncategorized("Index Not Found".into())),
-    };
-
-    ipfs.pin_rm(&old_cid.to_string(), true).await?;
-
-    let mut metadata: FullPost = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
+    let (mut feed, mut metadata) = unload_feed::<FullPost>(&ipfs, index).await?;
 
     metadata.update(title, image, content);
 
-    let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+    tokio::try_join!(
+        reload_feed(&ipfs, index, &metadata, &mut feed),
+        reset_comments_at(&ipfs, index)
+    )?;
 
-    println!("New Post CID => {}", &new_cid.to_string());
-
-    println!("Updating Content Feed...");
-
-    ipfs.pin_add(&new_cid.to_string(), true).await?;
-
-    feed.content[index] = new_cid.into();
-
-    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
-
-    println!("✅ Weblog Post Updated In Content Feed At Index {}", index);
+    println!("✅ Weblog Updated & Comments Cleared At Index {}", index);
 
     Ok(())
 }
@@ -321,8 +265,6 @@ pub struct UpdateVideo {
 async fn update_video(command: UpdateVideo) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let mut feed = get_feed(&ipfs).await?;
-
     let UpdateVideo {
         index,
         title,
@@ -330,12 +272,7 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
         video,
     } = command;
 
-    let old_cid = match feed.content.get(index) {
-        Some(mt) => mt.link,
-        None => return Err(Error::Uncategorized("Index Not Found".into())),
-    };
-
-    let mut metadata: VideoMetadata = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
+    let (mut feed, mut metadata) = unload_feed::<VideoMetadata>(&ipfs, index).await?;
 
     let duration = match video {
         Some(cid) => Some(get_video_duration(&ipfs, &cid).await?),
@@ -344,17 +281,12 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
 
     metadata.update(title, image, video, duration);
 
-    let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+    tokio::try_join!(
+        reload_feed(&ipfs, index, &metadata, &mut feed),
+        reset_comments_at(&ipfs, index)
+    )?;
 
-    println!("New Post CID => {}", &new_cid.to_string());
-
-    println!("Updating Content Feed...");
-
-    feed.content[index] = new_cid.into();
-
-    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
-
-    println!("✅ Video Post Updated In Content Feed At Index {}", index);
+    println!("✅ Video Updated & Comments Cleared At Index {}", index);
 
     Ok(())
 }
@@ -372,43 +304,133 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
 
     let DeleteContent { index } = command;
 
-    let mut feed = get_feed(&ipfs).await?;
+    let (mut feed, mut comments) = tokio::try_join!(
+        get_from_ipns::<FeedAnchor>(&ipfs, FEED_KEY),
+        get_from_ipns::<CommentsAnchor>(&ipfs, COMMENTS_KEY)
+    )?;
 
-    if index >= feed.content.len() {
+    if index >= feed.content.len() || index >= comments.links.len() {
         return Err(Error::Uncategorized("Index Not Found".into()));
     }
 
-    let link = feed.content.remove(index);
+    let content = feed.content.remove(index);
+    let comments = comments.links.remove(index);
 
-    ipfs.pin_rm(&link.link.to_string(), true).await?;
+    let content_cid = content.link.to_string();
+    let comment_cid = comments.link.to_string();
 
-    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
+    tokio::try_join!(
+        ipfs.pin_rm(&content_cid, true),
+        ipfs.pin_rm(&comment_cid, true),
+        update_ipns(&ipfs, FEED_KEY, &feed),
+        update_ipns(&ipfs, COMMENTS_KEY, &comments)
+    )?;
 
-    println!("✅ Post In Content Feed At Index {} Deleted", index);
+    println!("✅ Post & Comments Deleted At Index {}", index);
 
     Ok(())
 }
 
-async fn get_feed(ipfs: &IpfsClient) -> Result<Feed, Error> {
-    let mut res = ipfs.key_list().await?;
+/*** Utils below ****/
 
-    let keypair = match search_keypairs(&FEED_KEY, &mut res) {
-        Some(kp) => kp,
-        None => return Err(Error::Uncategorized("Key Not Found".into())),
+/// Serialize and pin content then update IPNS.
+async fn add_content_to_feed<T>(ipfs: &IpfsClient, metadata: &T) -> Result<usize, Error>
+where
+    T: Serialize,
+{
+    let comments = Comments::default();
+
+    let (content_cid, comments_cid) = tokio::try_join!(
+        ipfs_dag_put_node_async(ipfs, metadata),
+        ipfs_dag_put_node_async(ipfs, &comments)
+    )?;
+
+    println!("New Content => {:?}", &content_cid);
+
+    let content_cid_string = content_cid.to_string();
+    let comment_cid_string = comments_cid.to_string();
+
+    println!("Pinning...");
+
+    tokio::try_join!(
+        ipfs.pin_add(&content_cid_string, true),
+        ipfs.pin_add(&comment_cid_string, true)
+    )?;
+
+    println!("Updating Content Feed...");
+
+    let (mut feed, mut comments) = tokio::try_join!(
+        get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY),
+        get_from_ipns::<CommentsAnchor>(&ipfs, COMMENTS_KEY)
+    )?;
+
+    feed.content.push(content_cid.into());
+    comments.links.push(comments_cid.into());
+
+    tokio::try_join!(
+        update_ipns(ipfs, FEED_KEY, &feed),
+        update_ipns(ipfs, COMMENTS_KEY, &comments)
+    )?;
+
+    Ok(feed.content.len() - 1)
+}
+
+/// Get comment anchor, update with empty comment list then update IPNS.
+async fn reset_comments_at(ipfs: &IpfsClient, index: usize) -> Result<(), Error> {
+    println!("Clearing Comments...");
+
+    let mut comments = get_from_ipns::<CommentsAnchor>(ipfs, COMMENTS_KEY).await?;
+
+    let new_cid = ipfs_dag_put_node_async(ipfs, &Comments::default()).await?;
+    comments.links[index] = new_cid.into();
+
+    update_ipns(ipfs, COMMENTS_KEY, &comments).await?;
+
+    Ok(())
+}
+
+/// Get cid at index in feed, unpin then return feed and cid.
+async fn unload_feed<T>(ipfs: &IpfsClient, index: usize) -> Result<(FeedAnchor, T), Error>
+where
+    T: DeserializeOwned,
+{
+    let feed = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
+
+    let old_cid = match feed.content.get(index) {
+        Some(mt) => mt.link,
+        None => return Err(Error::Uncategorized("Index Not Found".into())),
     };
+    println!("Old Post => {:?}", old_cid);
 
-    #[cfg(debug_assertions)]
-    println!("IPNS: key => {} {}", &keypair.name, &keypair.id);
+    println!("Unpinning...");
+    ipfs.pin_rm(&old_cid.to_string(), true).await?;
 
-    let res = ipfs.name_resolve(Some(&keypair.id), false, false).await?;
+    let metadata: T = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
 
-    let cid = Cid::try_from(res.path).expect("Invalid Cid");
+    Ok((feed, metadata))
+}
 
-    ipfs.pin_rm(&cid.to_string(), false).await?;
+/// Serialize and pin metadata then update feed and update IPNS.
+async fn reload_feed<T>(
+    ipfs: &IpfsClient,
+    index: usize,
+    metadata: &T,
+    feed: &mut FeedAnchor,
+) -> Result<(), Error>
+where
+    T: Serialize,
+{
+    let new_cid = ipfs_dag_put_node_async(ipfs, metadata).await?;
+    println!("New Post => {:?}", new_cid);
 
-    let node = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
+    println!("Pinning...");
+    ipfs.pin_add(&new_cid.to_string(), true).await?;
 
-    Ok(node)
+    println!("Updating Content Feed...");
+    feed.content[index] = new_cid.into();
+    update_ipns(ipfs, FEED_KEY, feed).await?;
+
+    Ok(())
 }
 
 async fn get_video_duration(ipfs: &IpfsClient, video: &Cid) -> Result<f64, Error> {

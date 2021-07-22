@@ -10,7 +10,7 @@ use yew::services::ConsoleService;
 use yew_router::prelude::{Router, Switch};
 
 use linked_data::beacon::Beacon;
-use linked_data::feed::Feed;
+use linked_data::feed::FeedAnchor;
 use linked_data::moderation::Bans;
 use linked_data::moderation::Moderators;
 
@@ -47,7 +47,7 @@ pub struct App {
     beacon: Rc<Beacon>,
 
     feed_cid: Cid,
-    feed: Rc<Feed>,
+    feed: Rc<FeedAnchor>,
 
     bans_cid: Cid,
     bans: Rc<Bans>,
@@ -59,7 +59,7 @@ pub struct App {
 pub enum AppMsg {
     ResolveName(Result<Cid>),
     Beacon(Result<Beacon>),
-    Feed(Result<(Cid, Feed)>),
+    Feed(Result<(Cid, FeedAnchor)>),
     BanList(Result<(Cid, Bans)>),
     ModList(Result<(Cid, Moderators)>),
 }
@@ -98,7 +98,7 @@ impl Component for App {
             beacon: Rc::from(Beacon::default()),
 
             feed_cid: Cid::default(),
-            feed: Rc::from(Feed::default()),
+            feed: Rc::from(FeedAnchor::default()),
 
             bans_cid: Cid::default(),
             bans: Rc::from(Bans::default()),
@@ -222,7 +222,7 @@ impl App {
     }
 
     /// Callback when IPFS dag get return Feed node.
-    fn on_feed_resolved(&mut self, res: Result<(Cid, Feed)>) -> bool {
+    fn on_feed_resolved(&mut self, res: Result<(Cid, FeedAnchor)>) -> bool {
         let (feed_cid, feed) = match res {
             Ok((cid, feed)) => (cid, feed),
             Err(e) => {

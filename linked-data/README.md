@@ -22,5 +22,5 @@ Micro-blogging & long form. Listed in content feed.
 ## Content Feed
 Mutable content feed, create, updates or delete media.
 
-<!-- ## Comments
-Comments link to the original content or other comments and form discussion trees. The leaf nodes of the tree are saved to allow discusion traversal.  -->
+## Comments
+Comments are crypto-signed, link to the original content and optionally other comments. The list of comments is keep in sync with content feed.

@@ -34,7 +34,7 @@ pub async fn moderation_cli(cli: Moderation) {
     };
 
     if let Err(e) = res {
-        eprintln!("❗ IPFS: {}", e);
+        eprintln!("❗ IPFS: {:#?}", e);
     }
 }
 
@@ -143,10 +143,7 @@ async fn replace_ban_list(args: ReplaceBanList) -> Result<(), Error> {
     )
     .await?;
 
-    println!(
-        "✅ Previous Ban List Replaced with {}",
-        &args.cid.to_string()
-    );
+    println!("✅ Previous Ban List Replaced with {:?}", &args.cid);
 
     Ok(())
 }
@@ -255,18 +252,15 @@ async fn replace_mod_list(args: ReplaceModList) -> Result<(), Error> {
     )
     .await?;
 
-    println!(
-        "✅ Previous Moderator List Replaced with {}",
-        &args.cid.to_string()
-    );
+    println!("✅ Previous Moderator List Replaced with {:?}", &args.cid);
 
     Ok(())
 }
 
 fn parse_address(addrs: &str) -> [u8; 20] {
     if let Some(end) = addrs.strip_prefix("0x") {
-        return <[u8; 20]>::from_hex(end).expect("Invalid Ethereum Address");
+        return <[u8; 20]>::from_hex(end).expect("Valid Ethereum Address");
     }
 
-    <[u8; 20]>::from_hex(&addrs).expect("Invalid Ethereum Address")
+    <[u8; 20]>::from_hex(&addrs).expect("Valid Ethereum Address")
 }
