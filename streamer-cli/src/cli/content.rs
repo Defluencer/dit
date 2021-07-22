@@ -7,7 +7,7 @@ use std::convert::TryFrom;
 use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
 
-use linked_data::blog::FullPost;
+use linked_data::blog::{FullPost, MicroPost};
 use linked_data::feed::Feed;
 use linked_data::video::{DayNode, HourNode, MinuteNode, VideoMetadata};
 
@@ -38,10 +38,12 @@ enum Command {
 pub async fn content_feed_cli(cli: ContentFeed) {
     let res = match cli.cmd {
         Command::Add(add) => match add {
+            AddContent::MicroBlog(blog) => add_micro_blog(blog).await,
             AddContent::Blog(blog) => add_blog(blog).await,
             AddContent::Video(video) => add_video(video).await,
         },
         Command::Update(update) => match update {
+            UpdateContent::MicroBlog(blog) => update_micro_blog(blog).await,
             UpdateContent::Blog(blog) => update_blog(blog).await,
             UpdateContent::Video(video) => update_video(video).await,
         },
@@ -55,6 +57,9 @@ pub async fn content_feed_cli(cli: ContentFeed) {
 
 #[derive(Debug, StructOpt)]
 enum AddContent {
+    /// Create new micro post.
+    MicroBlog(AddMicroPost),
+
     /// Create new blog post.
     Blog(AddPost),
 
@@ -74,6 +79,31 @@ async fn add_content_to_feed(ipfs: &IpfsClient, new_cid: Cid) -> Result<usize, E
     update_ipns(&ipfs, &FEED_KEY, &feed).await?;
 
     Ok(feed.content.len() - 1)
+}
+
+#[derive(Debug, StructOpt)]
+pub struct AddMicroPost {
+    /// The micro post content.
+    #[structopt(short, long)]
+    content: String,
+}
+
+async fn add_micro_blog(command: AddMicroPost) -> Result<(), Error> {
+    let ipfs = IpfsClient::default();
+
+    let AddMicroPost { content } = command;
+
+    let metadata = MicroPost::create(content);
+
+    let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+
+    println!("New Post CID => {}", &new_cid.to_string());
+
+    let index = add_content_to_feed(&ipfs, new_cid).await?;
+
+    println!("✅ Weblog Post Added In Content Feed At Index {}", index);
+
+    Ok(())
 }
 
 #[derive(Debug, StructOpt)]
@@ -154,11 +184,60 @@ async fn add_video(command: AddVideo) -> Result<(), Error> {
 
 #[derive(Debug, StructOpt)]
 enum UpdateContent {
-    /// Create new blog post.
+    /// Update micro blog post.
+    MicroBlog(UpdateMicroPost),
+
+    /// Update blog post.
     Blog(UpdatePost),
 
-    /// Create new video.
+    /// Update video post.
     Video(UpdateVideo),
+}
+
+#[derive(Debug, StructOpt)]
+pub struct UpdateMicroPost {
+    /// The content feed index of the post to update.
+    #[structopt(long)]
+    index: usize,
+
+    /// The new content.
+    #[structopt(short, long)]
+    content: Option<String>,
+}
+
+async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {
+    let ipfs = IpfsClient::default();
+
+    let mut feed = get_feed(&ipfs).await?;
+
+    let UpdateMicroPost { index, content } = command;
+
+    let old_cid = match feed.content.get(index) {
+        Some(mt) => mt.link,
+        None => return Err(Error::Uncategorized("Index Not Found".into())),
+    };
+
+    ipfs.pin_rm(&old_cid.to_string(), true).await?;
+
+    let mut metadata: MicroPost = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
+
+    metadata.update(content);
+
+    let new_cid = ipfs_dag_put_node_async(&ipfs, &metadata).await?;
+
+    println!("New Post CID => {}", &new_cid.to_string());
+
+    println!("Updating Content Feed...");
+
+    ipfs.pin_add(&new_cid.to_string(), true).await?;
+
+    feed.content[index] = new_cid.into();
+
+    update_ipns(&ipfs, &FEED_KEY, &feed).await?;
+
+    println!("✅ Weblog Post Updated In Content Feed At Index {}", index);
+
+    Ok(())
 }
 
 #[derive(Debug, StructOpt)]
@@ -194,7 +273,7 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
 
     let old_cid = match feed.content.get(index) {
         Some(mt) => mt.link,
-        None => return Err(Error::Uncategorized("Blog Post Index Not Found".into())),
+        None => return Err(Error::Uncategorized("Index Not Found".into())),
     };
 
     ipfs.pin_rm(&old_cid.to_string(), true).await?;
@@ -253,7 +332,7 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
 
     let old_cid = match feed.content.get(index) {
         Some(mt) => mt.link,
-        None => return Err(Error::Uncategorized("Video Index Not Found".into())),
+        None => return Err(Error::Uncategorized("Index Not Found".into())),
     };
 
     let mut metadata: VideoMetadata = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
@@ -291,15 +370,21 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
     println!("Deleting Content...");
     let ipfs = IpfsClient::default();
 
+    let DeleteContent { index } = command;
+
     let mut feed = get_feed(&ipfs).await?;
 
-    let link = feed.content.remove(command.index);
+    if index >= feed.content.len() {
+        return Err(Error::Uncategorized("Index Not Found".into()));
+    }
+
+    let link = feed.content.remove(index);
 
     ipfs.pin_rm(&link.link.to_string(), true).await?;
 
     update_ipns(&ipfs, &FEED_KEY, &feed).await?;
 
-    println!("✅ Post In Content Feed At Index {} Deleted", command.index);
+    println!("✅ Post In Content Feed At Index {} Deleted", index);
 
     Ok(())
 }
