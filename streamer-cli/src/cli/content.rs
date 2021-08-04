@@ -361,7 +361,7 @@ where
 
     let (mut feed, mut comments) = tokio::try_join!(
         get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY),
-        get_from_ipns::<CommentsAnchor>(&ipfs, COMMENTS_KEY)
+        get_from_ipns::<CommentsAnchor>(ipfs, COMMENTS_KEY)
     )?;
 
     feed.content.push(content_cid.into());
@@ -405,7 +405,7 @@ where
     println!("Unpinning...");
     ipfs.pin_rm(&old_cid.to_string(), true).await?;
 
-    let metadata: T = ipfs_dag_get_node_async(&ipfs, &old_cid.to_string()).await?;
+    let metadata: T = ipfs_dag_get_node_async(ipfs, &old_cid.to_string()).await?;
 
     Ok((feed, metadata))
 }

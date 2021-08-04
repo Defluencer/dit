@@ -60,7 +60,7 @@ pub async fn put_requests(
     }
 
     if path.extension().unwrap() == M3U8 {
-        return manifest_response(res, body, &path, setup_tx).await;
+        return manifest_response(res, body, path, setup_tx).await;
     }
 
     //Change error type

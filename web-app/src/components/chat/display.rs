@@ -265,7 +265,7 @@ impl Display {
             ConsoleService::error(&format!("{:?}", e));
         }
 
-        let msg_data = MessageData::new(self.next_id, &data, &name, &msg.message);
+        let msg_data = MessageData::new(self.next_id, &data, name, &msg.message);
 
         self.chat_messages.push_back(msg_data);
 

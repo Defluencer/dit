@@ -54,7 +54,7 @@ pub struct Inputs {
 }
 
 pub enum Msg {
-    SetMsg(String),
+    Set(String),
     Enter,
     Connect,
     PeerID(Result<String>),
@@ -107,7 +107,7 @@ impl Component for Inputs {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::SetMsg(msg) => self.on_chat_input(msg),
+            Msg::Set(msg) => self.on_chat_input(msg),
             Msg::Enter => self.send_message(),
             Msg::Connect => self.connect_account(),
             Msg::PeerID(res) => self.on_peer_id(res),
@@ -137,7 +137,7 @@ impl Component for Inputs {
                 <div>
                     <textarea class="input_text" id="input_text"
                     rows=5
-                    oninput=self.link.callback(|e: InputData| Msg::SetMsg(e.value))
+                    oninput=self.link.callback(|e: InputData| Msg::Set(e.value))
                     placeholder="Input text here...">
                     </textarea>
                     <button class="send_button" onclick=self.link.callback(|_| Msg::Enter)>{ "Send" }</button>

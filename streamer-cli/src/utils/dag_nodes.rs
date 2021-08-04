@@ -81,7 +81,7 @@ where
     T: ?Sized + DeserializeOwned,
 {
     let res = ipfs.key_list().await?;
-    let keypair = search_keypairs(&key, &res).expect("Key Found");
+    let keypair = search_keypairs(key, &res).expect("Key Found");
 
     #[cfg(debug_assertions)]
     println!("IPNS: key => {} {}", &keypair.name, &keypair.id);

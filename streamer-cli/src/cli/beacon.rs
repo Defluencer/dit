@@ -130,7 +130,7 @@ where
 
             println!("Updating {} IPNS Link...", name);
 
-            update_ipns(ipfs, &key, &T::default()).await?;
+            update_ipns(ipfs, key, &T::default()).await?;
 
             ipns_link
         }

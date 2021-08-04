@@ -99,7 +99,7 @@ impl ChatAggregator {
                 self.new_ban_count
             );
 
-            if let Err(e) = update_ipns(&self.ipfs, &BANS_KEY, &self.bans).await {
+            if let Err(e) = update_ipns(&self.ipfs, BANS_KEY, &self.bans).await {
                 eprintln!("❗ IPNS Update Failed. {}", e);
             }
         }
