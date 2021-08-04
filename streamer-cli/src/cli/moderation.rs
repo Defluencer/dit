@@ -78,11 +78,14 @@ async fn ban_user(args: Ban) -> Result<(), Error> {
 
     let ipfs = IpfsClient::default();
 
-    let mut ban_list: linked_data::moderation::Bans = get_from_ipns(&ipfs, BANS_KEY).await?;
+    let (old_ban_cid, mut ban_list) =
+        get_from_ipns::<linked_data::moderation::Bans>(&ipfs, BANS_KEY).await?;
 
     ban_list.banned.insert(address);
 
     update_ipns(&ipfs, BANS_KEY, &ban_list).await?;
+
+    ipfs.pin_rm(&old_ban_cid.to_string(), false).await?;
 
     println!("✅ User {} Banned", args.address);
 
@@ -103,10 +106,13 @@ async fn unban_user(args: UnBan) -> Result<(), Error> {
 
     let ipfs = IpfsClient::default();
 
-    let mut ban_list: linked_data::moderation::Bans = get_from_ipns(&ipfs, BANS_KEY).await?;
+    let (old_ban_cid, mut ban_list) =
+        get_from_ipns::<linked_data::moderation::Bans>(&ipfs, BANS_KEY).await?;
 
     if ban_list.banned.remove(&address) {
         update_ipns(&ipfs, BANS_KEY, &ban_list).await?;
+
+        ipfs.pin_rm(&old_ban_cid.to_string(), false).await?;
 
         println!("✅ User {} Unbanned", args.address);
 
@@ -130,7 +136,7 @@ async fn replace_ban_list(args: ReplaceBanList) -> Result<(), Error> {
 
     let ipfs = IpfsClient::default();
 
-    let _ = get_from_ipns(&ipfs, BANS_KEY).await?;
+    let (old_ban_cid, _) = get_from_ipns::<linked_data::moderation::Bans>(&ipfs, BANS_KEY).await?;
 
     ipfs.pin_add(&args.cid.to_string(), false).await?;
 
@@ -142,6 +148,8 @@ async fn replace_ban_list(args: ReplaceBanList) -> Result<(), Error> {
         Some(BANS_KEY),
     )
     .await?;
+
+    ipfs.pin_rm(&old_ban_cid.to_string(), false).await?;
 
     println!("✅ Previous Ban List Replaced with {:?}", &args.cid);
 
@@ -188,11 +196,14 @@ async fn mod_user(args: Mod) -> Result<(), Error> {
 
     let ipfs = IpfsClient::default();
 
-    let mut mods_list: linked_data::moderation::Moderators = get_from_ipns(&ipfs, MODS_KEY).await?;
+    let (old_mods_cid, mut mods_list) =
+        get_from_ipns::<linked_data::moderation::Moderators>(&ipfs, MODS_KEY).await?;
 
     mods_list.mods.insert(address);
 
     update_ipns(&ipfs, MODS_KEY, &mods_list).await?;
+
+    ipfs.pin_rm(&old_mods_cid.to_string(), false).await?;
 
     println!("✅ User {} Promoted To Moderator Position", args.address);
 
@@ -212,10 +223,13 @@ async fn unmod_user(args: UnMod) -> Result<(), Error> {
 
     let ipfs = IpfsClient::default();
 
-    let mut mod_list: linked_data::moderation::Moderators = get_from_ipns(&ipfs, MODS_KEY).await?;
+    let (old_mods_cid, mut mods_list) =
+        get_from_ipns::<linked_data::moderation::Moderators>(&ipfs, MODS_KEY).await?;
 
-    if mod_list.mods.remove(&address) {
-        update_ipns(&ipfs, MODS_KEY, &mod_list).await?;
+    if mods_list.mods.remove(&address) {
+        update_ipns(&ipfs, MODS_KEY, &mods_list).await?;
+
+        ipfs.pin_rm(&old_mods_cid.to_string(), false).await?;
 
         println!("✅ Moderator {} Demoted", args.address);
 
@@ -239,7 +253,8 @@ async fn replace_mod_list(args: ReplaceModList) -> Result<(), Error> {
 
     let ipfs = IpfsClient::default();
 
-    let _ = get_from_ipns(&ipfs, MODS_KEY).await?;
+    let (old_mods_cid, _) =
+        get_from_ipns::<linked_data::moderation::Moderators>(&ipfs, MODS_KEY).await?;
 
     ipfs.pin_add(&args.cid.to_string(), false).await?;
 
@@ -251,6 +266,8 @@ async fn replace_mod_list(args: ReplaceModList) -> Result<(), Error> {
         Some(MODS_KEY),
     )
     .await?;
+
+    ipfs.pin_rm(&old_mods_cid.to_string(), false).await?;
 
     println!("✅ Previous Moderator List Replaced with {:?}", &args.cid);
 

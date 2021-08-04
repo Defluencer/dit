@@ -59,7 +59,7 @@ impl Configuration {
 impl Default for Configuration {
     fn default() -> Self {
         Self {
-            input_socket_addr: SocketAddr::from_str("127.0.0.1:2526").expect("Invalid Address"),
+            input_socket_addr: SocketAddr::from_str("127.0.0.1:2526").expect("Valid Address"),
 
             archive: ArchiveConfig {
                 archive_live_chat: true,

@@ -21,7 +21,7 @@ pub const FEED_KEY: &str = "feed";
 pub const COMMENTS_KEY: &str = "comments";
 
 #[derive(Debug, StructOpt)]
-pub struct ContentFeed {
+pub struct Content {
     #[structopt(subcommand)]
     cmd: Command,
 }
@@ -38,7 +38,7 @@ enum Command {
     Delete(DeleteContent),
 }
 
-pub async fn content_feed_cli(cli: ContentFeed) {
+pub async fn content_feed_cli(cli: Content) {
     let res = match cli.cmd {
         Command::Add(add) => match add {
             AddContent::MicroBlog(blog) => add_micro_blog(blog).await,
@@ -186,7 +186,7 @@ async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {
 
     let UpdateMicroPost { index, content } = command;
 
-    let (mut feed, mut metadata) = unload_feed::<MicroPost>(&ipfs, index).await?;
+    let (old_feed_cid, mut feed, mut metadata) = unload_feed::<MicroPost>(&ipfs, index).await?;
 
     metadata.update(content);
 
@@ -194,6 +194,8 @@ async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {
         reload_feed(&ipfs, index, &metadata, &mut feed),
         reset_comments_at(&ipfs, index)
     )?;
+
+    ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
     println!("✅ Weblog Updated & Comments Cleared At Index {}", index);
 
@@ -229,7 +231,7 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
         content,
     } = command;
 
-    let (mut feed, mut metadata) = unload_feed::<FullPost>(&ipfs, index).await?;
+    let (old_feed_cid, mut feed, mut metadata) = unload_feed::<FullPost>(&ipfs, index).await?;
 
     metadata.update(title, image, content);
 
@@ -237,6 +239,8 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
         reload_feed(&ipfs, index, &metadata, &mut feed),
         reset_comments_at(&ipfs, index)
     )?;
+
+    ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
     println!("✅ Weblog Updated & Comments Cleared At Index {}", index);
 
@@ -272,7 +276,7 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
         video,
     } = command;
 
-    let (mut feed, mut metadata) = unload_feed::<VideoMetadata>(&ipfs, index).await?;
+    let (old_feed_cid, mut feed, mut metadata) = unload_feed::<VideoMetadata>(&ipfs, index).await?;
 
     let duration = match video {
         Some(cid) => Some(get_video_duration(&ipfs, &cid).await?),
@@ -285,6 +289,8 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
         reload_feed(&ipfs, index, &metadata, &mut feed),
         reset_comments_at(&ipfs, index)
     )?;
+
+    ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
     println!("✅ Video Updated & Comments Cleared At Index {}", index);
 
@@ -304,7 +310,7 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
 
     let DeleteContent { index } = command;
 
-    let (mut feed, mut comments) = tokio::try_join!(
+    let ((old_feed_cid, mut feed), (old_comments_cid, mut comments)) = tokio::try_join!(
         get_from_ipns::<FeedAnchor>(&ipfs, FEED_KEY),
         get_from_ipns::<CommentsAnchor>(&ipfs, COMMENTS_KEY)
     )?;
@@ -318,12 +324,19 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
 
     let content_cid = content.link.to_string();
     let comment_cid = comments.link.to_string();
+    let old_feed_cid = old_feed_cid.to_string();
+    let old_comments_cid = old_comments_cid.to_string();
 
     tokio::try_join!(
-        ipfs.pin_rm(&content_cid, true),
-        ipfs.pin_rm(&comment_cid, true),
         update_ipns(&ipfs, FEED_KEY, &feed),
-        update_ipns(&ipfs, COMMENTS_KEY, &comments)
+        update_ipns(&ipfs, COMMENTS_KEY, &comments),
+        ipfs.pin_rm(&content_cid, true),
+        ipfs.pin_rm(&comment_cid, true)
+    )?;
+
+    tokio::try_join!(
+        ipfs.pin_rm(&old_feed_cid, false),
+        ipfs.pin_rm(&old_comments_cid, false)
     )?;
 
     println!("✅ Post & Comments Deleted At Index {}", index);
@@ -359,7 +372,7 @@ where
 
     println!("Updating Content Feed...");
 
-    let (mut feed, mut comments) = tokio::try_join!(
+    let ((old_feed_cid, mut feed), (old_comments_cid, mut comments)) = tokio::try_join!(
         get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY),
         get_from_ipns::<CommentsAnchor>(ipfs, COMMENTS_KEY)
     )?;
@@ -367,9 +380,17 @@ where
     feed.content.push(content_cid.into());
     comments.links.push(comments_cid.into());
 
+    let old_feed_cid = old_feed_cid.to_string();
+    let old_comments_cid = old_comments_cid.to_string();
+
     tokio::try_join!(
         update_ipns(ipfs, FEED_KEY, &feed),
         update_ipns(ipfs, COMMENTS_KEY, &comments)
+    )?;
+
+    tokio::try_join!(
+        ipfs.pin_rm(&old_feed_cid, false),
+        ipfs.pin_rm(&old_comments_cid, false)
     )?;
 
     Ok(feed.content.len() - 1)
@@ -379,22 +400,25 @@ where
 async fn reset_comments_at(ipfs: &IpfsClient, index: usize) -> Result<(), Error> {
     println!("Clearing Comments...");
 
-    let mut comments = get_from_ipns::<CommentsAnchor>(ipfs, COMMENTS_KEY).await?;
+    let (old_comments_cid, mut comments) =
+        get_from_ipns::<CommentsAnchor>(ipfs, COMMENTS_KEY).await?;
 
     let new_cid = ipfs_dag_put_node_async(ipfs, &Comments::default()).await?;
     comments.links[index] = new_cid.into();
 
     update_ipns(ipfs, COMMENTS_KEY, &comments).await?;
 
+    ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
+
     Ok(())
 }
 
 /// Get cid at index in feed, unpin then return feed and cid.
-async fn unload_feed<T>(ipfs: &IpfsClient, index: usize) -> Result<(FeedAnchor, T), Error>
+async fn unload_feed<T>(ipfs: &IpfsClient, index: usize) -> Result<(Cid, FeedAnchor, T), Error>
 where
     T: DeserializeOwned,
 {
-    let feed = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
+    let (old_comments_cid, feed) = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
 
     let old_cid = match feed.content.get(index) {
         Some(mt) => mt.link,
@@ -407,7 +431,7 @@ where
 
     let metadata: T = ipfs_dag_get_node_async(ipfs, &old_cid.to_string()).await?;
 
-    Ok((feed, metadata))
+    Ok((old_comments_cid, feed, metadata))
 }
 
 /// Serialize and pin metadata then update feed and update IPNS.

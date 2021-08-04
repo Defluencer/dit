@@ -69,7 +69,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let mut config = match Configuration::from_file().await {
         Ok(conf) => conf,
         Err(e) => {
-            eprintln!("❗ IO: {:#?}", e);
+            eprintln!("❗ Configuration: {:#?}", e);
             Configuration::default()
         }
     };

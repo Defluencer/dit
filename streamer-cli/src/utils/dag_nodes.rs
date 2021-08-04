@@ -76,7 +76,7 @@ where
 }
 
 /// Get node associated with IPNS key, direct unpin then return.
-pub async fn get_from_ipns<T>(ipfs: &IpfsClient, key: &str) -> Result<T, Error>
+pub async fn get_from_ipns<T>(ipfs: &IpfsClient, key: &str) -> Result<(Cid, T), Error>
 where
     T: ?Sized + DeserializeOwned,
 {
@@ -89,11 +89,9 @@ where
     let res = ipfs.name_resolve(Some(&keypair.id), false, false).await?;
     let cid = Cid::try_from(res.path).expect("Valid Cid");
 
-    ipfs.pin_rm(&cid.to_string(), false).await?;
-
     let node = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
 
-    Ok(node)
+    Ok((cid, node))
 }
 
 pub fn search_keypairs<'a>(
