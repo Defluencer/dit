@@ -77,17 +77,21 @@ impl Component for App {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let cb = link.callback_once(AppMsg::ResolveName);
-        let client = props.web3.clone();
-        let name = props.ens_name.to_string();
+        spawn_local({
+            let cb = link.callback_once(AppMsg::ResolveName);
+            let web3 = props.web3.clone();
+            let name = props.ens_name.to_string();
 
-        spawn_local(async move { cb.emit(client.get_ipfs_content(name).await) });
+            async move { cb.emit(web3.get_ipfs_content(name).await) }
+        });
 
         if let Some(cid) = props.storage.get_cid(&props.ens_name) {
-            let cb = link.callback_once(AppMsg::Beacon);
-            let client = props.ipfs.clone();
+            spawn_local({
+                let cb = link.callback_once(AppMsg::Beacon);
+                let client = props.ipfs.clone();
 
-            spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
+                async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) }
+            });
         }
 
         Self {
@@ -168,10 +172,12 @@ impl App {
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Cid Update");
 
-        let cb = self.link.callback_once(AppMsg::Beacon);
-        let ipfs = self.props.ipfs.clone();
+        spawn_local({
+            let cb = self.link.callback_once(AppMsg::Beacon);
+            let ipfs = self.props.ipfs.clone();
 
-        spawn_local(async move { cb.emit(ipfs.dag_get(beacon_cid, Option::<String>::None).await) });
+            async move { cb.emit(ipfs.dag_get(beacon_cid, Option::<String>::None).await) }
+        });
 
         self.props
             .storage
@@ -199,53 +205,68 @@ impl App {
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
-        let cb = self.link.callback_once(AppMsg::Feed);
-        let ipfs = self.props.ipfs.clone();
-        let feed = beacon.content_feed.clone();
-        spawn_local(async move { cb.emit(ipfs.resolve_and_dag_get(feed).await) });
-
-        if let Some(cid) = self.props.storage.get_cid(&beacon.content_feed) {
+        spawn_local({
             let cb = self.link.callback_once(AppMsg::Feed);
             let ipfs = self.props.ipfs.clone();
+            let feed = beacon.content_feed.clone();
 
-            spawn_local(async move {
-                match ipfs.dag_get(cid, Option::<&str>::None).await {
-                    Ok(node) => cb.emit(Ok((cid, node))),
-                    Err(e) => cb.emit(Err(e)),
+            async move { cb.emit(ipfs.resolve_and_dag_get(feed).await) }
+        });
+
+        if let Some(cid) = self.props.storage.get_cid(&beacon.content_feed) {
+            spawn_local({
+                let cb = self.link.callback_once(AppMsg::Feed);
+                let ipfs = self.props.ipfs.clone();
+
+                async move {
+                    match ipfs.dag_get(cid, Option::<&str>::None).await {
+                        Ok(node) => cb.emit(Ok((cid, node))),
+                        Err(e) => cb.emit(Err(e)),
+                    }
                 }
             });
         }
 
-        let cb = self.link.callback_once(AppMsg::BanList);
-        let ipfs = self.props.ipfs.clone();
-        let bans = beacon.bans.clone();
-        spawn_local(async move { cb.emit(ipfs.resolve_and_dag_get(bans).await) });
-
-        if let Some(cid) = self.props.storage.get_cid(&beacon.bans) {
+        spawn_local({
             let cb = self.link.callback_once(AppMsg::BanList);
             let ipfs = self.props.ipfs.clone();
+            let bans = beacon.bans.clone();
 
-            spawn_local(async move {
-                match ipfs.dag_get(cid, Option::<&str>::None).await {
-                    Ok(node) => cb.emit(Ok((cid, node))),
-                    Err(e) => cb.emit(Err(e)),
+            async move { cb.emit(ipfs.resolve_and_dag_get(bans).await) }
+        });
+
+        if let Some(cid) = self.props.storage.get_cid(&beacon.bans) {
+            spawn_local({
+                let cb = self.link.callback_once(AppMsg::BanList);
+                let ipfs = self.props.ipfs.clone();
+
+                async move {
+                    match ipfs.dag_get(cid, Option::<&str>::None).await {
+                        Ok(node) => cb.emit(Ok((cid, node))),
+                        Err(e) => cb.emit(Err(e)),
+                    }
                 }
             });
         }
 
-        let cb = self.link.callback_once(AppMsg::ModList);
-        let ipfs = self.props.ipfs.clone();
-        let mods = beacon.mods.clone();
-        spawn_local(async move { cb.emit(ipfs.resolve_and_dag_get(mods).await) });
-
-        if let Some(cid) = self.props.storage.get_cid(&beacon.mods) {
+        spawn_local({
             let cb = self.link.callback_once(AppMsg::ModList);
             let ipfs = self.props.ipfs.clone();
+            let mods = beacon.mods.clone();
 
-            spawn_local(async move {
-                match ipfs.dag_get(cid, Option::<&str>::None).await {
-                    Ok(node) => cb.emit(Ok((cid, node))),
-                    Err(e) => cb.emit(Err(e)),
+            async move { cb.emit(ipfs.resolve_and_dag_get(mods).await) }
+        });
+
+        if let Some(cid) = self.props.storage.get_cid(&beacon.mods) {
+            spawn_local({
+                let cb = self.link.callback_once(AppMsg::ModList);
+                let ipfs = self.props.ipfs.clone();
+
+                async move {
+                    match ipfs.dag_get(cid, Option::<&str>::None).await {
+                        Ok(node) => cb.emit(Ok((cid, node))),
+                        Err(e) => cb.emit(Err(e)),
+                    }
                 }
             });
         }

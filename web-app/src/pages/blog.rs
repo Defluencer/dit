@@ -41,12 +41,12 @@ impl Component for Blog {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let Props { ipfs, metadata_cid } = props;
 
-        let cb = link.callback_once(Msg::Metadata);
-        let client = ipfs.clone();
+        spawn_local({
+            let cb = link.callback_once(Msg::Metadata);
+            let ipfs = ipfs.clone();
 
-        spawn_local(
-            async move { cb.emit(client.dag_get(metadata_cid, Option::<String>::None).await) },
-        );
+            async move { cb.emit(ipfs.dag_get(metadata_cid, Option::<String>::None).await) }
+        });
 
         Self {
             ipfs,

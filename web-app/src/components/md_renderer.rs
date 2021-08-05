@@ -29,11 +29,13 @@ impl Component for Markdown {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let cb = link.callback_once(Msg::File);
-        let client = props.ipfs.clone();
-        let cid = props.markdown_cid;
+        spawn_local({
+            let cb = link.callback_once(Msg::File);
+            let ipfs = props.ipfs.clone();
+            let cid = props.markdown_cid;
 
-        spawn_local(async move { cb.emit(client.cid_cat(cid).await) });
+            async move { cb.emit(ipfs.cid_cat(cid).await) }
+        });
 
         Self {
             text: String::default(),

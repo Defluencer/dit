@@ -38,11 +38,13 @@ impl Component for Thumbnail {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let cb = link.callback_once(Msg::Metadata);
-        let client = props.ipfs.clone();
-        let cid = props.metadata_cid;
+        spawn_local({
+            let cb = link.callback_once(Msg::Metadata);
+            let ipfs = props.ipfs.clone();
+            let cid = props.metadata_cid;
 
-        spawn_local(async move { cb.emit(client.dag_get(cid, Option::<&str>::None).await) });
+            async move { cb.emit(ipfs.dag_get(cid, Option::<&str>::None).await) }
+        });
 
         Self {
             props,
