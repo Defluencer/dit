@@ -1,3 +1,4 @@
+use core::fmt;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -134,7 +135,7 @@ impl IpfsService {
         let cid = Cid::try_from(response.cid.cid_string)?;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("IPFS: dag put => {}", &cid));
+        ConsoleService::info(&format!("IPFS: dag put => {:?}", cid));
 
         Ok(cid)
     }
@@ -188,7 +189,7 @@ impl IpfsService {
         let cid = Cid::try_from(res.path)?;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("IPFS: name resolve => {}", cid.to_string()));
+        ConsoleService::info(&format!("IPFS: name resolve => {:?}", cid));
 
         let node = self.dag_get(cid, Option::<&str>::None).await?;
 
@@ -245,10 +246,16 @@ impl IpfsService {
 
             let response = match serde_json::from_str::<PubsubSubResponse>(&line) {
                 Ok(node) => node,
-                Err(e) => {
-                    cb.emit(Err(e.into()));
-                    return;
-                }
+                Err(_) => match serde_json::from_str::<PubsubSubError>(&line) {
+                    Ok(e) => {
+                        cb.emit(Err(e.into()));
+                        return;
+                    }
+                    Err(e) => {
+                        cb.emit(Err(e.into()));
+                        return;
+                    }
+                },
             };
 
             let PubsubSubResponse { from, data } = response;
@@ -334,4 +341,27 @@ struct NameResolveResponse {
 struct IdResponse {
     #[serde(rename = "ID")]
     pub id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct PubsubSubError {
+    #[serde(rename = "Message")]
+    pub message: String,
+
+    #[serde(rename = "Code")]
+    pub code: u64,
+
+    #[serde(rename = "Type")]
+    pub error_type: String,
+}
+
+impl std::error::Error for PubsubSubError {}
+
+impl fmt::Display for PubsubSubError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match serde_json::to_string_pretty(&self) {
+            Ok(e) => write!(f, "{}", e),
+            Err(e) => write!(f, "{}", e),
+        }
+    }
 }

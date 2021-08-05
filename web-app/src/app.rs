@@ -77,18 +77,18 @@ impl Component for App {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let cb = link.callback_once(AppMsg::ResolveName);
+        let client = props.web3.clone();
+        let name = props.ens_name.to_string();
+
+        spawn_local(async move { cb.emit(client.get_ipfs_content(name).await) });
+
         if let Some(cid) = props.storage.get_cid(&props.ens_name) {
             let cb = link.callback_once(AppMsg::Beacon);
             let client = props.ipfs.clone();
 
             spawn_local(async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) });
         }
-
-        let cb = link.callback_once(AppMsg::ResolveName);
-        let client = props.web3.clone();
-        let name = props.ens_name.to_string();
-
-        spawn_local(async move { cb.emit(client.get_ipfs_content(name).await) });
 
         Self {
             props,
@@ -169,15 +169,13 @@ impl App {
         ConsoleService::info("Beacon Cid Update");
 
         let cb = self.link.callback_once(AppMsg::Beacon);
-        let client = self.props.ipfs.clone();
+        let ipfs = self.props.ipfs.clone();
 
-        spawn_local(
-            async move { cb.emit(client.dag_get(beacon_cid, Option::<String>::None).await) },
-        );
+        spawn_local(async move { cb.emit(ipfs.dag_get(beacon_cid, Option::<String>::None).await) });
 
         self.props
             .storage
-            .set_local_beacon(&self.props.ens_name, &beacon_cid);
+            .set_beacon(&self.props.ens_name, &beacon_cid);
 
         self.beacon_cid = beacon_cid;
 
@@ -201,20 +199,56 @@ impl App {
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
+        let cb = self.link.callback_once(AppMsg::Feed);
+        let ipfs = self.props.ipfs.clone();
+        let feed = beacon.content_feed.clone();
+        spawn_local(async move { cb.emit(ipfs.resolve_and_dag_get(feed).await) });
+
+        if let Some(cid) = self.props.storage.get_cid(&beacon.content_feed) {
+            let cb = self.link.callback_once(AppMsg::Feed);
+            let ipfs = self.props.ipfs.clone();
+
+            spawn_local(async move {
+                match ipfs.dag_get(cid, Option::<&str>::None).await {
+                    Ok(node) => cb.emit(Ok((cid, node))),
+                    Err(e) => cb.emit(Err(e)),
+                }
+            });
+        }
+
         let cb = self.link.callback_once(AppMsg::BanList);
-        let client = self.props.ipfs.clone();
+        let ipfs = self.props.ipfs.clone();
         let bans = beacon.bans.clone();
-        spawn_local(async move { cb.emit(client.resolve_and_dag_get(bans).await) });
+        spawn_local(async move { cb.emit(ipfs.resolve_and_dag_get(bans).await) });
+
+        if let Some(cid) = self.props.storage.get_cid(&beacon.bans) {
+            let cb = self.link.callback_once(AppMsg::BanList);
+            let ipfs = self.props.ipfs.clone();
+
+            spawn_local(async move {
+                match ipfs.dag_get(cid, Option::<&str>::None).await {
+                    Ok(node) => cb.emit(Ok((cid, node))),
+                    Err(e) => cb.emit(Err(e)),
+                }
+            });
+        }
 
         let cb = self.link.callback_once(AppMsg::ModList);
-        let client = self.props.ipfs.clone();
+        let ipfs = self.props.ipfs.clone();
         let mods = beacon.mods.clone();
-        spawn_local(async move { cb.emit(client.resolve_and_dag_get(mods).await) });
+        spawn_local(async move { cb.emit(ipfs.resolve_and_dag_get(mods).await) });
 
-        let cb = self.link.callback_once(AppMsg::Feed);
-        let client = self.props.ipfs.clone();
-        let feed = beacon.content_feed.clone();
-        spawn_local(async move { cb.emit(client.resolve_and_dag_get(feed).await) });
+        if let Some(cid) = self.props.storage.get_cid(&beacon.mods) {
+            let cb = self.link.callback_once(AppMsg::ModList);
+            let ipfs = self.props.ipfs.clone();
+
+            spawn_local(async move {
+                match ipfs.dag_get(cid, Option::<&str>::None).await {
+                    Ok(node) => cb.emit(Ok((cid, node))),
+                    Err(e) => cb.emit(Err(e)),
+                }
+            });
+        }
 
         self.beacon = Rc::from(beacon);
 

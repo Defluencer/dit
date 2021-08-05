@@ -14,8 +14,8 @@ pub struct Beacon {
     /// Broadcaster GossipSub Topics.
     pub topics: Topics,
 
-    /// Broadcaster GossipSub Peer ID.
-    pub peer_id: String, // Base58btc encoded string.
+    /// Broadcaster GossipSub Peer ID. Base58btc.
+    pub peer_id: String,
 
     /// Link to all banned addresses.
     pub bans: String, //IPNS path -> "/ipns/<hash>"

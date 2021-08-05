@@ -42,6 +42,12 @@ impl LocalStorage {
         Self { storage }
     }
 
+    /* pub fn remove_item(&self, key: &str) {
+        if let Err(e) = self.storage.remove_item(key) {
+            ConsoleService::error(&format!("{:#?}", e));
+        }
+    } */
+
     pub fn get_cid(&self, key: &str) -> Option<Cid> {
         let cid = match self.storage.get_item(key) {
             Ok(option) => option?,
@@ -60,21 +66,21 @@ impl LocalStorage {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Storage Get => {} \n {}", key, &cid.to_string()));
+        ConsoleService::info(&format!("Storage Get => {} \n {:?}", key, cid));
 
         Some(cid)
     }
 
     pub fn set_cid(&self, key: &str, cid: &Cid) {
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Storage Set => {} \n {}", key, &cid.to_string()));
+        ConsoleService::info(&format!("Storage Set => {} \n {:?}", key, cid));
 
         if let Err(e) = self.storage.set_item(key, &cid.to_string()) {
             ConsoleService::error(&format!("{:#?}", e));
         }
     }
 
-    pub fn set_local_beacon(&self, ens_name: &str, cid: &Cid) {
+    pub fn set_beacon(&self, ens_name: &str, cid: &Cid) {
         let cid_string = &cid.to_string();
 
         #[cfg(debug_assertions)]

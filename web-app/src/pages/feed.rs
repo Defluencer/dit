@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::components::{Navbar, Thumbnail};
+use crate::components::{Loading, Navbar, Thumbnail};
 use crate::utils::{IpfsService, LocalStorage};
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
@@ -37,18 +37,27 @@ impl Component for ContentFeed {
     }
 
     fn view(&self) -> Html {
+        let content = if self.feed.content.is_empty() {
+            html! {
+                <Loading />
+            }
+        } else {
+            html! {
+                <>
+                    {
+                        for self.feed.content.iter().rev().map(|ipld| {
+                            html! { <Thumbnail ipfs=self.ipfs.clone()  metadata_cid=ipld.link /> }
+                        })
+                    }
+                </>
+            }
+        };
+
         html! {
             <div class="content_feed_page">
                 <Navbar />
                 <div class="feed">
-                {
-                    for self.feed.content.iter().rev().map(|ipld| {
-                        html! {
-                            <Thumbnail ipfs=self.ipfs.clone()  metadata_cid=ipld.link />
-                        }
-                    }
-                    )
-                }
+                    { content }
                 </div>
             </div>
         }
