@@ -41,20 +41,20 @@ impl ChatAggregator {
         let res = ipfs
             .name_resolve(Some(&mods), false, false)
             .await
-            .expect("Invalid Mods Link");
+            .expect("Moderators Link");
 
         let mods = ipfs_dag_get_node_async(&ipfs, &res.path)
             .await
-            .expect("Invalid Moderators Node");
+            .expect("Moderators Node");
 
         let res = ipfs
             .name_resolve(Some(&bans), false, false)
             .await
-            .expect("Invalid Mods Link");
+            .expect("Bans Link");
 
         let bans = ipfs_dag_get_node_async(&ipfs, &res.path)
             .await
-            .expect("Invalid Moderators Node");
+            .expect("Bans Node");
 
         Self {
             ipfs,

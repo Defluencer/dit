@@ -19,7 +19,9 @@ pub type Address = [u8; 20];
 /// GossipSub Peer ID
 pub type PeerId = String;
 
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[derive(
+    Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Default, Hash, PartialOrd, Ord,
+)]
 pub struct IPLDLink {
     #[serde(rename = "/")]
     #[serde(serialize_with = "serialize_cid")]

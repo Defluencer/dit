@@ -15,18 +15,20 @@ pub struct CommentsAnchor {
 /// Must be unpinned when updating the content otherwise it will recursive pin the old content.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Comments {
-    list: Vec<IPLDLink>,
+    pub list: Vec<IPLDLink>,
 }
 
 /// A comment signaling node. Must be crypto-signed.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct CommentLink {
+pub struct Comment {
     /// Link to the original content.
     pub origin: IPLDLink,
 
     /// Link to the comment being replied to.
     pub reply: Option<IPLDLink>,
 
-    /// Link to the comment content itself.
-    pub comment: IPLDLink,
+    pub comment: String,
 }
+
+// To display comments iterate in reverse but skip replies to other comments, save for next step
+// Display replies and repeat until no more comments.
