@@ -1,24 +1,21 @@
 use crate::IPLDLink;
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
-/// List of all comment lists.
+//Resolve the comment of your friends and the friend of your friends to see their comments.
+
+/// Metadata of all your comments.
 /// Direct Pin.
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct CommentsAnchor {
-    /// Links to list of comments.
-    pub links: Vec<IPLDLink>, // In sync with content feed. Indexes are the same.
+pub struct Commentary {
+    /// Map CID strings to link of signed comments.
+    pub metadata: HashMap<String, Vec<IPLDLink>>,
 }
 
-/// List of comments of some content.
-/// Recursive Pin.
-/// Must be unpinned when updating the content otherwise it will recursive pin the old content.
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct Comments {
-    pub list: Vec<IPLDLink>,
-}
-
-/// A comment signaling node. Must be crypto-signed.
+/// A comment. Must be crypto-signed.
+/// Direct Pin.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Comment {
     /// Link to the original content.
@@ -29,6 +26,3 @@ pub struct Comment {
 
     pub comment: String,
 }
-
-// To display comments iterate in reverse but skip replies to other comments, save for next step
-// Display replies and repeat until no more comments.

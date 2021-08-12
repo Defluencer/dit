@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 /// Direct pin.
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct FeedAnchor {
-    /// In sync with comments. Indexes are the same.
     pub content: Vec<IPLDLink>,
 }
 

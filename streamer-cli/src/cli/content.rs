@@ -9,7 +9,7 @@ use ipfs_api::response::Error;
 use ipfs_api::IpfsClient;
 
 use linked_data::blog::{FullPost, MicroPost};
-use linked_data::comments::{Comments, CommentsAnchor};
+use linked_data::comments::Commentary;
 use linked_data::feed::FeedAnchor;
 use linked_data::video::{DayNode, HourNode, MinuteNode, VideoMetadata};
 
@@ -190,10 +190,12 @@ async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {
 
     metadata.update(content);
 
-    tokio::try_join!(
+    /* tokio::try_join!(
         reload_feed(&ipfs, index, &metadata, &mut feed),
         reset_comments_at(&ipfs, index)
-    )?;
+    )?; */
+
+    reload_feed(&ipfs, index, &metadata, &mut feed).await?;
 
     ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
@@ -235,10 +237,12 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
 
     metadata.update(title, image, content);
 
-    tokio::try_join!(
+    /* tokio::try_join!(
         reload_feed(&ipfs, index, &metadata, &mut feed),
         reset_comments_at(&ipfs, index)
-    )?;
+    )?; */
+
+    reload_feed(&ipfs, index, &metadata, &mut feed).await?;
 
     ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
@@ -285,10 +289,12 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
 
     metadata.update(title, image, video, duration);
 
-    tokio::try_join!(
+    /* tokio::try_join!(
         reload_feed(&ipfs, index, &metadata, &mut feed),
         reset_comments_at(&ipfs, index)
-    )?;
+    )?; */
+
+    reload_feed(&ipfs, index, &metadata, &mut feed).await?;
 
     ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
@@ -312,31 +318,35 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
 
     let ((old_feed_cid, mut feed), (old_comments_cid, mut comments)) = tokio::try_join!(
         get_from_ipns::<FeedAnchor>(&ipfs, FEED_KEY),
-        get_from_ipns::<CommentsAnchor>(&ipfs, COMMENTS_KEY)
+        get_from_ipns::<Commentary>(&ipfs, COMMENTS_KEY)
     )?;
 
-    if index >= feed.content.len() || index >= comments.links.len() {
+    if index >= feed.content.len() {
         return Err(Error::Uncategorized("Index Not Found".into()));
     }
 
     let content = feed.content.remove(index);
-    let comments = comments.links.remove(index);
+    if let Some(comments) = comments.metadata.remove(&content.link.to_string()) {
+        //TODO find a way to do that concurently
+        for comment in comments.iter() {
+            ipfs.pin_rm(&comment.link.to_string(), false).await?;
+        }
+    }
 
     let content_cid = content.link.to_string();
-    let comment_cid = comments.link.to_string();
     let old_feed_cid = old_feed_cid.to_string();
+
     let old_comments_cid = old_comments_cid.to_string();
 
     tokio::try_join!(
         update_ipns(&ipfs, FEED_KEY, &feed),
         update_ipns(&ipfs, COMMENTS_KEY, &comments),
-        ipfs.pin_rm(&content_cid, true),
-        ipfs.pin_rm(&comment_cid, true)
+        ipfs.pin_rm(&content_cid, true)
     )?;
 
     tokio::try_join!(
         ipfs.pin_rm(&old_feed_cid, false),
-        ipfs.pin_rm(&old_comments_cid, false)
+        ipfs.pin_rm(&old_comments_cid, false),
     )?;
 
     println!("✅ Post & Comments Deleted At Index {}", index);
@@ -351,52 +361,28 @@ async fn add_content_to_feed<T>(ipfs: &IpfsClient, metadata: &T) -> Result<usize
 where
     T: Serialize,
 {
-    let comments = Comments::default();
-
-    let (content_cid, comments_cid) = tokio::try_join!(
-        ipfs_dag_put_node_async(ipfs, metadata),
-        ipfs_dag_put_node_async(ipfs, &comments)
-    )?;
+    let content_cid = ipfs_dag_put_node_async(ipfs, metadata).await?;
 
     println!("New Content => {:?}", &content_cid);
 
-    let content_cid_string = content_cid.to_string();
-    let comment_cid_string = comments_cid.to_string();
-
     println!("Pinning...");
 
-    tokio::try_join!(
-        ipfs.pin_add(&content_cid_string, true),
-        ipfs.pin_add(&comment_cid_string, true)
-    )?;
+    ipfs.pin_add(&content_cid.to_string(), true).await?;
 
     println!("Updating Content Feed...");
 
-    let ((old_feed_cid, mut feed), (old_comments_cid, mut comments)) = tokio::try_join!(
-        get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY),
-        get_from_ipns::<CommentsAnchor>(ipfs, COMMENTS_KEY)
-    )?;
+    let (old_feed_cid, mut feed) = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
 
     feed.content.push(content_cid.into());
-    comments.links.push(comments_cid.into());
 
-    let old_feed_cid = old_feed_cid.to_string();
-    let old_comments_cid = old_comments_cid.to_string();
+    update_ipns(ipfs, FEED_KEY, &feed).await?;
 
-    tokio::try_join!(
-        update_ipns(ipfs, FEED_KEY, &feed),
-        update_ipns(ipfs, COMMENTS_KEY, &comments)
-    )?;
-
-    tokio::try_join!(
-        ipfs.pin_rm(&old_feed_cid, false),
-        ipfs.pin_rm(&old_comments_cid, false)
-    )?;
+    ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
     Ok(feed.content.len() - 1)
 }
 
-/// Get comment anchor, update with empty comment list then update IPNS.
+/* /// Get comment anchor, update with empty comment list then update IPNS.
 async fn reset_comments_at(ipfs: &IpfsClient, index: usize) -> Result<(), Error> {
     println!("Clearing Comments...");
 
@@ -411,7 +397,7 @@ async fn reset_comments_at(ipfs: &IpfsClient, index: usize) -> Result<(), Error>
     ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
 
     Ok(())
-}
+} */
 
 /// Get cid at index in feed, unpin then return feed and cid.
 async fn unload_feed<T>(ipfs: &IpfsClient, index: usize) -> Result<(Cid, FeedAnchor, T), Error>

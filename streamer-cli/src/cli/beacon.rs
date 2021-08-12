@@ -9,7 +9,7 @@ use ipfs_api::IpfsClient;
 use ipfs_api::KeyType;
 
 use linked_data::beacon::Topics;
-use linked_data::comments::CommentsAnchor;
+use linked_data::comments::Commentary;
 use linked_data::feed::FeedAnchor;
 use linked_data::moderation::{Bans, Moderators};
 
@@ -61,7 +61,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
         create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &key_list),
         create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &key_list),
         create_ipns_link::<FeedAnchor>(&ipfs, "Content Feed", FEED_KEY, &key_list),
-        create_ipns_link::<CommentsAnchor>(&ipfs, "Comments", COMMENTS_KEY, &key_list)
+        create_ipns_link::<Commentary>(&ipfs, "Comments", COMMENTS_KEY, &key_list)
     )?;
 
     println!("Creating Beacon...");

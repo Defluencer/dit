@@ -19,6 +19,9 @@ pub type Address = [u8; 20];
 /// GossipSub Peer ID
 pub type PeerId = String;
 
+/// IPNS link
+pub type IPNSLink = String;
+
 #[derive(
     Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Default, Hash, PartialOrd, Ord,
 )]
@@ -35,14 +38,14 @@ impl From<Cid> for IPLDLink {
     }
 }
 
-fn serialize_cid<S>(cid: &Cid, serializer: S) -> Result<S::Ok, S::Error>
+pub fn serialize_cid<S>(cid: &Cid, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
     serializer.serialize_str(&cid.to_string())
 }
 
-fn deserialize_cid<'de, D>(deserializer: D) -> Result<Cid, D::Error>
+pub fn deserialize_cid<'de, D>(deserializer: D) -> Result<Cid, D::Error>
 where
     D: Deserializer<'de>,
 {
