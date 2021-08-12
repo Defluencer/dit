@@ -190,11 +190,6 @@ async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {
 
     metadata.update(content);
 
-    /* tokio::try_join!(
-        reload_feed(&ipfs, index, &metadata, &mut feed),
-        reset_comments_at(&ipfs, index)
-    )?; */
-
     reload_feed(&ipfs, index, &metadata, &mut feed).await?;
 
     ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
@@ -236,11 +231,6 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
     let (old_feed_cid, mut feed, mut metadata) = unload_feed::<FullPost>(&ipfs, index).await?;
 
     metadata.update(title, image, content);
-
-    /* tokio::try_join!(
-        reload_feed(&ipfs, index, &metadata, &mut feed),
-        reset_comments_at(&ipfs, index)
-    )?; */
 
     reload_feed(&ipfs, index, &metadata, &mut feed).await?;
 
@@ -289,11 +279,6 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
 
     metadata.update(title, image, video, duration);
 
-    /* tokio::try_join!(
-        reload_feed(&ipfs, index, &metadata, &mut feed),
-        reset_comments_at(&ipfs, index)
-    )?; */
-
     reload_feed(&ipfs, index, &metadata, &mut feed).await?;
 
     ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
@@ -326,6 +311,7 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
     }
 
     let content = feed.content.remove(index);
+
     if let Some(comments) = comments.metadata.remove(&content.link.to_string()) {
         //TODO find a way to do that concurently
         for comment in comments.iter() {
@@ -381,23 +367,6 @@ where
 
     Ok(feed.content.len() - 1)
 }
-
-/* /// Get comment anchor, update with empty comment list then update IPNS.
-async fn reset_comments_at(ipfs: &IpfsClient, index: usize) -> Result<(), Error> {
-    println!("Clearing Comments...");
-
-    let (old_comments_cid, mut comments) =
-        get_from_ipns::<CommentsAnchor>(ipfs, COMMENTS_KEY).await?;
-
-    let new_cid = ipfs_dag_put_node_async(ipfs, &Comments::default()).await?;
-    comments.links[index] = new_cid.into();
-
-    update_ipns(ipfs, COMMENTS_KEY, &comments).await?;
-
-    ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
-
-    Ok(())
-} */
 
 /// Get cid at index in feed, unpin then return feed and cid.
 async fn unload_feed<T>(ipfs: &IpfsClient, index: usize) -> Result<(Cid, FeedAnchor, T), Error>
