@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::pages::{Blog, ContentFeed, Home, Live, Settings, Video};
@@ -7,10 +8,13 @@ use wasm_bindgen_futures::spawn_local;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
+use yew::Callback;
 use yew_router::prelude::{Router, Switch};
 
 use linked_data::beacon::Beacon;
+use linked_data::comments::Commentary;
 use linked_data::feed::FeedAnchor;
+use linked_data::friends::Friendlies;
 use linked_data::moderation::Bans;
 use linked_data::moderation::Moderators;
 
@@ -41,27 +45,43 @@ pub enum AppRoute {
 
 pub struct App {
     props: Props,
-    link: ComponentLink<Self>,
 
-    beacon_cid: Cid,
-    beacon: Rc<Beacon>,
+    name_cb: Callback<Result<Cid>>,
 
-    feed_cid: Cid,
+    beacon_set: HashSet<Cid>,
+    beacon_cid: Option<Cid>,
+    beacon: Option<Rc<Beacon>>,
+    beacon_cb: Callback<Result<Beacon>>,
+
+    feed_set: HashMap<String, Cid>,
     feed: Rc<FeedAnchor>,
+    feed_cb: Callback<Result<(String, Cid, FeedAnchor)>>,
 
-    bans_cid: Cid,
+    bans_cid: Option<Cid>,
     bans: Rc<Bans>,
+    bans_cb: Callback<Result<(String, Cid, Bans)>>,
 
-    mods_cid: Cid,
+    mods_cid: Option<Cid>,
     mods: Rc<Moderators>,
+    mods_cb: Callback<Result<(String, Cid, Moderators)>>,
+
+    comments_set: HashMap<String, Cid>,
+    comments: Rc<Commentary>,
+    comments_cb: Callback<Result<(String, Cid, Commentary)>>,
+
+    friends_cid: Option<Cid>,
+    friends: Rc<Friendlies>,
+    friends_cb: Callback<Result<(String, Cid, Friendlies)>>,
 }
 
 pub enum AppMsg {
-    ResolveName(Result<Cid>),
+    ENSResolve(Result<Cid>),
     Beacon(Result<Beacon>),
-    Feed(Result<(Cid, FeedAnchor)>),
-    BanList(Result<(Cid, Bans)>),
-    ModList(Result<(Cid, Moderators)>),
+    Feed(Result<(String, Cid, FeedAnchor)>),
+    BanList(Result<(String, Cid, Bans)>),
+    ModList(Result<(String, Cid, Moderators)>),
+    CommentList(Result<(String, Cid, Commentary)>),
+    FriendList(Result<(String, Cid, Friendlies)>),
 }
 
 #[derive(Properties, Clone)]
@@ -77,48 +97,68 @@ impl Component for App {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let name_cb = link.callback(AppMsg::ENSResolve);
+
         spawn_local({
-            let cb = link.callback_once(AppMsg::ResolveName);
+            let cb = name_cb.clone();
             let web3 = props.web3.clone();
             let name = props.ens_name.to_string();
 
             async move { cb.emit(web3.get_ipfs_content(name).await) }
         });
 
+        let beacon_cb = link.callback(AppMsg::Beacon);
+
         if let Some(cid) = props.storage.get_cid(&props.ens_name) {
             spawn_local({
-                let cb = link.callback_once(AppMsg::Beacon);
-                let client = props.ipfs.clone();
+                let cb = beacon_cb.clone();
+                let ipfs = props.ipfs.clone();
 
-                async move { cb.emit(client.dag_get(cid, Option::<String>::None).await) }
+                async move { cb.emit(ipfs.dag_get(cid, Option::<String>::None).await) }
             });
         }
 
         Self {
             props,
-            link,
 
-            beacon_cid: Cid::default(),
-            beacon: Rc::from(Beacon::default()),
+            name_cb,
 
-            feed_cid: Cid::default(),
+            beacon_set: HashSet::with_capacity(10),
+            beacon_cid: None,
+            beacon: None,
+            beacon_cb,
+
+            feed_set: HashMap::with_capacity(10),
             feed: Rc::from(FeedAnchor::default()),
+            feed_cb: link.callback(AppMsg::Feed),
 
-            bans_cid: Cid::default(),
+            bans_cid: None,
             bans: Rc::from(Bans::default()),
+            bans_cb: link.callback(AppMsg::BanList),
 
-            mods_cid: Cid::default(),
+            mods_cid: None,
             mods: Rc::from(Moderators::default()),
+            mods_cb: link.callback(AppMsg::ModList),
+
+            comments_set: HashMap::with_capacity(10),
+            comments: Rc::from(Commentary::default()),
+            comments_cb: link.callback(AppMsg::CommentList),
+
+            friends_cid: None,
+            friends: Rc::from(Friendlies::default()),
+            friends_cb: link.callback(AppMsg::FriendList),
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            AppMsg::ResolveName(result) => self.on_name_resolved(result),
-            AppMsg::Beacon(result) => self.on_beacon_update(result),
-            AppMsg::Feed(result) => self.on_feed_resolved(result),
-            AppMsg::BanList(result) => self.on_ban_list_resolved(result),
-            AppMsg::ModList(result) => self.on_mod_list_resolved(result),
+            AppMsg::ENSResolve(result) => self.on_name(result),
+            AppMsg::Beacon(result) => self.on_beacon(result),
+            AppMsg::Feed(result) => self.on_feed(result),
+            AppMsg::BanList(result) => self.on_ban_list(result),
+            AppMsg::ModList(result) => self.on_mod_list(result),
+            AppMsg::CommentList(result) => self.on_comments(result),
+            AppMsg::FriendList(result) => self.on_friends(result),
         }
     }
 
@@ -131,9 +171,11 @@ impl Component for App {
         let ipfs = self.props.ipfs.clone();
         let storage = self.props.storage.clone();
         let feed = self.feed.clone();
-        let beacon = self.beacon.clone();
+        let beacon = self.beacon.clone().unwrap_or_default();
         let bans = self.bans.clone();
         let mods = self.mods.clone();
+        //let comments = self.comments.clone();
+        //let friends = self.friends.clone();
 
         html! {
             <>
@@ -155,8 +197,8 @@ impl Component for App {
 }
 
 impl App {
-    /// Callback when Ethereum Name Service resolve name to Beacon CID.
-    fn on_name_resolved(&mut self, response: Result<Cid>) -> bool {
+    /// Callback when Ethereum Name Service resolve any name.
+    fn on_name(&mut self, response: Result<Cid>) -> bool {
         let beacon_cid = match response {
             Ok(cid) => cid,
             Err(e) => {
@@ -165,31 +207,35 @@ impl App {
             }
         };
 
-        if self.beacon_cid == beacon_cid {
+        if self.beacon_set.contains(&beacon_cid) {
             return false;
         }
 
         #[cfg(debug_assertions)]
-        ConsoleService::info("Beacon Cid Update");
+        ConsoleService::info("Name Resolve");
 
         spawn_local({
-            let cb = self.link.callback_once(AppMsg::Beacon);
+            let cb = self.beacon_cb.clone();
             let ipfs = self.props.ipfs.clone();
 
             async move { cb.emit(ipfs.dag_get(beacon_cid, Option::<String>::None).await) }
         });
 
-        self.props
-            .storage
-            .set_beacon(&self.props.ens_name, &beacon_cid);
+        if self.beacon_cid.is_none() {
+            self.beacon_cid = beacon_cid.into();
 
-        self.beacon_cid = beacon_cid;
+            self.props
+                .storage
+                .set_beacon(&self.props.ens_name, &beacon_cid);
+        }
+
+        self.beacon_set.insert(beacon_cid);
 
         false
     }
 
-    /// Callback when IPFS dag get return beacon node.
-    fn on_beacon_update(&mut self, response: Result<Beacon>) -> bool {
+    /// Callback when IPFS dag get return any beacon.
+    fn on_beacon(&mut self, response: Result<Beacon>) -> bool {
         let beacon = match response {
             Ok(beacon) => beacon,
             Err(e) => {
@@ -198,15 +244,11 @@ impl App {
             }
         };
 
-        if *self.beacon == beacon {
-            return false;
-        }
-
         #[cfg(debug_assertions)]
         ConsoleService::info("Beacon Update");
 
         spawn_local({
-            let cb = self.link.callback_once(AppMsg::Feed);
+            let cb = self.feed_cb.clone();
             let ipfs = self.props.ipfs.clone();
             let feed = beacon.content_feed.clone();
 
@@ -215,12 +257,13 @@ impl App {
 
         if let Some(cid) = self.props.storage.get_cid(&beacon.content_feed) {
             spawn_local({
-                let cb = self.link.callback_once(AppMsg::Feed);
+                let cb = self.feed_cb.clone();
                 let ipfs = self.props.ipfs.clone();
+                let feed = beacon.content_feed.clone();
 
                 async move {
                     match ipfs.dag_get(cid, Option::<&str>::None).await {
-                        Ok(node) => cb.emit(Ok((cid, node))),
+                        Ok(node) => cb.emit(Ok((feed, cid, node))),
                         Err(e) => cb.emit(Err(e)),
                     }
                 }
@@ -228,7 +271,58 @@ impl App {
         }
 
         spawn_local({
-            let cb = self.link.callback_once(AppMsg::BanList);
+            let cb = self.comments_cb.clone();
+            let ipfs = self.props.ipfs.clone();
+            let comments = beacon.comments.clone();
+
+            async move { cb.emit(ipfs.resolve_and_dag_get(comments).await) }
+        });
+
+        if let Some(cid) = self.props.storage.get_cid(&beacon.comments) {
+            spawn_local({
+                let cb = self.comments_cb.clone();
+                let ipfs = self.props.ipfs.clone();
+                let comments = beacon.comments.clone();
+
+                async move {
+                    match ipfs.dag_get(cid, Option::<&str>::None).await {
+                        Ok(node) => cb.emit(Ok((comments, cid, node))),
+                        Err(e) => cb.emit(Err(e)),
+                    }
+                }
+            });
+        }
+
+        if self.beacon.is_some() {
+            //Only resolve the feed and comments of your friends.
+            return false;
+        }
+
+        spawn_local({
+            let cb = self.friends_cb.clone();
+            let ipfs = self.props.ipfs.clone();
+            let friends = beacon.friends.clone();
+
+            async move { cb.emit(ipfs.resolve_and_dag_get(friends).await) }
+        });
+
+        if let Some(cid) = self.props.storage.get_cid(&beacon.friends) {
+            spawn_local({
+                let cb = self.friends_cb.clone();
+                let ipfs = self.props.ipfs.clone();
+                let friends = beacon.friends.clone();
+
+                async move {
+                    match ipfs.dag_get(cid, Option::<&str>::None).await {
+                        Ok(node) => cb.emit(Ok((friends, cid, node))),
+                        Err(e) => cb.emit(Err(e)),
+                    }
+                }
+            });
+        }
+
+        spawn_local({
+            let cb = self.bans_cb.clone();
             let ipfs = self.props.ipfs.clone();
             let bans = beacon.bans.clone();
 
@@ -237,12 +331,13 @@ impl App {
 
         if let Some(cid) = self.props.storage.get_cid(&beacon.bans) {
             spawn_local({
-                let cb = self.link.callback_once(AppMsg::BanList);
+                let cb = self.bans_cb.clone();
                 let ipfs = self.props.ipfs.clone();
+                let bans = beacon.bans.clone();
 
                 async move {
                     match ipfs.dag_get(cid, Option::<&str>::None).await {
-                        Ok(node) => cb.emit(Ok((cid, node))),
+                        Ok(node) => cb.emit(Ok((bans, cid, node))),
                         Err(e) => cb.emit(Err(e)),
                     }
                 }
@@ -250,7 +345,7 @@ impl App {
         }
 
         spawn_local({
-            let cb = self.link.callback_once(AppMsg::ModList);
+            let cb = self.mods_cb.clone();
             let ipfs = self.props.ipfs.clone();
             let mods = beacon.mods.clone();
 
@@ -259,97 +354,172 @@ impl App {
 
         if let Some(cid) = self.props.storage.get_cid(&beacon.mods) {
             spawn_local({
-                let cb = self.link.callback_once(AppMsg::ModList);
+                let cb = self.mods_cb.clone();
                 let ipfs = self.props.ipfs.clone();
+                let mods = beacon.mods.clone();
 
                 async move {
                     match ipfs.dag_get(cid, Option::<&str>::None).await {
-                        Ok(node) => cb.emit(Ok((cid, node))),
+                        Ok(node) => cb.emit(Ok((mods, cid, node))),
                         Err(e) => cb.emit(Err(e)),
                     }
                 }
             });
         }
 
-        self.beacon = Rc::from(beacon);
+        if self.beacon.is_none() {
+            self.beacon = Rc::from(beacon).into();
+        }
 
-        true
+        false
     }
 
-    /// Callback when IPFS dag get return Feed node.
-    fn on_feed_resolved(&mut self, res: Result<(Cid, FeedAnchor)>) -> bool {
-        let (feed_cid, feed) = match res {
-            Ok((cid, feed)) => (cid, feed),
+    /// Callback when IPFS dag get return any content feed.
+    fn on_feed(&mut self, res: Result<(String, Cid, FeedAnchor)>) -> bool {
+        let (ipns, feed_cid, mut feed) = match res {
+            Ok((ipns, cid, feed)) => (ipns, cid, feed),
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
                 return false;
             }
         };
 
-        if self.feed_cid == feed_cid {
+        if Some(&feed_cid) == self.feed_set.get(&ipns) {
             return false;
         }
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Content Feed Update");
 
-        self.props
-            .storage
-            .set_cid(&self.beacon.content_feed, &feed_cid);
+        Rc::make_mut(&mut self.feed)
+            .content
+            .append(&mut feed.content);
 
-        self.feed_cid = feed_cid;
-        self.feed = Rc::from(feed);
+        self.props.storage.set_cid(&ipns, &feed_cid);
+
+        self.feed_set.insert(ipns, feed_cid);
 
         true
     }
 
-    /// Callback when IPFS dag get ban list node.
-    fn on_ban_list_resolved(&mut self, result: Result<(Cid, Bans)>) -> bool {
-        let (bans_cid, bans) = match result {
-            Ok((bans_cid, bans)) => (bans_cid, bans),
+    /// Callback when IPFS dag get return any comments.
+    fn on_comments(&mut self, result: Result<(String, Cid, Commentary)>) -> bool {
+        let (ipns, comments_cid, comments) = match result {
+            Ok((ipns, cid, node)) => (ipns, cid, node),
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
                 return false;
             }
         };
 
-        if self.bans_cid == bans_cid {
+        if Some(&comments_cid) == self.comments_set.get(&ipns) {
+            return false;
+        }
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Comment List Update");
+
+        Rc::make_mut(&mut self.comments).merge(comments);
+
+        self.props.storage.set_cid(&ipns, &comments_cid);
+
+        self.comments_set.insert(ipns, comments_cid);
+
+        true
+    }
+
+    /// Callback when IPFS dag get return your ban list.
+    fn on_ban_list(&mut self, result: Result<(String, Cid, Bans)>) -> bool {
+        let (ipns, bans_cid, bans) = match result {
+            Ok((ipns, bans_cid, bans)) => (ipns, bans_cid, bans),
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
+        if Some(bans_cid) == self.bans_cid {
             return false;
         }
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Ban List Update");
 
-        self.props.storage.set_cid(&self.beacon.bans, &bans_cid);
+        self.props.storage.set_cid(&ipns, &bans_cid);
 
-        self.bans_cid = bans_cid;
+        self.bans_cid = bans_cid.into();
         self.bans = Rc::from(bans);
 
         true
     }
 
-    /// Callback when IPFS dag get moderator list node.
-    fn on_mod_list_resolved(&mut self, result: Result<(Cid, Moderators)>) -> bool {
-        let (mods_cid, mods) = match result {
-            Ok((mods_cid, mods)) => (mods_cid, mods),
+    /// Callback when IPFS dag get return your moderators.
+    fn on_mod_list(&mut self, result: Result<(String, Cid, Moderators)>) -> bool {
+        let (ipns, mods_cid, mods) = match result {
+            Ok((ipns, mods_cid, mods)) => (ipns, mods_cid, mods),
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
                 return false;
             }
         };
 
-        if self.mods_cid == mods_cid {
+        if Some(mods_cid) == self.mods_cid {
             return false;
         }
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Moderator List Update");
 
-        self.props.storage.set_cid(&self.beacon.mods, &mods_cid);
+        self.props.storage.set_cid(&ipns, &mods_cid);
 
-        self.mods_cid = mods_cid;
+        self.mods_cid = mods_cid.into();
         self.mods = Rc::from(mods);
 
         true
+    }
+
+    /// Callback when IPFS dag get return your friend list.
+    fn on_friends(&mut self, result: Result<(String, Cid, Friendlies)>) -> bool {
+        let (ipns, friends_cid, friends) = match result {
+            Ok((ipns, cid, node)) => (ipns, cid, node),
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
+        if Some(friends_cid) == self.friends_cid {
+            return false;
+        }
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Friend List Update");
+
+        for name in friends.ens_domains.iter() {
+            spawn_local({
+                let web3 = self.props.web3.clone();
+                let name = name.clone();
+                let name_cb = self.name_cb.clone();
+
+                async move { name_cb.emit(web3.get_ipfs_content(name).await) }
+            })
+        }
+
+        for beacon in friends.beacons.iter() {
+            spawn_local({
+                let ipfs = self.props.ipfs.clone();
+                let cid = beacon.link;
+                let beacon_cb = self.beacon_cb.clone();
+
+                async move { beacon_cb.emit(ipfs.dag_get(cid, Option::<&str>::None).await) }
+            })
+        }
+
+        self.props.storage.set_cid(&ipns, &friends_cid);
+
+        self.friends_cid = friends_cid.into();
+        self.friends = Rc::from(friends);
+
+        false
     }
 }

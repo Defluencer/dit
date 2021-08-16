@@ -170,9 +170,8 @@ impl IpfsService {
     }
 
     /// Resolve IPNS link then dag get. Return CID and Node.
-    pub async fn resolve_and_dag_get<U, T>(&self, ipns: U) -> Result<(Cid, T)>
+    pub async fn resolve_and_dag_get<T>(&self, ipns: String) -> Result<(String, Cid, T)>
     where
-        U: Into<Cow<'static, str>>,
         T: ?Sized + DeserializeOwned,
     {
         let url = self.base_url.join("name/resolve")?;
@@ -180,7 +179,7 @@ impl IpfsService {
         let res: NameResolveResponse = self
             .client
             .post(url)
-            .query(&[("arg", &ipns.into())])
+            .query(&[("arg", &ipns)])
             .send()
             .await?
             .json()
@@ -193,7 +192,7 @@ impl IpfsService {
 
         let node = self.dag_get(cid, Option::<&str>::None).await?;
 
-        Ok((cid, node))
+        Ok((ipns, cid, node))
     }
 
     /// Subscribe to a topic then deserialize output.

@@ -6,12 +6,13 @@ use serde::{Deserialize, Serialize};
 
 /// Content feed in chronological order.
 /// Direct pin.
-#[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 pub struct FeedAnchor {
+    /// List of links to content ordered from oldest to newest.
     pub content: Vec<IPLDLink>,
 }
 
-#[derive(Deserialize, Clone, PartialEq)]
+#[derive(Deserialize, Clone)]
 #[serde(untagged)]
 pub enum Media {
     Statement(MicroPost),
@@ -19,8 +20,12 @@ pub enum Media {
     Video(VideoMetadata),
 }
 
-impl Default for Media {
-    fn default() -> Self {
-        Self::Statement(MicroPost::default())
+impl Media {
+    pub fn timestamp(&self) -> u64 {
+        match self {
+            Media::Statement(metadata) => metadata.timestamp,
+            Media::Blog(metadata) => metadata.timestamp,
+            Media::Video(metadata) => metadata.timestamp,
+        }
     }
 }

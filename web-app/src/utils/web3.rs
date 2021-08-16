@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::convert::TryFrom;
 
 use web3::transports::eip_1193::{Eip1193, Provider};
@@ -34,8 +35,11 @@ impl Web3Service {
         Self { client }
     }
 
-    pub async fn get_ipfs_content(&self, name: String) -> Result<Cid> {
-        let name = &format!("defluencer.{}.eth", name);
+    pub async fn get_ipfs_content<U>(&self, name: U) -> Result<Cid>
+    where
+        U: Into<Cow<'static, str>>,
+    {
+        let name = &format!("defluencer.{}.eth", name.into());
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("ENS get => {}", name));
@@ -56,7 +60,7 @@ impl Web3Service {
         let cid = Cid::try_from(&hash[2..])?;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Cid => {}", &cid.to_string()));
+        ConsoleService::info(&format!("Cid => {:?}", &cid));
 
         Ok(cid)
     }

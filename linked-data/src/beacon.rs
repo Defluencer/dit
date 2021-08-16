@@ -11,21 +11,24 @@ pub struct Topics {
 /// Direct pin.
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]
 pub struct Beacon {
-    /// Broadcaster GossipSub Topics.
+    /// GossipSub Topics.
     pub topics: Topics,
 
-    /// Broadcaster GossipSub Peer ID. Base58btc.
+    /// IPFS Peer ID. Base58btc.
     pub peer_id: String,
 
     /// Link to all banned addresses.
     pub bans: String, //IPNS path -> "/ipns/<hash>"
 
-    /// Link to all mods addresses.
+    /// Link to all moderator addresses.
     pub mods: String, //IPNS path -> "/ipns/<hash>"
 
-    /// Link to all content metadata.
+    /// Link to list of content metadata.
     pub content_feed: String, //IPNS path -> "/ipns/<hash>"
 
-    // Link to all archived comments.
+    /// Link to list of comments.
     pub comments: String, //IPNS path -> "/ipns/<hash>"
+
+    /// Link to list of your friend's beacons.
+    pub friends: String, //IPNS path -> "/ipns/<hash>"
 }

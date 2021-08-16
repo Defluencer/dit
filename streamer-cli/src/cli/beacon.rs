@@ -1,4 +1,5 @@
 use crate::cli::content::{COMMENTS_KEY, FEED_KEY};
+use crate::cli::friends::FRIENDS_KEY;
 use crate::cli::moderation::{BANS_KEY, MODS_KEY};
 use crate::utils::config::Configuration;
 use crate::utils::dag_nodes::{ipfs_dag_put_node_async, search_keypairs, update_ipns};
@@ -11,6 +12,7 @@ use ipfs_api::KeyType;
 use linked_data::beacon::Topics;
 use linked_data::comments::Commentary;
 use linked_data::feed::FeedAnchor;
+use linked_data::friends::Friendlies;
 use linked_data::moderation::{Bans, Moderators};
 
 use structopt::StructOpt;
@@ -57,11 +59,12 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     let key_list = ipfs.key_list().await?;
 
-    let (bans, mods, content_feed, comments) = tokio::try_join!(
+    let (bans, mods, content_feed, comments, friends) = tokio::try_join!(
         create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &key_list),
         create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &key_list),
         create_ipns_link::<FeedAnchor>(&ipfs, "Content Feed", FEED_KEY, &key_list),
-        create_ipns_link::<Commentary>(&ipfs, "Comments", COMMENTS_KEY, &key_list)
+        create_ipns_link::<Commentary>(&ipfs, "Comments", COMMENTS_KEY, &key_list),
+        create_ipns_link::<Friendlies>(&ipfs, "Friends", FRIENDS_KEY, &key_list)
     )?;
 
     println!("Creating Beacon...");
@@ -101,6 +104,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
         mods,
         content_feed,
         comments,
+        friends,
     };
 
     let cid = ipfs_dag_put_node_async(&ipfs, &beacon).await?;

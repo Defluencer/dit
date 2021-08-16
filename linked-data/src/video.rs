@@ -9,13 +9,10 @@ use cid::Cid;
 
 /// Metadata for video thumbnail and playback.
 /// Recursive pin.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct VideoMetadata {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
-
-    /// Duration in seconds.
-    pub duration: f64,
 
     /// Link to TimecodeNode.
     pub video: IPLDLink,
@@ -25,6 +22,9 @@ pub struct VideoMetadata {
 
     /// Title of this video.
     pub title: String,
+
+    /// Duration in seconds.
+    pub duration: f64,
 }
 
 impl VideoMetadata {
