@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 pub struct Topics {
     pub live_video: String,
     pub live_chat: String,
-    pub comments: String,
 }
 
 /// Mostly static links to content.
@@ -17,18 +16,18 @@ pub struct Beacon {
     /// IPFS Peer ID. Base58btc.
     pub peer_id: String,
 
-    /// Link to all banned addresses.
-    pub bans: String, //IPNS path -> "/ipns/<hash>"
-
-    /// Link to all moderator addresses.
-    pub mods: String, //IPNS path -> "/ipns/<hash>"
-
     /// Link to list of content metadata.
     pub content_feed: String, //IPNS path -> "/ipns/<hash>"
 
     /// Link to list of comments.
-    pub comments: String, //IPNS path -> "/ipns/<hash>"
+    pub comments: Option<String>, //IPNS path -> "/ipns/<hash>"
 
     /// Link to list of your friend's beacons.
-    pub friends: String, //IPNS path -> "/ipns/<hash>"
+    pub friends: Option<String>, //IPNS path -> "/ipns/<hash>"
+
+    /// Link to all banned addresses.
+    pub bans: Option<String>, //IPNS path -> "/ipns/<hash>"
+
+    /// Link to all moderator addresses.
+    pub mods: Option<String>, //IPNS path -> "/ipns/<hash>"
 }

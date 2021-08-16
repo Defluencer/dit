@@ -270,27 +270,29 @@ impl App {
             });
         }
 
-        spawn_local({
-            let cb = self.comments_cb.clone();
-            let ipfs = self.props.ipfs.clone();
-            let comments = beacon.comments.clone();
-
-            async move { cb.emit(ipfs.resolve_and_dag_get(comments).await) }
-        });
-
-        if let Some(cid) = self.props.storage.get_cid(&beacon.comments) {
+        if let Some(comments) = beacon.comments.as_ref() {
             spawn_local({
                 let cb = self.comments_cb.clone();
                 let ipfs = self.props.ipfs.clone();
-                let comments = beacon.comments.clone();
+                let comments = comments.clone();
 
-                async move {
-                    match ipfs.dag_get(cid, Option::<&str>::None).await {
-                        Ok(node) => cb.emit(Ok((comments, cid, node))),
-                        Err(e) => cb.emit(Err(e)),
-                    }
-                }
+                async move { cb.emit(ipfs.resolve_and_dag_get(comments).await) }
             });
+
+            if let Some(cid) = self.props.storage.get_cid(comments) {
+                spawn_local({
+                    let cb = self.comments_cb.clone();
+                    let ipfs = self.props.ipfs.clone();
+                    let comments = comments.clone();
+
+                    async move {
+                        match ipfs.dag_get(cid, Option::<&str>::None).await {
+                            Ok(node) => cb.emit(Ok((comments, cid, node))),
+                            Err(e) => cb.emit(Err(e)),
+                        }
+                    }
+                });
+            }
         }
 
         if self.beacon.is_some() {
@@ -298,73 +300,79 @@ impl App {
             return false;
         }
 
-        spawn_local({
-            let cb = self.friends_cb.clone();
-            let ipfs = self.props.ipfs.clone();
-            let friends = beacon.friends.clone();
-
-            async move { cb.emit(ipfs.resolve_and_dag_get(friends).await) }
-        });
-
-        if let Some(cid) = self.props.storage.get_cid(&beacon.friends) {
+        if let Some(friends) = beacon.friends.as_ref() {
             spawn_local({
                 let cb = self.friends_cb.clone();
                 let ipfs = self.props.ipfs.clone();
-                let friends = beacon.friends.clone();
+                let friends = friends.clone();
 
-                async move {
-                    match ipfs.dag_get(cid, Option::<&str>::None).await {
-                        Ok(node) => cb.emit(Ok((friends, cid, node))),
-                        Err(e) => cb.emit(Err(e)),
-                    }
-                }
+                async move { cb.emit(ipfs.resolve_and_dag_get(friends).await) }
             });
+
+            if let Some(cid) = self.props.storage.get_cid(friends) {
+                spawn_local({
+                    let cb = self.friends_cb.clone();
+                    let ipfs = self.props.ipfs.clone();
+                    let friends = friends.clone();
+
+                    async move {
+                        match ipfs.dag_get(cid, Option::<&str>::None).await {
+                            Ok(node) => cb.emit(Ok((friends, cid, node))),
+                            Err(e) => cb.emit(Err(e)),
+                        }
+                    }
+                });
+            }
         }
 
-        spawn_local({
-            let cb = self.bans_cb.clone();
-            let ipfs = self.props.ipfs.clone();
-            let bans = beacon.bans.clone();
-
-            async move { cb.emit(ipfs.resolve_and_dag_get(bans).await) }
-        });
-
-        if let Some(cid) = self.props.storage.get_cid(&beacon.bans) {
+        if let Some(bans) = beacon.bans.as_ref() {
             spawn_local({
                 let cb = self.bans_cb.clone();
                 let ipfs = self.props.ipfs.clone();
-                let bans = beacon.bans.clone();
+                let bans = bans.clone();
 
-                async move {
-                    match ipfs.dag_get(cid, Option::<&str>::None).await {
-                        Ok(node) => cb.emit(Ok((bans, cid, node))),
-                        Err(e) => cb.emit(Err(e)),
-                    }
-                }
+                async move { cb.emit(ipfs.resolve_and_dag_get(bans).await) }
             });
+
+            if let Some(cid) = self.props.storage.get_cid(bans) {
+                spawn_local({
+                    let cb = self.bans_cb.clone();
+                    let ipfs = self.props.ipfs.clone();
+                    let bans = bans.clone();
+
+                    async move {
+                        match ipfs.dag_get(cid, Option::<&str>::None).await {
+                            Ok(node) => cb.emit(Ok((bans, cid, node))),
+                            Err(e) => cb.emit(Err(e)),
+                        }
+                    }
+                });
+            }
         }
 
-        spawn_local({
-            let cb = self.mods_cb.clone();
-            let ipfs = self.props.ipfs.clone();
-            let mods = beacon.mods.clone();
-
-            async move { cb.emit(ipfs.resolve_and_dag_get(mods).await) }
-        });
-
-        if let Some(cid) = self.props.storage.get_cid(&beacon.mods) {
+        if let Some(mods) = beacon.mods.as_ref() {
             spawn_local({
                 let cb = self.mods_cb.clone();
                 let ipfs = self.props.ipfs.clone();
-                let mods = beacon.mods.clone();
+                let mods = mods.clone();
 
-                async move {
-                    match ipfs.dag_get(cid, Option::<&str>::None).await {
-                        Ok(node) => cb.emit(Ok((mods, cid, node))),
-                        Err(e) => cb.emit(Err(e)),
-                    }
-                }
+                async move { cb.emit(ipfs.resolve_and_dag_get(mods).await) }
             });
+
+            if let Some(cid) = self.props.storage.get_cid(mods) {
+                spawn_local({
+                    let cb = self.mods_cb.clone();
+                    let ipfs = self.props.ipfs.clone();
+                    let mods = mods.clone();
+
+                    async move {
+                        match ipfs.dag_get(cid, Option::<&str>::None).await {
+                            Ok(node) => cb.emit(Ok((mods, cid, node))),
+                            Err(e) => cb.emit(Err(e)),
+                        }
+                    }
+                });
+            }
         }
 
         if self.beacon.is_none() {

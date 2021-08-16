@@ -6,6 +6,8 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
+const CONFIG_LOCATION: &str = "config.json";
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ArchiveConfig {
     #[serde(skip)]
@@ -38,8 +40,6 @@ pub struct Configuration {
     pub video: VideoConfig,
     pub chat: ChatConfig,
 }
-
-const CONFIG_LOCATION: &str = "config.json";
 
 impl Configuration {
     pub async fn from_file() -> Result<Self, Error> {

@@ -32,7 +32,13 @@ impl Component for Thumbnail {
         false
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if self.metadata_cid != props.metadata_cid {
+            *self = props;
+
+            return true;
+        }
+
         false
     }
 

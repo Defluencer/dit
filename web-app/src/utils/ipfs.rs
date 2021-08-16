@@ -21,7 +21,7 @@ use cid::Cid;
 use reqwest::multipart::Form;
 use reqwest::{Client, Url};
 
-const DEFAULT_URI: &str = "http://localhost:5001/api/v0/";
+const DEFAULT_URI: &str = "http://127.0.0.1:5001/api/v0/";
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

@@ -38,10 +38,6 @@ pub struct Create {
     /// GossipSub topic for video broadcasting.
     #[structopt(long)]
     videos: String,
-
-    /// GossipSub topic for comments.
-    #[structopt(long)]
-    comments: String,
 }
 
 pub async fn beacon_cli(cli: Beacon) {
@@ -88,7 +84,6 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let topics = Topics {
         live_video: config.video.pubsub_topic,
         live_chat: config.chat.topic,
-        comments: args.comments,
     };
 
     let res = ipfs.id(None).await?;
@@ -100,11 +95,11 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let beacon = linked_data::beacon::Beacon {
         topics,
         peer_id,
-        bans,
-        mods,
+        bans: Some(bans),
+        mods: Some(mods),
         content_feed,
-        comments,
-        friends,
+        comments: Some(comments),
+        friends: Some(friends),
     };
 
     let cid = ipfs_dag_put_node_async(&ipfs, &beacon).await?;

@@ -59,8 +59,3 @@ impl Comment {
         }
     }
 }
-
-//TODO build a comments database
-//search by content cid
-//deduplication
-//easy merging
