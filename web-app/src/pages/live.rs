@@ -8,6 +8,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use linked_data::beacon::Beacon;
 use linked_data::moderation::{Bans, Moderators};
 
+/// Page displaying live video and chat.
 #[derive(Properties, Clone)]
 pub struct Live {
     pub ipfs: IpfsService,

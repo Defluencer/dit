@@ -2,6 +2,7 @@ use crate::components::Navbar;
 
 use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
 
+/// The landing page.
 pub struct Home {}
 
 impl Component for Home {

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::pages::{Blog, ContentFeed, Home, Live, Settings, Video};
+use crate::pages::{Content, ContentFeed, Home, Live, Settings};
 use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use wasm_bindgen_futures::spawn_local;
@@ -24,11 +24,8 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Switch, Debug, Clone)]
 pub enum AppRoute {
-    #[to = "/#/video/{cid}"]
-    Video(Cid),
-
-    #[to = "/#/weblog/{cid}"]
-    Blog(Cid),
+    #[to = "/#/content/{cid}"]
+    Content(Cid),
 
     #[to = "/#/settings"]
     Settings,
@@ -78,10 +75,10 @@ pub enum AppMsg {
     ENSResolve(Result<Cid>),
     Beacon(Result<Beacon>),
     Feed(Result<(String, Cid, FeedAnchor)>),
-    BanList(Result<(String, Cid, Bans)>),
-    ModList(Result<(String, Cid, Moderators)>),
-    CommentList(Result<(String, Cid, Commentary)>),
-    FriendList(Result<(String, Cid, Friendlies)>),
+    Bans(Result<(String, Cid, Bans)>),
+    Mods(Result<(String, Cid, Moderators)>),
+    Comments(Result<(String, Cid, Commentary)>),
+    Friends(Result<(String, Cid, Friendlies)>),
 }
 
 #[derive(Properties, Clone)]
@@ -134,19 +131,19 @@ impl Component for App {
 
             bans_cid: None,
             bans: Rc::from(Bans::default()),
-            bans_cb: link.callback(AppMsg::BanList),
+            bans_cb: link.callback(AppMsg::Bans),
 
             mods_cid: None,
             mods: Rc::from(Moderators::default()),
-            mods_cb: link.callback(AppMsg::ModList),
+            mods_cb: link.callback(AppMsg::Mods),
 
             comments_set: HashMap::with_capacity(10),
             comments: Rc::from(Commentary::default()),
-            comments_cb: link.callback(AppMsg::CommentList),
+            comments_cb: link.callback(AppMsg::Comments),
 
             friends_cid: None,
             friends: Rc::from(Friendlies::default()),
-            friends_cb: link.callback(AppMsg::FriendList),
+            friends_cb: link.callback(AppMsg::Friends),
         }
     }
 
@@ -155,10 +152,10 @@ impl Component for App {
             AppMsg::ENSResolve(result) => self.on_name(result),
             AppMsg::Beacon(result) => self.on_beacon(result),
             AppMsg::Feed(result) => self.on_feed(result),
-            AppMsg::BanList(result) => self.on_ban_list(result),
-            AppMsg::ModList(result) => self.on_mod_list(result),
-            AppMsg::CommentList(result) => self.on_comments(result),
-            AppMsg::FriendList(result) => self.on_friends(result),
+            AppMsg::Bans(result) => self.on_ban_list(result),
+            AppMsg::Mods(result) => self.on_mod_list(result),
+            AppMsg::Comments(result) => self.on_comments(result),
+            AppMsg::Friends(result) => self.on_friends(result),
         }
     }
 
@@ -182,8 +179,7 @@ impl Component for App {
                 <Router<AppRoute>
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
-                            AppRoute::Video(cid) => html! { <Video ipfs=ipfs.clone() metadata_cid=cid /> },
-                            AppRoute::Blog(cid) => html! { <Blog ipfs=ipfs.clone() metadata_cid=cid /> },
+                            AppRoute::Content(cid) => html! { <Content ipfs=ipfs.clone() metadata_cid=cid /> },
                             AppRoute::Settings => html! { <Settings storage=storage.clone() /> },
                             AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() beacon=beacon.clone() bans=bans.clone() mods=mods.clone() /> },
                             AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() feed=feed.clone() /> },

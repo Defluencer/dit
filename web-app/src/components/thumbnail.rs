@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::app::AppRoute;
+use crate::components::Image;
 use crate::utils::seconds_to_timecode;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
@@ -14,6 +15,7 @@ use cid::Cid;
 
 type Anchor = RouterAnchor<AppRoute>;
 
+/// Content thumbnails for any media type.
 #[derive(Properties, Clone)]
 pub struct Thumbnail {
     pub metadata_cid: Cid,
@@ -57,10 +59,10 @@ impl Thumbnail {
 
         html! {
             <div class="thumbnail">
-                <Anchor route=AppRoute::Video(self.metadata_cid) classes="thumbnail_link">
+                <Anchor route=AppRoute::Content(self.metadata_cid) classes="thumbnail_link">
                     <div class="video_thumbnail_title"> { &metadata.title } </div>
                     <div class="video_thumbnail_image">
-                        <img src=format!("ipfs://{}", metadata.image.link.to_string()) alt="This image require IPFS native browser" />
+                        <Image image_cid=metadata.image.link />
                     </div>
                     <div class="video_thumbnail_duration"> {&format!("{}:{}:{}", hour, minute, second) } </div>
                 </Anchor>
@@ -71,10 +73,10 @@ impl Thumbnail {
     fn render_blog(&self, metadata: &FullPost) -> Html {
         html! {
             <div class="thumbnail">
-                <Anchor route=AppRoute::Blog(self.metadata_cid) classes="thumbnail_link">
+                <Anchor route=AppRoute::Content(self.metadata_cid) classes="thumbnail_link">
                     <div class="post_thumbnail_title"> { &metadata.title } </div>
                     <div class="post_thumbnail_image">
-                        <img src=format!("ipfs://{}", metadata.image.link.to_string()) alt="This image require IPFS native browser" />
+                        <Image image_cid=metadata.image.link />
                     </div>
                 </Anchor>
             </div>
@@ -84,7 +86,9 @@ impl Thumbnail {
     fn render_statement(&self, metadata: &MicroPost) -> Html {
         html! {
             <div class="thumbnail">
-                <div class="statement_text"> { &metadata.content } </div>
+                <Anchor route=AppRoute::Content(self.metadata_cid) classes="thumbnail_link">
+                    <div class="statement_text"> { &metadata.content } </div>
+                </Anchor>
             </div>
         }
     }

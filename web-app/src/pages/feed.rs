@@ -16,6 +16,7 @@ use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+/// Page displaying content thumbnails from you and your friends.
 pub struct ContentFeed {
     props: Props,
     cb: Callback<(Cid, Result<Media>)>,

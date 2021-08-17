@@ -1,5 +1,6 @@
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
+/// Error indicator.
 #[derive(Clone, Properties)]
 pub struct Error {}
 

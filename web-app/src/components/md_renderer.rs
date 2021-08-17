@@ -10,6 +10,7 @@ use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+/// Markdown renderer.
 pub struct Markdown {
     text: String,
 }

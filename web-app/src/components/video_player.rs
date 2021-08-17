@@ -52,6 +52,7 @@ struct LiveStream {
     drop_sig: Rc<AtomicBool>,
 }
 
+/// Video player for live streams and on demand.
 pub struct VideoPlayer {
     link: ComponentLink<Self>,
 
