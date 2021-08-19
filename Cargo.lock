@@ -447,6 +447,9 @@ name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "encoding_rs"
@@ -1096,6 +1099,7 @@ name = "linked-data"
 version = "0.1.0"
 dependencies = [
  "cid",
+ "either",
  "libsecp256k1",
  "serde",
  "serde_json",
@@ -1996,6 +2000,7 @@ name = "streamer-cli"
 version = "0.1.0"
 dependencies = [
  "cid",
+ "either",
  "futures-util",
  "hex",
  "hyper",
@@ -2479,6 +2484,7 @@ version = "0.1.0"
 dependencies = [
  "blockies",
  "cid",
+ "either",
  "futures",
  "futures-util",
  "js-sys",

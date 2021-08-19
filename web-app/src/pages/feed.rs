@@ -10,6 +10,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 use yew::Callback;
 
+use linked_data::comments::Commentary;
 use linked_data::feed::{FeedAnchor, Media};
 
 use cid::Cid;
@@ -34,6 +35,7 @@ pub struct Props {
     pub ipfs: IpfsService,
     pub storage: LocalStorage,
     pub feed: Rc<FeedAnchor>,
+    pub comments: Rc<Commentary>,
 }
 
 impl Component for ContentFeed {
@@ -80,7 +82,7 @@ impl Component for ContentFeed {
                 <>
                     {
                         for self.content.iter().rev().map(|(cid, metadata)| {
-                            html! { <Thumbnail metadata_cid=*cid metadata=metadata.clone() /> }
+                            html! { <Thumbnail metadata_cid=*cid metadata=metadata.clone() comments=self.props.comments.clone() /> }
                         })
                     }
                 </>

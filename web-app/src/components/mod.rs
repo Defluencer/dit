@@ -1,4 +1,5 @@
 mod chat;
+mod comment;
 mod error;
 mod image;
 mod loading;
@@ -8,6 +9,7 @@ mod thumbnail;
 mod video_player;
 
 pub use chat::ChatWindow;
+pub use comment::Comment;
 pub use error::Error;
 pub use image::Image;
 pub use loading::Loading;

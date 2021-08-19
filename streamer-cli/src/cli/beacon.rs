@@ -40,6 +40,8 @@ pub struct Create {
     videos: String,
 }
 
+//TODO have topics be hashes
+
 pub async fn beacon_cli(cli: Beacon) {
     let res = match cli.cmd {
         Command::Create(create) => create_beacon(create).await,

@@ -8,6 +8,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew_router::components::RouterAnchor;
 
 use linked_data::blog::{FullPost, MicroPost};
+use linked_data::comments::Commentary;
 use linked_data::feed::Media;
 use linked_data::video::VideoMetadata;
 
@@ -20,6 +21,7 @@ type Anchor = RouterAnchor<AppRoute>;
 pub struct Thumbnail {
     pub metadata_cid: Cid,
     pub metadata: Rc<Media>,
+    pub comments: Rc<Commentary>,
 }
 
 impl Component for Thumbnail {
@@ -45,16 +47,21 @@ impl Component for Thumbnail {
     }
 
     fn view(&self) -> Html {
+        let numb = match self.comments.map.get(&self.metadata_cid.to_string()) {
+            Some(vec) => vec.len(),
+            None => 0,
+        };
+
         match &*self.metadata {
-            Media::Video(metadata) => self.render_video(metadata),
-            Media::Blog(metadata) => self.render_blog(metadata),
-            Media::Statement(metadata) => self.render_statement(metadata),
+            Media::Video(metadata) => self.render_video(metadata, numb),
+            Media::Blog(metadata) => self.render_blog(metadata, numb),
+            Media::Statement(metadata) => self.render_statement(metadata, numb),
         }
     }
 }
 
 impl Thumbnail {
-    fn render_video(&self, metadata: &VideoMetadata) -> Html {
+    fn render_video(&self, metadata: &VideoMetadata, numb: usize) -> Html {
         let (hour, minute, second) = seconds_to_timecode(metadata.duration);
 
         html! {
@@ -65,12 +72,13 @@ impl Thumbnail {
                         <Image image_cid=metadata.image.link />
                     </div>
                     <div class="video_thumbnail_duration"> {&format!("{}:{}:{}", hour, minute, second) } </div>
+                    <div> { format!("{} Comments", numb) } </div>
                 </Anchor>
             </div>
         }
     }
 
-    fn render_blog(&self, metadata: &FullPost) -> Html {
+    fn render_blog(&self, metadata: &FullPost, numb: usize) -> Html {
         html! {
             <div class="thumbnail">
                 <Anchor route=AppRoute::Content(self.metadata_cid) classes="thumbnail_link">
@@ -78,16 +86,18 @@ impl Thumbnail {
                     <div class="post_thumbnail_image">
                         <Image image_cid=metadata.image.link />
                     </div>
+                    <div> { format!("{} Comments", numb) } </div>
                 </Anchor>
             </div>
         }
     }
 
-    fn render_statement(&self, metadata: &MicroPost) -> Html {
+    fn render_statement(&self, metadata: &MicroPost, numb: usize) -> Html {
         html! {
             <div class="thumbnail">
                 <Anchor route=AppRoute::Content(self.metadata_cid) classes="thumbnail_link">
                     <div class="statement_text"> { &metadata.content } </div>
+                    <div> { format!("{} Comments", numb) } </div>
                 </Anchor>
             </div>
         }

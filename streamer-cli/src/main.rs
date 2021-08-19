@@ -4,8 +4,10 @@ mod server;
 mod utils;
 
 use crate::cli::beacon::{beacon_cli, Beacon};
+use crate::cli::comments::{comments_cli, Comments};
 use crate::cli::content::{content_feed_cli, Content};
 use crate::cli::file::{file_cli, File};
+use crate::cli::friends::{friends_cli, Friends};
 use crate::cli::moderation::{moderation_cli, Moderation};
 use crate::cli::stream::{stream_cli, Stream};
 
@@ -30,6 +32,12 @@ enum CommandLineInterface {
 
     /// Manage your content feed.
     Content(Content),
+
+    /// Manage your comments.
+    Comments(Comments),
+
+    /// Manage your friends list.
+    Friends(Friends),
 }
 
 #[tokio::main]
@@ -40,5 +48,7 @@ async fn main() {
         CommandLineInterface::Beacon(beacon) => beacon_cli(beacon).await,
         CommandLineInterface::Moderation(mods) => moderation_cli(mods).await,
         CommandLineInterface::Content(feed) => content_feed_cli(feed).await,
+        CommandLineInterface::Comments(comments) => comments_cli(comments).await,
+        CommandLineInterface::Friends(friends) => friends_cli(friends).await,
     }
 }

@@ -52,7 +52,7 @@ where
 {
     let cid_str: &str = Deserialize::deserialize(deserializer)?;
 
-    let cid = Cid::try_from(cid_str).expect("Deserialize string to CID failed");
+    let cid = Cid::try_from(cid_str).expect("Deserialized CID");
 
     Ok(cid)
 }

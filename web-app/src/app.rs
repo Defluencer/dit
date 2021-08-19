@@ -18,6 +18,8 @@ use linked_data::friends::Friendlies;
 use linked_data::moderation::Bans;
 use linked_data::moderation::Moderators;
 
+use either::Either;
+
 use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -171,7 +173,7 @@ impl Component for App {
         let beacon = self.beacon.clone().unwrap_or_default();
         let bans = self.bans.clone();
         let mods = self.mods.clone();
-        //let comments = self.comments.clone();
+        let comments = self.comments.clone();
         //let friends = self.friends.clone();
 
         html! {
@@ -179,10 +181,10 @@ impl Component for App {
                 <Router<AppRoute>
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
-                            AppRoute::Content(cid) => html! { <Content ipfs=ipfs.clone() metadata_cid=cid /> },
+                            AppRoute::Content(cid) => html! { <Content ipfs=ipfs.clone() metadata_cid=cid comments=comments.clone() /> },
                             AppRoute::Settings => html! { <Settings storage=storage.clone() /> },
                             AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() beacon=beacon.clone() bans=bans.clone() mods=mods.clone() /> },
-                            AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() feed=feed.clone() /> },
+                            AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() feed=feed.clone() comments=comments.clone() /> },
                             AppRoute::Home => html! { <Home /> },
                         }
                     })
@@ -499,24 +501,27 @@ impl App {
         #[cfg(debug_assertions)]
         ConsoleService::info("Friend List Update");
 
-        for name in friends.ens_domains.iter() {
-            spawn_local({
-                let web3 = self.props.web3.clone();
-                let name = name.clone();
-                let name_cb = self.name_cb.clone();
+        for friend in friends.list.iter() {
+            match &friend.friend {
+                Either::Right(ipld) => {
+                    spawn_local({
+                        let ipfs = self.props.ipfs.clone();
+                        let cid = ipld.link;
+                        let beacon_cb = self.beacon_cb.clone();
 
-                async move { name_cb.emit(web3.get_ipfs_content(name).await) }
-            })
-        }
+                        async move { beacon_cb.emit(ipfs.dag_get(cid, Option::<&str>::None).await) }
+                    });
+                }
+                Either::Left(name) => {
+                    spawn_local({
+                        let web3 = self.props.web3.clone();
+                        let name = name.clone();
+                        let name_cb = self.name_cb.clone();
 
-        for beacon in friends.beacons.iter() {
-            spawn_local({
-                let ipfs = self.props.ipfs.clone();
-                let cid = beacon.link;
-                let beacon_cb = self.beacon_cb.clone();
-
-                async move { beacon_cb.emit(ipfs.dag_get(cid, Option::<&str>::None).await) }
-            })
+                        async move { name_cb.emit(web3.get_ipfs_content(name).await) }
+                    });
+                }
+            }
         }
 
         self.props.storage.set_cid(&ipns, &friends_cid);

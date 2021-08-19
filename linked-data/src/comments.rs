@@ -7,30 +7,31 @@ use serde::{Deserialize, Serialize};
 
 /// Metadata of all your comments.
 /// Direct Pin.
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 pub struct Commentary {
     /// Content cids mapped to lists of links to signed comments ordered from oldest to newest.
-    pub metadata: HashMap<String, Vec<IPLDLink>>,
+    pub map: HashMap<String, Vec<IPLDLink>>,
 }
 
 impl Commentary {
     pub fn merge(&mut self, other: Self) {
-        for (cid, mut links) in other.metadata.into_iter() {
-            match self.metadata.get_mut(&cid) {
+        for (cid, mut links) in other.map.into_iter() {
+            match self.map.get_mut(&cid) {
                 Some(vec) => {
                     vec.append(&mut links);
                 }
                 None => {
-                    self.metadata.insert(cid, links);
+                    self.map.insert(cid, links);
                 }
             }
         }
     }
 }
 
-/// A comment. Must be crypto-signed.
+/// Comment metadata and text.
+/// Must be crypto-signed to prove authenticity.
 /// Direct Pin.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Comment {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
@@ -57,5 +58,47 @@ impl Comment {
             reply,
             comment,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cid::Cid;
+
+    #[test]
+    fn serde_test() {
+        let mut old_comments = Commentary {
+            map: HashMap::with_capacity(2),
+        };
+
+        old_comments
+            .map
+            .insert("CID1".to_owned(), vec![Cid::default().into()]);
+        old_comments
+            .map
+            .insert("CID2".to_owned(), vec![Cid::default().into()]);
+
+        let json = match serde_json::to_string_pretty(&old_comments) {
+            Ok(json) => json,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        };
+
+        println!("{}", json);
+
+        let new_comments = match serde_json::from_str(&json) {
+            Ok(json) => json,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        };
+
+        println!("{:?}", new_comments);
+
+        assert_eq!(old_comments, new_comments);
     }
 }

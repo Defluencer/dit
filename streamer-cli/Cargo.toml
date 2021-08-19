@@ -8,6 +8,7 @@ description = "Defluencer toolkit command line interface."
 
 [dependencies]
 cid = "0.7"
+either = {version = "1.6", features = ["serde"]}
 futures-util = "0.3"
 hex = "0.4"
 hyper = { version = "0.14", features = ["http1", "server", "runtime", "stream"] }
