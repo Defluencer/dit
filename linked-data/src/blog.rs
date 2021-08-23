@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use cid::Cid;
 
 /// A micro blog post (Twitter-sytle).
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Eq, Clone)]
 pub struct MicroPost {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
@@ -39,7 +39,7 @@ impl MicroPost {
 
 /// Metadata for a long blog post.
 /// Recursive pin.
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Eq, Clone)]
 pub struct FullPost {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,

@@ -281,7 +281,7 @@ impl Inputs {
 
         spawn_local({
             let ipfs = self.props.ipfs.clone();
-            let topic = self.props.beacon.topics.live_chat.clone();
+            let topic = self.props.beacon.topics.chat.clone();
 
             async move {
                 if let Err(e) = ipfs.pubsub_pub(topic, json_string).await {

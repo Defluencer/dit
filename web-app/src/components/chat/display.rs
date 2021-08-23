@@ -58,7 +58,7 @@ impl Component for Display {
 
         spawn_local({
             let ipfs = props.ipfs.clone();
-            let sub_topic = props.beacon.topics.live_chat.clone();
+            let sub_topic = props.beacon.topics.chat.clone();
             let cb = link.callback(Msg::PubSub);
             let sig = drop_sig.clone();
 

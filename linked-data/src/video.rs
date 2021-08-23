@@ -9,7 +9,7 @@ use cid::Cid;
 
 /// Metadata for video thumbnail and playback.
 /// Recursive pin.
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct VideoMetadata {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,

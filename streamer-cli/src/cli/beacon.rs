@@ -1,8 +1,11 @@
+use std::convert::TryFrom;
+
 use crate::cli::content::{COMMENTS_KEY, FEED_KEY};
 use crate::cli::friends::FRIENDS_KEY;
 use crate::cli::moderation::{BANS_KEY, MODS_KEY};
 use crate::utils::config::Configuration;
 use crate::utils::dag_nodes::{ipfs_dag_put_node_async, search_keypairs, update_ipns};
+
 use serde::Serialize;
 
 use ipfs_api::response::Error;
@@ -13,9 +16,13 @@ use linked_data::beacon::Topics;
 use linked_data::comments::Commentary;
 use linked_data::feed::FeedAnchor;
 use linked_data::friends::Friendlies;
+use linked_data::keccak256;
 use linked_data::moderation::{Bans, Moderators};
 
 use structopt::StructOpt;
+
+use cid::multibase::{encode, Base};
+use cid::Cid;
 
 #[derive(Debug, StructOpt)]
 pub struct Beacon {
@@ -31,16 +38,10 @@ enum Command {
 
 #[derive(Debug, StructOpt)]
 pub struct Create {
-    /// GossipSub topic for live chat.
-    #[structopt(long)]
-    chat: String,
-
-    /// GossipSub topic for video broadcasting.
-    #[structopt(long)]
-    videos: String,
+    /// Your choosen display name.
+    #[structopt(short, long)]
+    display_name: String,
 }
-
-//TODO have topics be hashes
 
 pub async fn beacon_cli(cli: Beacon) {
     let res = match cli.cmd {
@@ -54,6 +55,8 @@ pub async fn beacon_cli(cli: Beacon) {
 
 async fn create_beacon(args: Create) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
+
+    let Create { display_name } = args;
 
     let key_list = ipfs.key_list().await?;
 
@@ -75,17 +78,20 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
         }
     };
 
-    config.chat.topic = args.chat;
-    config.chat.mods = mods.clone();
-    config.chat.bans = bans.clone();
-
-    config.video.pubsub_topic = args.videos;
+    config.chat.topic = encode(
+        Base::Base32Lower,
+        &keccak256(&format!("{}_video", &display_name).into_bytes()),
+    );
+    config.video.pubsub_topic = encode(
+        Base::Base32Lower,
+        &keccak256(&format!("{}_chat", &display_name).into_bytes()),
+    );
 
     config.save_to_file().await?;
 
     let topics = Topics {
-        live_video: config.video.pubsub_topic,
-        live_chat: config.chat.topic,
+        video: config.video.pubsub_topic,
+        chat: config.chat.topic,
     };
 
     let res = ipfs.id(None).await?;
@@ -97,6 +103,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let beacon = linked_data::beacon::Beacon {
         topics,
         peer_id,
+        display_name,
         bans: Some(bans),
         mods: Some(mods),
         content_feed,
@@ -118,11 +125,11 @@ async fn create_ipns_link<T>(
     name: &str,
     key: &str,
     key_list: &ipfs_api::response::KeyPairList,
-) -> Result<String, Error>
+) -> Result<Cid, Error>
 where
     T: Default + Serialize,
 {
-    let mut link = match search_keypairs(key, key_list) {
+    let link = match search_keypairs(key, key_list) {
         Some(kp) => kp.id.to_owned(),
         None => {
             println!("Generating {} IPNS Key...", name);
@@ -137,11 +144,11 @@ where
         }
     };
 
-    link.insert_str(0, "/ipns/"); // add this in front to make a path
+    let cid = Cid::try_from(link).expect("Serialize CID");
 
-    println!("✅ {} IPNS Link => {}", name, &link);
+    println!("✅ {} IPNS Link => {}", name, &cid);
 
-    Ok(link)
+    Ok(cid)
 }
 
 async fn generate_key(ipfs: &IpfsClient, key: &str) -> Result<String, Error> {

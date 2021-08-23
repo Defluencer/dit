@@ -8,9 +8,8 @@ pub mod moderation;
 pub mod signature;
 pub mod video;
 
-use std::convert::TryFrom;
-
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 
 use cid::Cid;
 
@@ -21,15 +20,15 @@ pub type Address = [u8; 20];
 pub type PeerId = String;
 
 /// IPNS link
-pub type IPNSLink = String;
+pub type IPNSLink = Cid;
 
+#[serde_as]
 #[derive(
     Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Default, Hash, PartialOrd, Ord,
 )]
 pub struct IPLDLink {
     #[serde(rename = "/")]
-    #[serde(serialize_with = "serialize_cid")]
-    #[serde(deserialize_with = "deserialize_cid")]
+    #[serde_as(as = "DisplayFromStr")]
     pub link: Cid,
 }
 
@@ -39,20 +38,12 @@ impl From<Cid> for IPLDLink {
     }
 }
 
-pub fn serialize_cid<S>(cid: &Cid, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    serializer.serialize_str(&cid.to_string())
-}
-
-pub fn deserialize_cid<'de, D>(deserializer: D) -> Result<Cid, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let cid_str: &str = Deserialize::deserialize(deserializer)?;
-
-    let cid = Cid::try_from(cid_str).expect("Deserialized CID");
-
-    Ok(cid)
+/// Compute the Keccak-256 hash of input bytes.
+pub fn keccak256(bytes: &[u8]) -> [u8; 32] {
+    use tiny_keccak::{Hasher, Keccak};
+    let mut output = [0u8; 32];
+    let mut hasher = Keccak::v256();
+    hasher.update(bytes);
+    hasher.finalize(&mut output);
+    output
 }

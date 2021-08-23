@@ -31,31 +31,19 @@ mod tests {
         let mut old_friends = Friendlies {
             list: HashSet::with_capacity(2),
         };
+
         old_friends.list.insert(Friend {
             friend: Either::Left("friend1".to_owned()),
         });
+
         old_friends.list.insert(Friend {
             friend: Either::Right(Cid::default().into()),
         });
 
-        let json = match serde_json::to_string_pretty(&old_friends) {
-            Ok(json) => json,
-            Err(e) => {
-                eprintln!("{}", e);
-                return;
-            }
-        };
-
+        let json = serde_json::to_string_pretty(&old_friends).expect("Serialize");
         println!("{}", json);
 
-        let new_friends = match serde_json::from_str(&json) {
-            Ok(json) => json,
-            Err(e) => {
-                eprintln!("{}", e);
-                return;
-            }
-        };
-
+        let new_friends = serde_json::from_str(&json).expect("Deserialize");
         println!("{:?}", new_friends);
 
         assert_eq!(old_friends, new_friends);

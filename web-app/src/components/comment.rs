@@ -2,14 +2,11 @@ use std::rc::Rc;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use linked_data::signature::SignedMessage;
-
 #[derive(Clone, Properties)]
 pub struct Comment {
-    pub signed_comment: Rc<SignedMessage<linked_data::comments::Comment>>,
+    pub name: Rc<str>,
+    pub comment: Rc<linked_data::comments::Comment>,
 }
-
-//TODO find a way to get a name for each comments
 
 impl Component for Comment {
     type Message = ();
@@ -24,7 +21,7 @@ impl Component for Comment {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if self.signed_comment != props.signed_comment {
+        if self.comment != props.comment {
             *self = props;
 
             return true;
@@ -36,7 +33,8 @@ impl Component for Comment {
     fn view(&self) -> Html {
         html! {
             <div class="=comment">
-                { &self.signed_comment.data.comment }
+                <div class="comment_name"> { &self.name } </div>
+                <div class="comment_text"> { &self.comment.comment } </div>
             </div>
         }
     }

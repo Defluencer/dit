@@ -80,24 +80,6 @@ impl LocalStorage {
         }
     }
 
-    pub fn set_beacon(&self, ens_name: &str, cid: &Cid) {
-        let cid_string = &cid.to_string();
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Storage Set => {} \n {}", ens_name, cid_string));
-
-        if let Err(e) = self.storage.set_item(ens_name, cid_string) {
-            ConsoleService::error(&format!("{:#?}", e));
-        }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Storage Set => {} \n {}", cid_string, ens_name));
-
-        if let Err(e) = self.storage.set_item(cid_string, ens_name) {
-            ConsoleService::error(&format!("{:#?}", e));
-        }
-    }
-
     pub fn set_local_ipfs_addrs(&self, addrs: &str) {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(

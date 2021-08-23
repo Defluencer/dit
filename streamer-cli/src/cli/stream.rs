@@ -58,7 +58,14 @@ pub async fn stream_cli(stream: Stream) {
             let (archive_tx, archive_rx) = unbounded_channel();
 
             if !no_chat {
-                let mut chat = ChatAggregator::new(ipfs.clone(), archive_tx.clone(), chat).await;
+                let mut chat =
+                    match ChatAggregator::new(ipfs.clone(), archive_tx.clone(), chat).await {
+                        Ok(chat) => chat,
+                        Err(e) => {
+                            eprintln!("❗ IPFS: {:#?}", e);
+                            return;
+                        }
+                    };
 
                 let chat_handle = tokio::spawn(async move {
                     chat.start().await;

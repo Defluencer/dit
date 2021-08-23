@@ -145,7 +145,7 @@ impl Component for VideoPlayer {
 
                 spawn_local({
                     let ipfs = ipfs.clone();
-                    let topic = beacon.topics.live_video.clone();
+                    let topic = beacon.topics.video.clone();
                     let cb = link.callback(Msg::PubSub);
                     let sig = drop_sig.clone();
 

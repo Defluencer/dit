@@ -61,23 +61,34 @@ async fn add_comment(command: AddComment) -> Result<(), Error> {
         comment,
     } = command;
 
-    let (old_comments_cid, mut comments) = get_from_ipns::<Commentary>(&ipfs, COMMENTS_KEY).await?;
-
     let reply = reply.map(|rep| rep.into());
     let comment = Comment::create(origin.into(), reply, comment);
     let comment_cid = ipfs_dag_put_node_async(&ipfs, &comment).await?;
 
-    let origin_cid = origin.to_string();
-    match comments.map.get_mut(&origin_cid) {
+    println!("Adding Comment {:?}", &comment_cid);
+
+    println!("Pinning...");
+
+    ipfs.pin_add(&comment_cid.to_string(), false).await?;
+
+    println!("Updating Comment List...");
+
+    let (old_comments_cid, mut comments) = get_from_ipns::<Commentary>(&ipfs, COMMENTS_KEY).await?;
+
+    match comments.map.get_mut(&origin) {
         Some(vec) => vec.push(comment_cid.into()),
         None => {
-            comments.map.insert(origin_cid, vec![comment_cid.into()]);
+            comments.map.insert(origin, vec![comment_cid.into()]);
         }
     }
 
     update_ipns(&ipfs, COMMENTS_KEY, &comments).await?;
+
+    println!("Unpinning Old List...");
+
     ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
-    ipfs.pin_add(&comment_cid.to_string(), false).await?;
+
+    println!("✅ Comment Added");
 
     Ok(())
 }
@@ -98,9 +109,11 @@ async fn remove_comment(command: RemoveComment) -> Result<(), Error> {
 
     let RemoveComment { origin, comment } = command;
 
+    println!("Removing Comment {:?}", &comment);
+
     let (old_comments_cid, mut comments) = get_from_ipns::<Commentary>(&ipfs, COMMENTS_KEY).await?;
 
-    let vec = match comments.map.get_mut(&origin.to_string()) {
+    let vec = match comments.map.get_mut(&origin) {
         Some(vec) => vec,
         None => return Err(Error::Uncategorized("Origin Not Found".into())),
     };
@@ -112,8 +125,15 @@ async fn remove_comment(command: RemoveComment) -> Result<(), Error> {
 
     vec.remove(index);
 
+    println!("Updating Comment List...");
+
     update_ipns(&ipfs, COMMENTS_KEY, &comments).await?;
+
+    println!("Unpinning Old List...");
+
     ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
+
+    println!("✅ Comment Removed");
 
     Ok(())
 }

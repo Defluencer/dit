@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::components::{Comment, Error, Image, Loading, Markdown, Navbar, VideoPlayer};
+use crate::components::{Error, Image, Loading, Markdown, Navbar, VideoPlayer};
 use crate::utils::IpfsService;
 
 use wasm_bindgen_futures::spawn_local;
@@ -11,9 +11,8 @@ use yew::services::ConsoleService;
 use yew::Callback;
 
 use linked_data::blog::{FullPost, MicroPost};
-use linked_data::comments::Commentary;
+use linked_data::comments::{Comment, CommentCache};
 use linked_data::feed::Media;
-use linked_data::signature::SignedMessage;
 use linked_data::video::VideoMetadata;
 
 use cid::Cid;
@@ -31,26 +30,26 @@ enum State {
 pub struct Content {
     props: Props,
 
-    cb: Callback<Result<SignedMessage<linked_data::comments::Comment>>>,
+    cb: Callback<(Cid, Result<Comment>)>,
 
     state: State,
 
     comments_set: HashSet<Cid>,
-    comments: Vec<Rc<SignedMessage<linked_data::comments::Comment>>>,
+    comments: Vec<(Rc<str>, Rc<Comment>)>,
 }
 
 #[derive(Clone, Properties)]
 pub struct Props {
     pub ipfs: IpfsService,
 
-    pub metadata_cid: Cid,
+    pub cid: Cid,
 
-    pub comments: Rc<Commentary>,
+    pub comments: Rc<CommentCache>,
 }
 
 pub enum Msg {
     Metadata(Result<Media>),
-    Comment(Result<SignedMessage<linked_data::comments::Comment>>),
+    Comment((Cid, Result<Comment>)),
 }
 
 impl Component for Content {
@@ -61,7 +60,7 @@ impl Component for Content {
         spawn_local({
             let cb = link.callback_once(Msg::Metadata);
             let ipfs = props.ipfs.clone();
-            let cid = props.metadata_cid;
+            let cid = props.cid;
 
             async move { cb.emit(ipfs.dag_get(cid, Option::<String>::None).await) }
         });
@@ -116,8 +115,8 @@ impl Component for Content {
                 }
                 <div class="comment_section">
                 {
-                    for self.comments.iter().rev().map(|comment| {
-                        html! { <Comment signed_comment=comment.clone() /> }
+                    for self.comments.iter().rev().map(|(name, comment)| {
+                        html! { <crate::components::Comment name=name.clone() comment=comment.clone() /> }
                     })
                 }
                 </div>
@@ -129,19 +128,15 @@ impl Component for Content {
 impl Content {
     /// IPFS dag get all comments starting by newest.
     fn get_comments(&mut self) {
-        let cid = self.props.metadata_cid.to_string();
+        for ipld in self.props.comments.iter_per_origin(&self.props.cid) {
+            if self.comments_set.insert(ipld.link) {
+                spawn_local({
+                    let ipfs = self.props.ipfs.clone();
+                    let cb = self.cb.clone();
+                    let cid = ipld.link;
 
-        if let Some(vec) = self.props.comments.map.get(&cid) {
-            for ipld in vec.iter().rev() {
-                if self.comments_set.insert(ipld.link) {
-                    spawn_local({
-                        let ipfs = self.props.ipfs.clone();
-                        let cb = self.cb.clone();
-                        let cid = ipld.link;
-
-                        async move { cb.emit(ipfs.dag_get(cid, Option::<String>::None).await) }
-                    });
-                }
+                    async move { cb.emit((cid, ipfs.dag_get(cid, Option::<String>::None).await)) }
+                });
             }
         }
     }
@@ -158,13 +153,10 @@ impl Content {
         true
     }
 
-    fn on_comment(
-        &mut self,
-        response: Result<SignedMessage<linked_data::comments::Comment>>,
-    ) -> bool {
-        let signed_comment = match response {
-            Ok(data) => data,
-            Err(e) => {
+    fn on_comment(&mut self, response: (Cid, Result<Comment>)) -> bool {
+        let (cid, comment) = match response {
+            (cid, Ok(node)) => (cid, node),
+            (_, Err(e)) => {
                 ConsoleService::error(&format!("{:?}", e));
                 return false;
             }
@@ -173,16 +165,21 @@ impl Content {
         #[cfg(debug_assertions)]
         ConsoleService::info("Comment Update");
 
-        if !signed_comment.verify() {
+        /* if !signed_comment.verify() {
             return false;
-        }
+        } */
+
+        let name = match self.props.comments.get_comment_name(cid) {
+            Some(name) => Rc::from(name),
+            None => return false,
+        };
 
         let index = self
             .comments
-            .binary_search_by(|probe| probe.data.timestamp.cmp(&signed_comment.data.timestamp))
+            .binary_search_by(|(_, probe)| probe.timestamp.cmp(&comment.timestamp))
             .unwrap_or_else(|x| x);
 
-        self.comments.insert(index, Rc::from(signed_comment));
+        self.comments.insert(index, (name, Rc::from(comment)));
 
         true
     }

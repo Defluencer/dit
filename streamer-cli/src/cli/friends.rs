@@ -22,11 +22,11 @@ pub struct Friends {
 #[derive(Debug, StructOpt)]
 enum Command {
     /// Add a new friend to your list.
-    /// Use either their beacon Cid OR their ethereum name service domain name
+    /// Use either their beacon Cid OR their ethereum name service domain.
     Add(AddFriend),
 
     /// Remove a friend from your list.
-    /// Use either their beacon Cid OR their ethereum name service domain name
+    /// Use either their beacon Cid OR their ethereum name service domain.
     Remove(RemoveFriend),
 }
 
@@ -57,8 +57,6 @@ async fn add_friend(command: AddFriend) -> Result<(), Error> {
 
     let AddFriend { beacon, ens } = command;
 
-    let (old_friends_cid, mut friends) = get_from_ipns::<Friendlies>(&ipfs, FRIENDS_KEY).await?;
-
     let new_friend = match (beacon, ens) {
         (Some(cid), None) => Friend {
             friend: Either::Right(cid.into()),
@@ -73,10 +71,21 @@ async fn add_friend(command: AddFriend) -> Result<(), Error> {
         }
     };
 
+    println!("Adding Friend {:?}", &new_friend.friend);
+
+    let (old_friends_cid, mut friends) = get_from_ipns::<Friendlies>(&ipfs, FRIENDS_KEY).await?;
+
     friends.list.insert(new_friend);
 
+    println!("Updating Friends List...");
+
     update_ipns(&ipfs, FRIENDS_KEY, &friends).await?;
+
+    println!("Unpinning Old List...");
+
     ipfs.pin_rm(&old_friends_cid.to_string(), false).await?;
+
+    println!("✅ Friend Added");
 
     Ok(())
 }
@@ -97,8 +106,6 @@ async fn remove_friend(command: RemoveFriend) -> Result<(), Error> {
 
     let RemoveFriend { beacon, ens } = command;
 
-    let (old_friends_cid, mut friends) = get_from_ipns::<Friendlies>(&ipfs, FRIENDS_KEY).await?;
-
     let old_friend = match (beacon, ens) {
         (Some(cid), None) => Friend {
             friend: Either::Right(cid.into()),
@@ -113,10 +120,21 @@ async fn remove_friend(command: RemoveFriend) -> Result<(), Error> {
         }
     };
 
+    println!("Removing Friend {:?}", &old_friend.friend);
+
+    let (old_friends_cid, mut friends) = get_from_ipns::<Friendlies>(&ipfs, FRIENDS_KEY).await?;
+
     friends.list.remove(&old_friend);
 
+    println!("Updating Friends List...");
+
     update_ipns(&ipfs, FRIENDS_KEY, &friends).await?;
+
+    println!("Unpinning Old List...");
+
     ipfs.pin_rm(&old_friends_cid.to_string(), false).await?;
+
+    println!("✅ Friend Removed");
 
     Ok(())
 }

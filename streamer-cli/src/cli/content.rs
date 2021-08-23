@@ -314,7 +314,7 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
 
     let content = feed.content.remove(index);
 
-    if let Some(comments) = comments.map.remove(&content.link.to_string()) {
+    if let Some(comments) = comments.map.remove(&content.link) {
         //TODO find a way to do that concurently
         for comment in comments.iter() {
             ipfs.pin_rm(&comment.link.to_string(), false).await?;

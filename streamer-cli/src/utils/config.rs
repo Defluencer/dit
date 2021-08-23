@@ -25,12 +25,6 @@ pub struct VideoConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChatConfig {
     pub topic: String,
-
-    /// IPNS link
-    pub mods: String,
-
-    /// IPNS link
-    pub bans: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -72,8 +66,6 @@ impl Default for Configuration {
 
             chat: ChatConfig {
                 topic: "defluencer_live_chat".into(),
-                mods: String::default(),
-                bans: String::default(),
             },
         }
     }

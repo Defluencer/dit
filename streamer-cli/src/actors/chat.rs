@@ -1,12 +1,14 @@
 use crate::actors::archivist::Archive;
-use crate::cli::moderation::BANS_KEY;
+use crate::cli::moderation::{BANS_KEY, MODS_KEY};
 use crate::utils::config::ChatConfig;
-use crate::utils::dag_nodes::{ipfs_dag_get_node_async, ipfs_dag_put_node_async, update_ipns};
+use crate::utils::dag_nodes::{
+    get_from_ipns, ipfs_dag_get_node_async, ipfs_dag_put_node_async, update_ipns,
+};
 
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::StreamExt;
 
-use ipfs_api::response::PubsubSubResponse;
+use ipfs_api::response::{Error, PubsubSubResponse};
 use ipfs_api::IpfsClient;
 
 use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
@@ -35,28 +37,20 @@ impl ChatAggregator {
         ipfs: IpfsClient,
         archive_tx: UnboundedSender<Archive>,
         config: ChatConfig,
-    ) -> Self {
-        let ChatConfig { topic, mods, bans } = config;
+    ) -> Result<Self, Error> {
+        let ChatConfig { topic } = config;
 
-        let res = ipfs
-            .name_resolve(Some(&mods), false, false)
-            .await
-            .expect("Moderators Link");
+        let ((_, mods), (_, bans)) = match tokio::try_join!(
+            get_from_ipns(&ipfs, MODS_KEY),
+            get_from_ipns(&ipfs, BANS_KEY)
+        ) {
+            Ok(res) => res,
+            Err(e) => {
+                return Err(e);
+            }
+        };
 
-        let mods = ipfs_dag_get_node_async(&ipfs, &res.path)
-            .await
-            .expect("Moderators Node");
-
-        let res = ipfs
-            .name_resolve(Some(&bans), false, false)
-            .await
-            .expect("Bans Link");
-
-        let bans = ipfs_dag_get_node_async(&ipfs, &res.path)
-            .await
-            .expect("Bans Node");
-
-        Self {
+        Ok(Self {
             ipfs,
 
             archive_tx,
@@ -70,7 +64,7 @@ impl ChatAggregator {
             new_ban_count: 0,
 
             mods,
-        }
+        })
     }
 
     pub async fn start(&mut self) {

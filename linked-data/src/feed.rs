@@ -12,7 +12,7 @@ pub struct FeedAnchor {
     pub content: Vec<IPLDLink>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, PartialEq, Clone)]
 #[serde(untagged)]
 pub enum Media {
     Statement(MicroPost),
