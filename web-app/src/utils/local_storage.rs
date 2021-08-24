@@ -66,14 +66,14 @@ impl LocalStorage {
         };
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Storage Get => {} \n {:?}", key, cid));
+        ConsoleService::info(&format!("Storage Get {} \n Returns {}", key, cid));
 
         Some(cid)
     }
 
     pub fn set_cid(&self, key: &str, cid: &Cid) {
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Storage Set => {} \n {:?}", key, cid));
+        ConsoleService::info(&format!("Storage Set {} \n To {}", key, cid));
 
         if let Err(e) = self.storage.set_item(key, &cid.to_string()) {
             ConsoleService::error(&format!("{:#?}", e));

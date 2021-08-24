@@ -60,7 +60,7 @@ impl Web3Service {
         let cid = Cid::try_from(&hash[2..])?;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Cid => {:?}", &cid));
+        ConsoleService::info(&format!("Cid => {}", &cid));
 
         Ok(cid)
     }

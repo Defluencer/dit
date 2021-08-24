@@ -16,7 +16,7 @@ use cid::Cid;
 type Anchor = RouterAnchor<AppRoute>;
 
 /// Content thumbnails for any media type.
-#[derive(Properties, Clone)]
+#[derive(Properties, Clone, PartialEq)]
 pub struct Thumbnail {
     pub cid: Cid,
     pub metadata: Rc<Media>,
@@ -36,7 +36,7 @@ impl Component for Thumbnail {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if self.metadata != props.metadata {
+        if *self != props {
             *self = props;
 
             return true;

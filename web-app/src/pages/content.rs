@@ -169,7 +169,7 @@ impl Content {
             return false;
         } */
 
-        let name = match self.props.comments.get_comment_name(cid) {
+        let name = match self.props.comments.get_comment_name(&cid) {
             Some(name) => Rc::from(name),
             None => return false,
         };

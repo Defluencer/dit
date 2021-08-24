@@ -32,7 +32,7 @@ impl Component for Comment {
 
     fn view(&self) -> Html {
         html! {
-            <div class="=comment">
+            <div class="comment">
                 <div class="comment_name"> { &self.name } </div>
                 <div class="comment_text"> { &self.comment.comment } </div>
             </div>

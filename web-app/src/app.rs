@@ -485,7 +485,7 @@ impl App {
         #[cfg(debug_assertions)]
         ConsoleService::info("Friend List Update");
 
-        for friend in friends.list.iter() {
+        for friend in friends.friends.iter() {
             match &friend.friend {
                 Either::Right(ipld) => {
                     spawn_local({

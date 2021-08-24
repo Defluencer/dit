@@ -135,7 +135,7 @@ impl IpfsService {
         let cid = Cid::try_from(response.cid.cid_string)?;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("IPFS: dag put => {:?}", cid));
+        ConsoleService::info(&format!("IPFS: dag put => {}", cid));
 
         Ok(cid)
     }
@@ -188,7 +188,7 @@ impl IpfsService {
         let cid = Cid::try_from(res.path)?;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("IPFS: name resolve => {:?}", cid));
+        ConsoleService::info(&format!("IPFS: name resolve {} \n to {}", ipns, cid));
 
         let node = self.dag_get(cid, Option::<&str>::None).await?;
 

@@ -22,11 +22,11 @@ pub struct Friends {
 #[derive(Debug, StructOpt)]
 enum Command {
     /// Add a new friend to your list.
-    /// Use either their beacon Cid OR their ethereum name service domain.
+    /// Use either their beacon Cid OR their ethereum name service domain name.
     Add(AddFriend),
 
     /// Remove a friend from your list.
-    /// Use either their beacon Cid OR their ethereum name service domain.
+    /// Use either their beacon Cid OR their ethereum name service domain name.
     Remove(RemoveFriend),
 }
 
@@ -73,13 +73,13 @@ async fn add_friend(command: AddFriend) -> Result<(), Error> {
 
     println!("Adding Friend {:?}", &new_friend.friend);
 
-    let (old_friends_cid, mut friends) = get_from_ipns::<Friendlies>(&ipfs, FRIENDS_KEY).await?;
+    let (old_friends_cid, mut list) = get_from_ipns::<Friendlies>(&ipfs, FRIENDS_KEY).await?;
 
-    friends.list.insert(new_friend);
+    list.friends.insert(new_friend);
 
     println!("Updating Friends List...");
 
-    update_ipns(&ipfs, FRIENDS_KEY, &friends).await?;
+    update_ipns(&ipfs, FRIENDS_KEY, &list).await?;
 
     println!("Unpinning Old List...");
 
@@ -96,7 +96,7 @@ pub struct RemoveFriend {
     #[structopt(short, long)]
     beacon: Option<Cid>,
 
-    /// Ethereum name service domain.
+    /// Ethereum name service domain name.
     #[structopt(short, long)]
     ens: Option<String>,
 }
@@ -122,13 +122,13 @@ async fn remove_friend(command: RemoveFriend) -> Result<(), Error> {
 
     println!("Removing Friend {:?}", &old_friend.friend);
 
-    let (old_friends_cid, mut friends) = get_from_ipns::<Friendlies>(&ipfs, FRIENDS_KEY).await?;
+    let (old_friends_cid, mut list) = get_from_ipns::<Friendlies>(&ipfs, FRIENDS_KEY).await?;
 
-    friends.list.remove(&old_friend);
+    list.friends.remove(&old_friend);
 
     println!("Updating Friends List...");
 
-    update_ipns(&ipfs, FRIENDS_KEY, &friends).await?;
+    update_ipns(&ipfs, FRIENDS_KEY, &list).await?;
 
     println!("Unpinning Old List...");
 

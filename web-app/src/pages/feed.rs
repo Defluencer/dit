@@ -74,7 +74,7 @@ impl Component for ContentFeed {
             self.get_content();
         }
 
-        false
+        true
     }
 
     fn view(&self) -> Html {
@@ -86,7 +86,7 @@ impl Component for ContentFeed {
             html! {
                 <>
                     {
-                        for self.content_cids.iter().zip(self.content.iter().zip(self.comment_counts.iter())).map(
+                        for self.content_cids.iter().rev().zip(self.content.iter().rev().zip(self.comment_counts.iter().rev())).map(
                             |(cid, (metadata, count))|
                             html! { <Thumbnail cid=*cid metadata=metadata.clone() count=*count />
                         })
@@ -141,10 +141,11 @@ impl ContentFeed {
             .binary_search_by(|probe| probe.timestamp().cmp(&metadata.timestamp()))
             .unwrap_or_else(|x| x);
 
+        let count = self.props.comments.get_comment_count(&cid);
+
         self.content_cids.insert(index, cid);
         self.content.insert(index, Rc::from(metadata));
-        self.comment_counts
-            .insert(index, self.props.comments.get_comment_count(&cid));
+        self.comment_counts.insert(index, count);
 
         true
     }

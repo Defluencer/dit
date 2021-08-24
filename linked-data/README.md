@@ -17,10 +17,13 @@ Display Name and GossipSub Peer ID are signed using Ethereum Keys then the addre
 Moderator send ban message to users via GossipSub. The message is signed as if a chat message. The beacon is updated with the new lists.
 
 ## Blog
-Micro-blogging & long form. Listed in content feed.
+Micro-blogging & long form via markdown files. 
 
 ## Content Feed
 Mutable content feed, create, updates or delete media.
 
 ## Comments
-Comments are crypto-signed, link to the original content and optionally other comments. The list of comments is keep in sync with content feed.
+Comment on any content.
+
+## Friends
+List of ENS domain name or Beacon CIDs. Used to fetch their content and comments.

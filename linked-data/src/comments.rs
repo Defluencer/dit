@@ -13,24 +13,9 @@ use cid::Cid;
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 pub struct Commentary {
-    /// Content cids mapped to lists of links to signed comments ordered from oldest to newest.
+    /// Content cids mapped to lists of links to comments ordered from oldest to newest.
     #[serde_as(as = "HashMap<DisplayFromStr, Vec<_>>")]
-    pub map: HashMap<Cid, Vec<IPLDLink>>,
-}
-
-impl Commentary {
-    pub fn merge(&mut self, other: Self) {
-        for (cid, mut links) in other.map.into_iter() {
-            match self.map.get_mut(&cid) {
-                Some(vec) => {
-                    vec.append(&mut links);
-                }
-                None => {
-                    self.map.insert(cid, links);
-                }
-            }
-        }
-    }
+    pub comments: HashMap<Cid, Vec<IPLDLink>>,
 }
 
 /// Comment metadata and text.
@@ -66,7 +51,7 @@ impl Comment {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CommentCache {
     origin_indexing: HashMap<Cid, Vec<usize>>, //content cid mapped to indices
 
@@ -90,20 +75,23 @@ impl CommentCache {
     }
 
     pub fn insert(&mut self, name: String, commentary: Commentary) {
-        match self.name_table.iter().position(|item| *item == name) {
-            Some(idx) => self.names.push(idx),
+        let name_table_idx = match self.name_table.iter().position(|item| *item == name) {
+            Some(idx) => idx,
             None => {
                 let idx = self.name_table.len();
-                self.names.push(idx);
-
                 self.name_table.push(name);
-            }
-        }
 
-        for (key, value) in commentary.map.into_iter() {
+                idx
+            }
+        };
+
+        for (key, value) in commentary.comments.into_iter() {
             let start_idx = self.links.len(); // inclusive
             self.links.extend(value);
             let end_idx = self.links.len(); // exclusive
+
+            let iter = std::iter::repeat(name_table_idx).take(end_idx - start_idx);
+            self.names.extend(iter);
 
             let indices = (start_idx..end_idx).collect();
 
@@ -125,13 +113,15 @@ impl CommentCache {
         idx.iter().map(move |idx| &self.links[*idx])
     }
 
-    pub fn get_comment_name(&self, cid: Cid) -> Option<&str> {
-        let idx = match self.links.iter().position(|item| item.link == cid) {
+    pub fn get_comment_name(&self, cid: &Cid) -> Option<&str> {
+        let idx = match self.links.iter().position(|item| item.link == *cid) {
             Some(idx) => idx,
             None => return None,
         };
 
-        Some(&self.name_table[self.names[idx]])
+        let name = &self.name_table[self.names[idx]];
+
+        Some(name)
     }
 
     pub fn get_comment_count(&self, origin: &Cid) -> usize {
@@ -150,14 +140,18 @@ mod tests {
     #[test]
     fn serde_test() {
         let mut old_comments = Commentary {
-            map: HashMap::with_capacity(2),
+            comments: HashMap::with_capacity(2),
         };
 
         let cid =
             Cid::from_str("bafyreibjo4xmgaevkgud7mbifn3dzp4v4lyaui4yvqp3f2bqwtxcjrdqg4").unwrap();
 
-        old_comments.map.insert(cid, vec![Cid::default().into()]);
-        old_comments.map.insert(cid, vec![Cid::default().into()]);
+        old_comments
+            .comments
+            .insert(cid, vec![Cid::default().into()]);
+        old_comments
+            .comments
+            .insert(cid, vec![Cid::default().into()]);
 
         let json = serde_json::to_string(&old_comments).expect("Serialize");
         println!("{}", json);

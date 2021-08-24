@@ -39,7 +39,7 @@ pub async fn comments_cli(cli: Comments) {
 
 #[derive(Debug, StructOpt)]
 pub struct AddComment {
-    /// CID of content beign commented on.
+    /// CID of content being commented on.
     #[structopt(short, long)]
     origin: Cid,
 
@@ -65,30 +65,28 @@ async fn add_comment(command: AddComment) -> Result<(), Error> {
     let comment = Comment::create(origin.into(), reply, comment);
     let comment_cid = ipfs_dag_put_node_async(&ipfs, &comment).await?;
 
-    println!("Adding Comment {:?}", &comment_cid);
-
     println!("Pinning...");
 
     ipfs.pin_add(&comment_cid.to_string(), false).await?;
 
     println!("Updating Comment List...");
 
-    let (old_comments_cid, mut comments) = get_from_ipns::<Commentary>(&ipfs, COMMENTS_KEY).await?;
+    let (old_comments_cid, mut list) = get_from_ipns::<Commentary>(&ipfs, COMMENTS_KEY).await?;
 
-    match comments.map.get_mut(&origin) {
+    match list.comments.get_mut(&origin) {
         Some(vec) => vec.push(comment_cid.into()),
         None => {
-            comments.map.insert(origin, vec![comment_cid.into()]);
+            list.comments.insert(origin, vec![comment_cid.into()]);
         }
     }
 
-    update_ipns(&ipfs, COMMENTS_KEY, &comments).await?;
+    update_ipns(&ipfs, COMMENTS_KEY, &list).await?;
 
     println!("Unpinning Old List...");
 
     ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
 
-    println!("✅ Comment Added");
+    println!("✅ Added Comment {}", comment_cid);
 
     Ok(())
 }
@@ -109,11 +107,9 @@ async fn remove_comment(command: RemoveComment) -> Result<(), Error> {
 
     let RemoveComment { origin, comment } = command;
 
-    println!("Removing Comment {:?}", &comment);
+    let (old_comments_cid, mut list) = get_from_ipns::<Commentary>(&ipfs, COMMENTS_KEY).await?;
 
-    let (old_comments_cid, mut comments) = get_from_ipns::<Commentary>(&ipfs, COMMENTS_KEY).await?;
-
-    let vec = match comments.map.get_mut(&origin) {
+    let vec = match list.comments.get_mut(&origin) {
         Some(vec) => vec,
         None => return Err(Error::Uncategorized("Origin Not Found".into())),
     };
@@ -127,13 +123,13 @@ async fn remove_comment(command: RemoveComment) -> Result<(), Error> {
 
     println!("Updating Comment List...");
 
-    update_ipns(&ipfs, COMMENTS_KEY, &comments).await?;
+    update_ipns(&ipfs, COMMENTS_KEY, &list).await?;
 
     println!("Unpinning Old List...");
 
     ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
 
-    println!("✅ Comment Removed");
+    println!("✅ Removed Comment {}", comment);
 
     Ok(())
 }

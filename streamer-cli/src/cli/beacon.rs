@@ -73,7 +73,8 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let mut config = match Configuration::from_file().await {
         Ok(conf) => conf,
         Err(e) => {
-            eprintln!("❗ Configuration: {:#?}", e);
+            eprintln!("❗ Config get error: {:#?}", e);
+            eprintln!("Using Default...");
             Configuration::default()
         }
     };
@@ -115,7 +116,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     ipfs.pin_add(&cid.to_string(), false).await?;
 
-    println!("✅ Beacon Created => {:?}", &cid);
+    println!("✅ Created Beacon {}", &cid);
 
     Ok(())
 }
@@ -138,13 +139,13 @@ where
 
             println!("Updating {} IPNS Link...", name);
 
-            update_ipns(ipfs, key, &T::default()).await?;
-
             ipns_link
         }
     };
 
     let cid = Cid::try_from(link).expect("Serialize CID");
+
+    update_ipns(ipfs, key, &T::default()).await?;
 
     println!("✅ {} IPNS Link => {}", name, &cid);
 
