@@ -27,7 +27,7 @@ Most features are fonctionnal but still require testing.
 - Comments on any content.
 - Fetch friends content & comments.
 
-For more info -> [Streamer CLI](https://github.com/SionoiS/dit/blob/develop/streamer-cli/README.md)
+For more info -> [Defluencer CLI](https://github.com/SionoiS/dit/blob/develop/defluencer-cli/README.md)
  & [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
 
 Dev Build -> Defluencer.eth on Ropsten test net.

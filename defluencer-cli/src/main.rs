@@ -3,7 +3,7 @@ mod cli;
 mod server;
 mod utils;
 
-use crate::cli::beacon::{beacon_cli, Beacon};
+use crate::cli::beacon::{beacon_cli, BeaconCLI};
 use crate::cli::comments::{comments_cli, Comments};
 use crate::cli::content::{content_feed_cli, Content};
 use crate::cli::file::{file_cli, File};
@@ -25,7 +25,7 @@ enum CommandLineInterface {
     File(File),
 
     /// Create a content beacon.
-    Beacon(Beacon),
+    Beacon(BeaconCLI),
 
     /// Appoint moderators & ban or unban users.
     Moderation(Moderation),

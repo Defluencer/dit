@@ -65,12 +65,18 @@ pub async fn update_ipns<T>(ipfs: &IpfsClient, key: &str, content: &T) -> Result
 where
     T: ?Sized + Serialize,
 {
-    let cid = ipfs_dag_put_node_async(ipfs, content).await?.to_string();
+    let cid = ipfs_dag_put_node_async(ipfs, content).await?;
+
+    let cid = cid.to_string();
 
     ipfs.pin_add(&cid, false).await?;
 
-    ipfs.name_publish(&cid, true, Some("4320h"), None, Some(key)) // 6 months
-        .await?;
+    if cfg!(debug_assertions) {
+        ipfs.name_publish(&cid, true, None, None, Some(key)).await?;
+    } else {
+        ipfs.name_publish(&cid, true, Some("4320h"), None, Some(key)) // 6 months
+            .await?;
+    }
 
     Ok(())
 }

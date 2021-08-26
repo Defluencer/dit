@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-    "streamer-cli",
+    "defluencer-cli",
     "web-app",
     "linked-data"
 ]

@@ -53,10 +53,10 @@ impl Comment {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CommentCache {
-    origin_indexing: HashMap<Cid, Vec<usize>>, //content cid mapped to indices
+    origin_indexing: HashMap<Cid, Vec<usize>>, //content cid mapped to indices into links
 
-    links: Vec<IPLDLink>,
-    names: Vec<usize>, //indices into name table
+    links: Vec<IPLDLink>, //sync
+    names: Vec<usize>,    //sync, also indices into name table
 
     name_table: Vec<String>,
 

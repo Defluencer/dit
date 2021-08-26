@@ -436,6 +436,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "defluencer-cli"
+version = "0.1.0"
+dependencies = [
+ "cid",
+ "either",
+ "futures-util",
+ "hex",
+ "hyper",
+ "ipfs-api",
+ "linked-data",
+ "m3u8-rs",
+ "serde",
+ "serde_json",
+ "structopt",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2083,26 +2103,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "streamer-cli"
-version = "0.1.0"
-dependencies = [
- "cid",
- "either",
- "futures-util",
- "hex",
- "hyper",
- "ipfs-api",
- "linked-data",
- "m3u8-rs",
- "serde",
- "serde_json",
- "structopt",
- "tokio",
- "tokio-stream",
- "tokio-util",
-]
 
 [[package]]
 name = "strsim"

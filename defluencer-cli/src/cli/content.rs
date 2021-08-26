@@ -22,6 +22,11 @@ pub const COMMENTS_KEY: &str = "comments";
 
 #[derive(Debug, StructOpt)]
 pub struct Content {
+    /// Your display name.
+    /// Used for identification.
+    #[structopt(short, long)]
+    user: String,
+
     #[structopt(subcommand)]
     cmd: Command,
 }
