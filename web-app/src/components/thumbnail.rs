@@ -19,6 +19,7 @@ type Anchor = RouterAnchor<AppRoute>;
 #[derive(Properties, Clone, PartialEq)]
 pub struct Thumbnail {
     pub cid: Cid,
+    pub name: Rc<str>,
     pub metadata: Rc<Media>,
     pub count: usize,
 }
@@ -60,6 +61,7 @@ impl Thumbnail {
 
         html! {
             <div class="thumbnail">
+                <div class="thumbnail_author"> { &self.name } </div>
                 <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
                     <div class="video_thumbnail_title"> { &metadata.title } </div>
                     <div class="video_thumbnail_image">
@@ -75,6 +77,7 @@ impl Thumbnail {
     fn render_blog(&self, metadata: &FullPost) -> Html {
         html! {
             <div class="thumbnail">
+                <div class="thumbnail_author"> { &self.name } </div>
                 <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
                     <div class="post_thumbnail_title"> { &metadata.title } </div>
                     <div class="post_thumbnail_image">
@@ -89,6 +92,7 @@ impl Thumbnail {
     fn render_statement(&self, metadata: &MicroPost) -> Html {
         html! {
             <div class="thumbnail">
+                <div class="thumbnail_author"> { &self.name } </div>
                 <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
                     <div class="statement_text"> { &metadata.content } </div>
                     <div class="comment_count"> { &format!("{} Comments", self.count) } </div>

@@ -10,8 +10,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use linked_data::comments::CommentCache;
-use linked_data::feed::{FeedAnchor, Media};
+use linked_data::feed::{ContentCache, Media};
 
 use cid::Cid;
 
@@ -24,9 +23,7 @@ pub struct ContentFeed {
     cb: Callback<(Cid, Result<Media>)>,
 
     content_set: HashSet<Cid>,
-    content_cids: Vec<Cid>,
-    content: Vec<Rc<Media>>,
-    comment_counts: Vec<usize>,
+    content: Vec<(Cid, Rc<str>, Rc<Media>, usize)>,
 }
 
 pub enum Msg {
@@ -37,8 +34,7 @@ pub enum Msg {
 pub struct Props {
     pub ipfs: IpfsService,
     pub storage: LocalStorage,
-    pub feed: Rc<FeedAnchor>,
-    pub comments: Rc<CommentCache>,
+    pub content: Rc<ContentCache>,
 }
 
 impl Component for ContentFeed {
@@ -51,9 +47,7 @@ impl Component for ContentFeed {
             cb: link.callback(Msg::Metadata),
 
             content_set: HashSet::with_capacity(100),
-            content_cids: Vec::with_capacity(100),
             content: Vec::with_capacity(100),
-            comment_counts: Vec::with_capacity(100),
         };
 
         feed.get_content();
@@ -68,7 +62,7 @@ impl Component for ContentFeed {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if props.feed != self.props.feed || props.comments != self.props.comments {
+        if props.content != self.props.content {
             self.props = props;
 
             self.get_content();
@@ -86,9 +80,9 @@ impl Component for ContentFeed {
             html! {
                 <>
                     {
-                        for self.content_cids.iter().rev().zip(self.content.iter().rev().zip(self.comment_counts.iter().rev())).map(
-                            |(cid, (metadata, count))|
-                            html! { <Thumbnail cid=*cid metadata=metadata.clone() count=*count />
+                        for self.content.iter().rev().map(
+                            |(cid, name, metadata, count)|
+                            html! { <Thumbnail cid=*cid name=name.clone()  metadata=metadata.clone() count=*count />
                         })
 
                     }
@@ -110,12 +104,12 @@ impl Component for ContentFeed {
 impl ContentFeed {
     /// IPFS dag get all metadata from content feed starting by newest.
     fn get_content(&mut self) {
-        for ipld in self.props.feed.content.iter().rev() {
-            if self.content_set.insert(ipld.link) {
+        for cid in self.props.content.iter_content() {
+            if self.content_set.insert(*cid) {
                 spawn_local({
                     let cb = self.cb.clone();
                     let ipfs = self.props.ipfs.clone();
-                    let cid = ipld.link;
+                    let cid = *cid;
 
                     async move { cb.emit((cid, ipfs.dag_get(cid, Option::<&str>::None).await)) }
                 });
@@ -138,14 +132,18 @@ impl ContentFeed {
 
         let index = self
             .content
-            .binary_search_by(|probe| probe.timestamp().cmp(&metadata.timestamp()))
+            .binary_search_by(|(_, _, probe, _)| probe.timestamp().cmp(&metadata.timestamp()))
             .unwrap_or_else(|x| x);
 
-        let count = self.props.comments.get_comment_count(&cid);
+        let name = match self.props.content.get_content_author(&cid) {
+            Some(name) => name,
+            None => return false,
+        };
 
-        self.content_cids.insert(index, cid);
-        self.content.insert(index, Rc::from(metadata));
-        self.comment_counts.insert(index, count);
+        let count = self.props.content.get_comment_count(&cid);
+
+        self.content
+            .insert(index, (cid, Rc::from(name), Rc::from(metadata), count));
 
         true
     }

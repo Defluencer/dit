@@ -11,8 +11,8 @@ use yew::services::ConsoleService;
 use yew::Callback;
 
 use linked_data::blog::{FullPost, MicroPost};
-use linked_data::comments::{Comment, CommentCache};
-use linked_data::feed::Media;
+use linked_data::comments::Comment;
+use linked_data::feed::{ContentCache, Media};
 use linked_data::video::VideoMetadata;
 
 use cid::Cid;
@@ -44,7 +44,7 @@ pub struct Props {
 
     pub cid: Cid,
 
-    pub comments: Rc<CommentCache>,
+    pub content: Rc<ContentCache>,
 }
 
 pub enum Msg {
@@ -89,7 +89,7 @@ impl Component for Content {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if props.comments != self.props.comments {
+        if props.content != self.props.content {
             self.props = props;
 
             self.get_comments();
@@ -128,7 +128,7 @@ impl Component for Content {
 impl Content {
     /// IPFS dag get all comments starting by newest.
     fn get_comments(&mut self) {
-        for ipld in self.props.comments.iter_per_origin(&self.props.cid) {
+        for ipld in self.props.content.iter_comments(&self.props.cid) {
             if self.comments_set.insert(ipld.link) {
                 spawn_local({
                     let ipfs = self.props.ipfs.clone();
@@ -169,8 +169,8 @@ impl Content {
             return false;
         } */
 
-        let name = match self.props.comments.get_comment_name(&cid) {
-            Some(name) => Rc::from(name),
+        let name = match self.props.content.get_comment_author(&cid) {
+            Some(name) => name,
             None => return false,
         };
 
@@ -179,7 +179,8 @@ impl Content {
             .binary_search_by(|(_, probe)| probe.timestamp.cmp(&comment.timestamp))
             .unwrap_or_else(|x| x);
 
-        self.comments.insert(index, (name, Rc::from(comment)));
+        self.comments
+            .insert(index, (Rc::from(name), Rc::from(comment)));
 
         true
     }

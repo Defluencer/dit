@@ -12,8 +12,8 @@ use yew::Callback;
 use yew_router::prelude::{Router, Switch};
 
 use linked_data::beacon::Beacon;
-use linked_data::comments::{CommentCache, Commentary};
-use linked_data::feed::FeedAnchor;
+use linked_data::comments::Commentary;
+use linked_data::feed::{ContentCache, FeedAnchor};
 use linked_data::friends::Friendlies;
 use linked_data::moderation::Bans;
 use linked_data::moderation::Moderators;
@@ -23,6 +23,7 @@ use either::Either;
 use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+type FeedCallback = Callback<(String, Cid, Result<(Cid, FeedAnchor)>)>;
 type CommentCallback = Callback<(String, Cid, Result<(Cid, Commentary)>)>;
 
 #[derive(Switch, Debug, Clone)]
@@ -54,8 +55,13 @@ pub struct App {
 
     /// Maps IPNS to FeedAnchors
     feed_set: HashMap<Cid, Cid>,
-    feed: Rc<FeedAnchor>,
-    feed_cb: Callback<(Cid, Result<(Cid, FeedAnchor)>)>,
+    feed_cb: FeedCallback,
+
+    content: Rc<ContentCache>,
+
+    /// Maps IPNS to Commentary
+    comments_set: HashMap<Cid, Cid>,
+    comments_cb: CommentCallback,
 
     bans_cid: Option<Cid>,
     bans: Rc<Bans>,
@@ -64,11 +70,6 @@ pub struct App {
     mods_cid: Option<Cid>,
     mods: Rc<Moderators>,
     mods_cb: Callback<(Cid, Result<(Cid, Moderators)>)>,
-
-    /// Maps IPNS to Commentary
-    comments_set: HashMap<Cid, Cid>,
-    comments: Rc<CommentCache>,
-    comments_cb: CommentCallback,
 
     friends_cid: Option<Cid>,
     friends: Rc<Friendlies>,
@@ -79,7 +80,7 @@ pub struct App {
 pub enum AppMsg {
     ENSResolve((String, Result<Cid>)),
     Beacon((Cid, Result<Beacon>)),
-    Feed((Cid, Result<(Cid, FeedAnchor)>)),
+    Feed((String, Cid, Result<(Cid, FeedAnchor)>)),
     Bans((Cid, Result<(Cid, Bans)>)),
     Mods((Cid, Result<(Cid, Moderators)>)),
     Comments((String, Cid, Result<(Cid, Commentary)>)),
@@ -109,8 +110,12 @@ impl Component for App {
             beacon_cb: link.callback(AppMsg::Beacon),
 
             feed_set: HashMap::with_capacity(10),
-            feed: Rc::from(FeedAnchor::default()),
             feed_cb: link.callback(AppMsg::Feed),
+
+            content: Rc::from(ContentCache::create()),
+
+            comments_set: HashMap::with_capacity(10),
+            comments_cb: link.callback(AppMsg::Comments),
 
             bans_cid: None,
             bans: Rc::from(Bans::default()),
@@ -119,10 +124,6 @@ impl Component for App {
             mods_cid: None,
             mods: Rc::from(Moderators::default()),
             mods_cb: link.callback(AppMsg::Mods),
-
-            comments_set: HashMap::with_capacity(10),
-            comments: Rc::from(CommentCache::create()),
-            comments_cb: link.callback(AppMsg::Comments),
 
             friends_cid: None,
             friends: Rc::from(Friendlies::default()),
@@ -154,11 +155,10 @@ impl Component for App {
         let web3 = self.props.web3.clone();
         let ipfs = self.props.ipfs.clone();
         let storage = self.props.storage.clone();
-        let feed = self.feed.clone();
+        let content = self.content.clone();
         let beacon = self.beacon.clone().unwrap_or_default();
         let bans = self.bans.clone();
         let mods = self.mods.clone();
-        let comments = self.comments.clone();
         //let friends = self.friends.clone();
 
         html! {
@@ -166,10 +166,10 @@ impl Component for App {
                 <Router<AppRoute>
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
-                            AppRoute::Content(cid) => html! { <Content ipfs=ipfs.clone() cid=cid comments=comments.clone() /> },
+                            AppRoute::Content(cid) => html! { <Content ipfs=ipfs.clone() cid=cid content=content.clone() /> },
                             AppRoute::Settings => html! { <Settings storage=storage.clone() /> },
                             AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() beacon=beacon.clone() bans=bans.clone() mods=mods.clone() /> },
-                            AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() feed=feed.clone() comments=comments.clone() /> },
+                            AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() content=content.clone()  /> },
                             AppRoute::Home => html! { <Home /> },
                         }
                     })
@@ -255,8 +255,9 @@ impl App {
             let cb = self.feed_cb.clone();
             let ipfs = self.props.ipfs.clone();
             let feed = beacon.content_feed;
+            let name = beacon.display_name.clone();
 
-            async move { cb.emit((feed, ipfs.resolve_and_dag_get(feed).await)) }
+            async move { cb.emit((name, feed, ipfs.resolve_and_dag_get(feed).await)) }
         });
 
         if let Some(cid) = self.props.storage.get_cid(&beacon.content_feed.to_string()) {
@@ -264,11 +265,12 @@ impl App {
                 let cb = self.feed_cb.clone();
                 let ipfs = self.props.ipfs.clone();
                 let feed = beacon.content_feed;
+                let name = beacon.display_name.clone();
 
                 async move {
                     match ipfs.dag_get(cid, Option::<&str>::None).await {
-                        Ok(node) => cb.emit((feed, Ok((cid, node)))),
-                        Err(e) => cb.emit((feed, Err(e))),
+                        Ok(node) => cb.emit((name, feed, Ok((cid, node)))),
+                        Err(e) => cb.emit((name, feed, Err(e))),
                     }
                 }
             });
@@ -381,10 +383,13 @@ impl App {
     }
 
     /// Callback when IPFS dag get return any content feed.
-    fn on_feed(&mut self, res: (Cid, Result<(Cid, FeedAnchor)>)) -> bool {
-        let (ipns, feed_cid, mut feed) = match on_node(res) {
-            Some(res) => res,
-            None => return false,
+    fn on_feed(&mut self, res: (String, Cid, Result<(Cid, FeedAnchor)>)) -> bool {
+        let (name, ipns, feed_cid, feed) = match res {
+            (name, ipns, Ok((cid, feed))) => (name, ipns, cid, feed),
+            (_, _, Err(e)) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
         };
 
         if Some(feed_cid) == self.feed_set.insert(ipns, feed_cid) {
@@ -394,9 +399,7 @@ impl App {
         #[cfg(debug_assertions)]
         ConsoleService::info("Content Feed Update");
 
-        Rc::make_mut(&mut self.feed)
-            .content
-            .append(&mut feed.content);
+        Rc::make_mut(&mut self.content).insert_content(name, feed);
 
         self.props.storage.set_cid(&ipns.to_string(), &feed_cid);
 
@@ -420,7 +423,7 @@ impl App {
         #[cfg(debug_assertions)]
         ConsoleService::info("Comment List Update");
 
-        Rc::make_mut(&mut self.comments).insert(name, comments);
+        Rc::make_mut(&mut self.content).insert_comments(name, comments);
 
         self.props.storage.set_cid(&ipns.to_string(), &comments_cid);
 

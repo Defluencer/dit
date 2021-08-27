@@ -22,11 +22,6 @@ pub const COMMENTS_KEY: &str = "comments";
 
 #[derive(Debug, StructOpt)]
 pub struct Content {
-    /// Your display name.
-    /// Used for identification.
-    #[structopt(short, long)]
-    user: String,
-
     #[structopt(subcommand)]
     cmd: Command,
 }
@@ -357,11 +352,9 @@ where
     let content_cid = ipfs_dag_put_node_async(ipfs, metadata).await?;
 
     println!("Pinning...");
-
     ipfs.pin_add(&content_cid.to_string(), true).await?;
 
     println!("Updating Content Feed...");
-
     let (old_feed_cid, mut feed) = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
 
     feed.content.push(content_cid.into());
@@ -380,14 +373,14 @@ where
 {
     println!("Old Content => {}", cid);
 
-    let (old_comments_cid, feed) = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
+    let (old_feed_cid, feed) = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
 
     println!("Unpinning...");
     ipfs.pin_rm(&cid.to_string(), true).await?;
 
     let metadata: T = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
 
-    Ok((old_comments_cid, feed, metadata))
+    Ok((old_feed_cid, feed, metadata))
 }
 
 /// Serialize and pin metadata then update feed and update IPNS.
