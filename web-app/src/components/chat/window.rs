@@ -9,6 +9,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use linked_data::beacon::Beacon;
 use linked_data::moderation::{Bans, Moderators};
 
+/// Live chat widget
 #[derive(Properties, Clone)]
 pub struct ChatWindow {
     pub web3: Web3Service,

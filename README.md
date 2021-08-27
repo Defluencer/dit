@@ -1,5 +1,5 @@
 # Decentralized Influencer Toolkit
-My goal is to build tools that allow anyone to become a defluencer (decentralized influencer). Decentralize the means of communications by decentralizing the data itself. Once the data is decentralized anyone can build upon it without restriction. New platforms & apps with the same data underneat.
+My goal is to build tools that allow anyone to become a defluencer (decentralized influencer). Decentralize the means of communications by decentralizing the data itself. Once the data is decentralized anyone can build upon it without restriction. New platforms, apps and websites with the same data underneat.
 
 ## Protocols
 - Video addressing.
@@ -11,7 +11,8 @@ My goal is to build tools that allow anyone to become a defluencer (decentralize
 - Moderation tools.
 - Blog.
 - Multimedia content feed.
-- Comments (WIP)
+- Comments.
+- Friends List.
 
 For more info -> [Linked Data](https://github.com/SionoiS/dit/blob/develop/linked-data/README.md)
 
@@ -23,11 +24,13 @@ Most features are fonctionnal but still require testing.
 - Stream pre-recorded videos & past live streams with adaptative birate.
 - Display markdown file as blog post.
 - Multimedia content feed.
+- Comment on any content.
+- Fetch friends content & comments.
 
-For more info -> [Streamer CLI](https://github.com/SionoiS/dit/blob/develop/streamer-cli/README.md)
+For more info -> [Defluencer CLI](https://github.com/SionoiS/dit/blob/develop/defluencer-cli/README.md)
  & [Web App](https://github.com/SionoiS/dit/blob/develop/web-app/README.md)
 
-Live Demo -> Defluencer.eth on Ropsten test net.
+Dev Build -> Defluencer.eth on Ropsten test net.
 
 ## Libraries
 Easy to use javascript libs are planned.

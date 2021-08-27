@@ -8,6 +8,7 @@ licence = "MIT OR Apache-2.0"
 [dependencies]
 blockies = "0.3"
 cid = "0.7"
+either = {version = "1.6", features = ["serde"]}
 futures = "0.3"
 futures-util = { version = "0.3", features = ["io"] }
 js-sys = "0.3"

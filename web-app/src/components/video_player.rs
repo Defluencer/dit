@@ -52,6 +52,7 @@ struct LiveStream {
     drop_sig: Rc<AtomicBool>,
 }
 
+/// Video player for live streams and on demand.
 pub struct VideoPlayer {
     link: ComponentLink<Self>,
 
@@ -140,13 +141,16 @@ impl Component for VideoPlayer {
 
         let live_stream = match beacon {
             Some(beacon) => {
-                let client = ipfs.clone();
-                let topic = beacon.topics.live_video.clone();
-                let cb = link.callback(Msg::PubSub);
                 let drop_sig = Rc::from(AtomicBool::new(false));
-                let sig = drop_sig.clone();
 
-                spawn_local(async move { client.pubsub_sub(topic, cb, sig).await });
+                spawn_local({
+                    let ipfs = ipfs.clone();
+                    let topic = beacon.topics.video.clone();
+                    let cb = link.callback(Msg::PubSub);
+                    let sig = drop_sig.clone();
+
+                    async move { ipfs.pubsub_sub(topic, cb, sig).await }
+                });
 
                 Some(LiveStream {
                     beacon,
@@ -296,11 +300,13 @@ impl VideoPlayer {
         if let Some(metadata) = self.metadata.as_ref() {
             self.media_source.set_duration(metadata.duration);
 
-            let cb = self.link.callback_once(Msg::SetupNode);
-            let client = self.ipfs.clone();
-            let cid = metadata.video.link;
+            spawn_local({
+                let cb = self.link.callback_once(Msg::SetupNode);
+                let ipfs = self.ipfs.clone();
+                let cid = metadata.video.link;
 
-            spawn_local(async move { cb.emit(client.dag_get(cid, Some(SETUP_PATH)).await) });
+                async move { cb.emit(ipfs.dag_get(cid, Some(SETUP_PATH)).await) }
+            });
         }
     }
 
@@ -359,10 +365,12 @@ impl VideoPlayer {
         live.buffer.push_back(cid);
 
         if self.media_buffers.is_none() {
-            let cb = self.link.callback_once(Msg::SetupNode);
-            let client = self.ipfs.clone();
+            spawn_local({
+                let cb = self.link.callback_once(Msg::SetupNode);
+                let ipfs = self.ipfs.clone();
 
-            spawn_local(async move { cb.emit(client.dag_get(cid, Some("/setup/")).await) });
+                async move { cb.emit(ipfs.dag_get(cid, Some("/setup/")).await) }
+            });
         }
     }
 
@@ -554,10 +562,12 @@ impl VideoPlayer {
         self.media_buffers = Some(media_buffer);
         self.state = MachineState::Load;
 
-        let cb = self.link.callback_once(Msg::Append);
-        let client = self.ipfs.clone();
+        spawn_local({
+            let cb = self.link.callback_once(Msg::Append);
+            let ipfs = self.ipfs.clone();
 
-        spawn_local(async move { cb.emit(client.double_path_cat(audio_path, video_path).await) });
+            async move { cb.emit(ipfs.double_path_cat(audio_path, video_path).await) }
+        });
     }
 
     /// Load either live or VOD segment.
@@ -610,10 +620,12 @@ impl VideoPlayer {
         self.state = MachineState::AdaptativeBitrate;
         self.ema.start_timer();
 
-        let cb = self.link.callback_once(Msg::Append);
-        let client = self.ipfs.clone();
+        spawn_local({
+            let cb = self.link.callback_once(Msg::Append);
+            let ipfs = self.ipfs.clone();
 
-        spawn_local(async move { cb.emit(client.double_path_cat(audio_path, video_path).await) });
+            async move { cb.emit(ipfs.double_path_cat(audio_path, video_path).await) }
+        });
     }
 
     /// Get CID from timecode then fetch video data from ipfs.
@@ -701,10 +713,12 @@ impl VideoPlayer {
         self.state = MachineState::AdaptativeBitrate;
         self.ema.start_timer();
 
-        let cb = self.link.callback_once(Msg::Append);
-        let client = self.ipfs.clone();
+        spawn_local({
+            let cb = self.link.callback_once(Msg::Append);
+            let ipfs = self.ipfs.clone();
 
-        spawn_local(async move { cb.emit(client.double_path_cat(audio_path, video_path).await) });
+            async move { cb.emit(ipfs.double_path_cat(audio_path, video_path).await) }
+        });
     }
 
     /// Recalculate download speed then set quality level.
@@ -946,10 +960,12 @@ impl VideoPlayer {
 
         self.state = MachineState::Load;
 
-        let cb = self.link.callback_once(Msg::AppendVideo);
-        let client = self.ipfs.clone();
+        spawn_local({
+            let cb = self.link.callback_once(Msg::AppendVideo);
+            let ipfs = self.ipfs.clone();
 
-        spawn_local(async move { cb.emit(client.cid_cat(cid).await) });
+            async move { cb.emit(ipfs.cid_cat(cid).await) }
+        });
     }
 
     /// Append audio and video segments to the buffers.

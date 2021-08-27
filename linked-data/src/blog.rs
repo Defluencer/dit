@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use cid::Cid;
 
 /// A micro blog post (Twitter-sytle).
-/// Direct pin.
-#[derive(Deserialize, Serialize, Default, Clone, PartialEq)]
+/// Recursive pin.
+#[derive(Deserialize, Serialize, PartialEq, Eq, Clone)]
 pub struct MicroPost {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
@@ -16,9 +16,31 @@ pub struct MicroPost {
     pub content: String,
 }
 
+impl MicroPost {
+    pub fn create(content: String) -> Self {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        Self { timestamp, content }
+    }
+
+    pub fn update(&mut self, content: Option<String>) {
+        self.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        if let Some(content) = content {
+            self.content = content;
+        }
+    }
+}
+
 /// Metadata for a long blog post.
 /// Recursive pin.
-#[derive(Deserialize, Serialize, Default, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Eq, Clone)]
 pub struct FullPost {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,

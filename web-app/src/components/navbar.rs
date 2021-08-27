@@ -1,19 +1,21 @@
 use crate::app::AppRoute;
 
-use yew::prelude::{html, Component, ComponentLink, Html, ShouldRender};
+use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 use yew_router::components::RouterAnchor;
 
 type Anchor = RouterAnchor<AppRoute>;
 
+/// Navigation bar.
+#[derive(Properties, Clone)]
 pub struct Navbar {}
 
 impl Component for Navbar {
     type Message = ();
-    type Properties = ();
+    type Properties = Self;
 
-    fn create(_: Self::Properties, _link: ComponentLink<Self>) -> Self {
-        Self {}
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        props
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {

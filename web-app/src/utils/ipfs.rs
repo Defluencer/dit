@@ -1,3 +1,4 @@
+use core::fmt;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -20,7 +21,7 @@ use cid::Cid;
 use reqwest::multipart::Form;
 use reqwest::{Client, Url};
 
-const DEFAULT_URI: &str = "http://localhost:5001/api/v0/";
+const DEFAULT_URI: &str = "http://127.0.0.1:5001/api/v0/";
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -134,7 +135,7 @@ impl IpfsService {
         let cid = Cid::try_from(response.cid.cid_string)?;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("IPFS: dag put => {}", &cid));
+        ConsoleService::info(&format!("IPFS: dag put => {}", cid));
 
         Ok(cid)
     }
@@ -168,10 +169,9 @@ impl IpfsService {
         Ok(node)
     }
 
-    /// Resolve IPNS link then dag get. Return CID and Node.
-    pub async fn resolve_and_dag_get<U, T>(&self, ipns: U) -> Result<(Cid, T)>
+    /// Resolve IPNS link then dag get. Return IPNS link, CID & Node.
+    pub async fn resolve_and_dag_get<T>(&self, ipns: Cid) -> Result<(Cid, T)>
     where
-        U: Into<Cow<'static, str>>,
         T: ?Sized + DeserializeOwned,
     {
         let url = self.base_url.join("name/resolve")?;
@@ -179,7 +179,7 @@ impl IpfsService {
         let res: NameResolveResponse = self
             .client
             .post(url)
-            .query(&[("arg", &ipns.into())])
+            .query(&[("arg", &ipns.to_string())])
             .send()
             .await?
             .json()
@@ -188,7 +188,7 @@ impl IpfsService {
         let cid = Cid::try_from(res.path)?;
 
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("IPFS: name resolve => {}", cid.to_string()));
+        ConsoleService::info(&format!("IPFS: name resolve {} \n to {}", ipns, cid));
 
         let node = self.dag_get(cid, Option::<&str>::None).await?;
 
@@ -245,10 +245,16 @@ impl IpfsService {
 
             let response = match serde_json::from_str::<PubsubSubResponse>(&line) {
                 Ok(node) => node,
-                Err(e) => {
-                    cb.emit(Err(e.into()));
-                    return;
-                }
+                Err(_) => match serde_json::from_str::<PubsubSubError>(&line) {
+                    Ok(e) => {
+                        cb.emit(Err(e.into()));
+                        return;
+                    }
+                    Err(e) => {
+                        cb.emit(Err(e.into()));
+                        return;
+                    }
+                },
             };
 
             let PubsubSubResponse { from, data } = response;
@@ -334,4 +340,27 @@ struct NameResolveResponse {
 struct IdResponse {
     #[serde(rename = "ID")]
     pub id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct PubsubSubError {
+    #[serde(rename = "Message")]
+    pub message: String,
+
+    #[serde(rename = "Code")]
+    pub code: u64,
+
+    #[serde(rename = "Type")]
+    pub error_type: String,
+}
+
+impl std::error::Error for PubsubSubError {}
+
+impl fmt::Display for PubsubSubError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match serde_json::to_string_pretty(&self) {
+            Ok(e) => write!(f, "{}", e),
+            Err(e) => write!(f, "{}", e),
+        }
+    }
 }

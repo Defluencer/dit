@@ -9,6 +9,9 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 use yew::ChangeData;
 
+use reqwest::Url;
+
+/// Page with app settings and options.
 pub struct Settings {
     link: ComponentLink<Self>,
 
@@ -56,6 +59,7 @@ impl Component for Settings {
                             onchange=self.link.callback(Msg::Addrs)
                             placeholder="IPFS API address" />
                     </div>
+                    <div> { "Refresh the page for the changes to take effect." } </div>
                 </div>
             </div>
         }
@@ -108,7 +112,14 @@ impl Component for Settings {
 impl Settings {
     fn addrs(&mut self, msg: ChangeData) -> bool {
         match msg {
-            ChangeData::Value(addrs) => self.storage.set_local_ipfs_addrs(&addrs),
+            ChangeData::Value(addrs) => match Url::parse(&addrs) {
+                Ok(_) => self.storage.set_local_ipfs_addrs(&addrs),
+                Err(e) => {
+                    ConsoleService::error(&format!("{:#?}", e));
+                    return false;
+                }
+            },
+
             ChangeData::Select(_) => {}
             ChangeData::Files(_) => {}
         }

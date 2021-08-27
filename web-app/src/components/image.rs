@@ -1,10 +1,14 @@
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-/// Loading indicator.
-#[derive(Clone, Properties)]
-pub struct Loading {}
+use cid::Cid;
 
-impl Component for Loading {
+/// Image from IPFS.
+#[derive(Clone, Properties)]
+pub struct Image {
+    pub image_cid: Cid,
+}
+
+impl Component for Image {
     type Message = ();
     type Properties = Self;
 
@@ -16,13 +20,19 @@ impl Component for Loading {
         false
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if props.image_cid != self.image_cid {
+            *self = props;
+
+            return true;
+        }
+
         false
     }
 
     fn view(&self) -> Html {
         html! {
-            <div class="center_text"> { "Loading..." } </div>
+            <img src=format!("ipfs://{}", self.image_cid.to_string()) alt="This image require IPFS native browser" />
         }
     }
 }

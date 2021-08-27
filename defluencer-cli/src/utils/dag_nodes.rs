@@ -1,4 +1,3 @@
-use ipfs_api::response::KeyListResponse;
 use ipfs_api::response::KeyPair;
 use std::convert::TryFrom;
 use std::io::Cursor;
@@ -13,7 +12,7 @@ use serde::Serialize;
 
 use cid::Cid;
 
-/// Serialize then add dag node to IPFS. Return a CID.
+/// Serialize then add dag node to IPFS and return CID.
 pub async fn ipfs_dag_put_node_async<T>(ipfs: &IpfsClient, node: &T) -> Result<Cid, Error>
 where
     T: ?Sized + Serialize,
@@ -24,11 +23,11 @@ where
         serde_json::to_string_pretty(node).unwrap()
     );
 
-    let json_string = serde_json::to_string(node).expect("Serialization failed");
+    let json_string = serde_json::to_string(node).expect("Serialization");
 
     let response = ipfs.dag_put(Cursor::new(json_string)).await?;
 
-    let cid = Cid::try_from(response.cid.cid_string).expect("Invalid Cid");
+    let cid = Cid::try_from(response.cid.cid_string).expect("Valid Cid");
 
     #[cfg(debug_assertions)]
     println!("IPFS: dag put => {}", &cid);
@@ -36,10 +35,10 @@ where
     Ok(cid)
 }
 
-/// Deserialize dag node from IPFS path. Return dag node.
+/// Deserialize dag node from IPFS path and return.
 pub async fn ipfs_dag_get_node_async<T>(ipfs: &IpfsClient, path: &str) -> Result<T, Error>
 where
-    T: ?Sized + DeserializeOwned + Serialize,
+    T: ?Sized + DeserializeOwned,
 {
     #[cfg(debug_assertions)]
     println!("IPFS: dag get => {}", path);
@@ -50,62 +49,64 @@ where
         .try_concat()
         .await?;
 
-    let node = serde_json::from_slice::<T>(&data).expect("Deserialization failed");
-
     #[cfg(debug_assertions)]
     println!(
         "Serde: Deserialize => {}",
-        serde_json::to_string_pretty(&node).unwrap()
+        std::str::from_utf8(&data).expect("UTF8 Data")
     );
+
+    let node = serde_json::from_slice::<T>(&data).expect("Deserialization");
 
     Ok(node)
 }
 
-/// Serialize the new node, pin it then publish it under this IPNS key.
+/// Serialize the new node, direct pin then publish under this IPNS key.
 pub async fn update_ipns<T>(ipfs: &IpfsClient, key: &str, content: &T) -> Result<(), Error>
 where
     T: ?Sized + Serialize,
 {
-    let cid = ipfs_dag_put_node_async(ipfs, content).await?.to_string();
+    let cid = ipfs_dag_put_node_async(ipfs, content).await?;
+
+    let cid = cid.to_string();
 
     ipfs.pin_add(&cid, false).await?;
 
-    ipfs.name_publish(&cid, true, Some("4320h"), None, Some(key)) // 6 months
-        .await?;
+    if cfg!(debug_assertions) {
+        ipfs.name_publish(&cid, true, None, None, Some(key)).await?;
+    } else {
+        ipfs.name_publish(&cid, true, Some("4320h"), None, Some(key)) // 6 months
+            .await?;
+    }
 
     Ok(())
 }
 
-/// Get node associated with IPNS key, unpin it then return it.
-pub async fn get_from_ipns<T>(ipfs: &IpfsClient, key: &str) -> Result<T, Error>
+/// Get node associated with IPNS key, direct unpin then return.
+pub async fn get_from_ipns<T>(ipfs: &IpfsClient, key: &str) -> Result<(Cid, T), Error>
 where
-    T: ?Sized + DeserializeOwned + Serialize,
+    T: ?Sized + DeserializeOwned,
 {
-    let mut res = ipfs.key_list().await?;
-
-    let keypair = match search_keypairs(&key, &mut res) {
-        Some(kp) => kp,
-        None => return Err(Error::Uncategorized("Key Not Found".into())),
-    };
+    let res = ipfs.key_list().await?;
+    let keypair = search_keypairs(key, &res).expect("Key Found");
 
     #[cfg(debug_assertions)]
     println!("IPNS: key => {} {}", &keypair.name, &keypair.id);
 
     let res = ipfs.name_resolve(Some(&keypair.id), false, false).await?;
-
-    let cid = Cid::try_from(res.path).expect("Invalid Cid");
-
-    ipfs.pin_rm(&cid.to_string(), false).await?;
+    let cid = Cid::try_from(res.path).expect("Valid Cid");
 
     let node = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
 
-    Ok(node)
+    Ok((cid, node))
 }
 
-pub fn search_keypairs(name: &str, res: &mut KeyListResponse) -> Option<KeyPair> {
-    for (i, keypair) in res.keys.iter_mut().enumerate() {
+pub fn search_keypairs<'a>(
+    name: &str,
+    res: &'a ipfs_api::response::KeyPairList,
+) -> Option<&'a KeyPair> {
+    for keypair in res.keys.iter() {
         if keypair.name == name {
-            return Some(res.keys.remove(i));
+            return Some(keypair);
         }
     }
 

@@ -6,6 +6,8 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
+const CONFIG_LOCATION: &str = "config.json";
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ArchiveConfig {
     #[serde(skip)]
@@ -23,12 +25,6 @@ pub struct VideoConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChatConfig {
     pub topic: String,
-
-    /// IPNS link
-    pub mods: String,
-
-    /// IPNS link
-    pub bans: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -38,8 +34,6 @@ pub struct Configuration {
     pub video: VideoConfig,
     pub chat: ChatConfig,
 }
-
-const CONFIG_LOCATION: &str = "config.json";
 
 impl Configuration {
     pub async fn from_file() -> Result<Self, Error> {
@@ -59,7 +53,7 @@ impl Configuration {
 impl Default for Configuration {
     fn default() -> Self {
         Self {
-            input_socket_addr: SocketAddr::from_str("127.0.0.1:2526").expect("Invalid Address"),
+            input_socket_addr: SocketAddr::from_str("127.0.0.1:2526").expect("Valid Address"),
 
             archive: ArchiveConfig {
                 archive_live_chat: true,
@@ -72,8 +66,6 @@ impl Default for Configuration {
 
             chat: ChatConfig {
                 topic: "defluencer_live_chat".into(),
-                mods: String::default(),
-                bans: String::default(),
             },
         }
     }

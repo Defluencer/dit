@@ -105,3 +105,24 @@ nav {
     display: flex;
     flex-direction: column;
 }
+
+.feed {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.comment {
+    display: flex;
+    background-color: lightgray;
+    margin: 10px;
+    padding: 20px;
+}
+
+.comment_name {
+    padding-left: 10px;
+}
+
+.comment_text {
+    padding-left: 10px;
+}

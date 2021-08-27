@@ -1,13 +1,14 @@
 [package]
-name = "streamer-cli"
+name = "defluencer-cli"
 version = "0.1.0"
 authors = ["SionoiS <SionoiS@users.noreply.github.com>"]
 edition = "2018"
 licence = "MIT OR Apache-2.0"
-description = "Defluencer toolkit command line interface."
+description = "Decentralized influencer toolkit command line interface."
 
 [dependencies]
 cid = "0.7"
+either = {version = "1.6", features = ["serde"]}
 futures-util = "0.3"
 hex = "0.4"
 hyper = { version = "0.14", features = ["http1", "server", "runtime", "stream"] }

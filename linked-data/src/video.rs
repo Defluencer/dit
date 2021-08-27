@@ -9,13 +9,10 @@ use cid::Cid;
 
 /// Metadata for video thumbnail and playback.
 /// Recursive pin.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Default)]
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct VideoMetadata {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
-
-    /// Duration in seconds.
-    pub duration: f64,
 
     /// Link to TimecodeNode.
     pub video: IPLDLink,
@@ -25,13 +22,16 @@ pub struct VideoMetadata {
 
     /// Title of this video.
     pub title: String,
+
+    /// Duration in seconds.
+    pub duration: f64,
 }
 
 impl VideoMetadata {
     pub fn create(title: String, duration: f64, image: Cid, video: Cid) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("SystemTime before UNIX EPOCH!")
+            .expect("SystemTime after UNIX EPOCH!")
             .as_secs();
 
         Self {
@@ -68,7 +68,7 @@ impl VideoMetadata {
 
         self.timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("SystemTime before UNIX EPOCH!")
+            .expect("SystemTime after UNIX EPOCH!")
             .as_secs();
     }
 }

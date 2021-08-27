@@ -54,7 +54,7 @@ pub struct Inputs {
 }
 
 pub enum Msg {
-    SetMsg(String),
+    Set(String),
     Enter,
     Connect,
     PeerID(Result<String>),
@@ -107,7 +107,7 @@ impl Component for Inputs {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::SetMsg(msg) => self.on_chat_input(msg),
+            Msg::Set(msg) => self.on_chat_input(msg),
             Msg::Enter => self.send_message(),
             Msg::Connect => self.connect_account(),
             Msg::PeerID(res) => self.on_peer_id(res),
@@ -137,7 +137,7 @@ impl Component for Inputs {
                 <div>
                     <textarea class="input_text" id="input_text"
                     rows=5
-                    oninput=self.link.callback(|e: InputData| Msg::SetMsg(e.value))
+                    oninput=self.link.callback(|e: InputData| Msg::Set(e.value))
                     placeholder="Input text here...">
                     </textarea>
                     <button class="send_button" onclick=self.link.callback(|_| Msg::Enter)>{ "Send" }</button>
@@ -276,15 +276,17 @@ impl Inputs {
             }
         };
 
-        let client = self.props.ipfs.clone();
-        let topic = self.props.beacon.topics.live_chat.clone();
-
         #[cfg(debug_assertions)]
         ConsoleService::info("Publish Message");
 
-        spawn_local(async move {
-            if let Err(e) = client.pubsub_pub(topic, json_string).await {
-                ConsoleService::error(&format!("{:#?}", e));
+        spawn_local({
+            let ipfs = self.props.ipfs.clone();
+            let topic = self.props.beacon.topics.chat.clone();
+
+            async move {
+                if let Err(e) = ipfs.pubsub_pub(topic, json_string).await {
+                    ConsoleService::error(&format!("{:#?}", e));
+                }
             }
         });
 
@@ -293,21 +295,25 @@ impl Inputs {
 
     /// Trigger ethereum request accounts.
     fn connect_account(&self) -> bool {
-        let cb = self.link.callback(Msg::Account);
-        let web3 = self.props.web3.clone();
-
         #[cfg(debug_assertions)]
         ConsoleService::info("Get Address");
 
-        spawn_local(async move { cb.emit(web3.get_eth_accounts().await) });
+        spawn_local({
+            let cb = self.link.callback(Msg::Account);
+            let web3 = self.props.web3.clone();
 
-        let cb = self.link.callback(Msg::PeerID);
-        let client = self.props.ipfs.clone();
+            async move { cb.emit(web3.get_eth_accounts().await) }
+        });
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Get Peer ID");
 
-        spawn_local(async move { cb.emit(client.ipfs_node_id().await) });
+        spawn_local({
+            let cb = self.link.callback(Msg::PeerID);
+            let ipfs = self.props.ipfs.clone();
+
+            async move { cb.emit(ipfs.ipfs_node_id().await) }
+        });
 
         false
     }
@@ -328,10 +334,12 @@ impl Inputs {
 
         self.address = Some(address);
 
-        let cb = self.link.callback(Msg::AccountName);
-        let web3 = self.props.web3.clone();
+        spawn_local({
+            let cb = self.link.callback(Msg::AccountName);
+            let web3 = self.props.web3.clone();
 
-        spawn_local(async move { cb.emit(web3.get_name(address).await) });
+            async move { cb.emit(web3.get_name(address).await) }
+        });
 
         false
     }
@@ -409,13 +417,17 @@ impl Inputs {
             }
         };
 
-        let cb = self.link.callback_once(Msg::Signed);
-        let web3 = self.props.web3.clone();
         let data = ChatId { name, peer };
 
-        self.sign_msg_content = Some(data.clone());
+        spawn_local({
+            let cb = self.link.callback_once(Msg::Signed);
+            let web3 = self.props.web3.clone();
+            let data = data.clone();
 
-        spawn_local(async move { cb.emit(web3.eth_sign(address, data).await) });
+            async move { cb.emit(web3.eth_sign(address, data).await) }
+        });
+
+        self.sign_msg_content = Some(data);
 
         false
     }
@@ -460,10 +472,12 @@ impl Inputs {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Verifiable => {}", &signed_msg.verify()));
 
-        let cb = self.link.callback_once(Msg::Minted);
-        let client = self.props.ipfs.clone();
+        spawn_local({
+            let cb = self.link.callback_once(Msg::Minted);
+            let ipfs = self.props.ipfs.clone();
 
-        spawn_local(async move { cb.emit(client.dag_put(&signed_msg).await) });
+            async move { cb.emit(ipfs.dag_put(&signed_msg).await) }
+        });
 
         false
     }

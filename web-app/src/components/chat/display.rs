@@ -54,14 +54,16 @@ impl Component for Display {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let client = props.ipfs.clone();
-        let cb = link.callback(Msg::PubSub);
-        let sub_topic = props.beacon.topics.live_chat.clone();
-
         let drop_sig = Rc::from(AtomicBool::new(false));
-        let sig = drop_sig.clone();
 
-        spawn_local(async move { client.pubsub_sub(sub_topic, cb, sig).await });
+        spawn_local({
+            let ipfs = props.ipfs.clone();
+            let sub_topic = props.beacon.topics.chat.clone();
+            let cb = link.callback(Msg::PubSub);
+            let sig = drop_sig.clone();
+
+            async move { ipfs.pubsub_sub(sub_topic, cb, sig).await }
+        });
 
         //https://github.com/ethereum/blockies
         //https://docs.rs/blockies/0.3.0/blockies/struct.Ethereum.html
@@ -167,13 +169,13 @@ impl Display {
         self.process_msg(from, msg)
     }
 
-    fn get_origin(&mut self, from: String, msg: Message) {
-        let cb = self.link.callback_once(Msg::Origin);
-        let client = self.props.ipfs.clone();
-        let cid = msg.origin.link;
+    fn get_origin(&self, from: String, msg: Message) {
+        spawn_local({
+            let cb = self.link.callback_once(Msg::Origin);
+            let ipfs = self.props.ipfs.clone();
+            let cid = msg.origin.link;
 
-        spawn_local(async move {
-            cb.emit((from, msg, client.dag_get(cid, Option::<String>::None).await))
+            async move { cb.emit((from, msg, ipfs.dag_get(cid, Option::<String>::None).await)) }
         });
     }
 
@@ -265,7 +267,7 @@ impl Display {
             ConsoleService::error(&format!("{:?}", e));
         }
 
-        let msg_data = MessageData::new(self.next_id, &data, &name, &msg.message);
+        let msg_data = MessageData::new(self.next_id, &data, name, &msg.message);
 
         self.chat_messages.push_back(msg_data);
 
