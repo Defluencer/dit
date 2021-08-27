@@ -5,13 +5,21 @@ IPFS daemon must be running first. Command: ```ipfs daemon --enable-pubsub-exper
 A beacon make your content discoverable and updateable.
 - Command: ```defluencer-cli beacon --help``` for more info.
 
+## Content Feed
+Add, update or delete content from your feed.
+- Command: ```defluencer-cli content --help``` for more info.
+
+## Comments
+Add or delete your comments.
+- Command: ```defluencer-cli comments --help ``` for more info.
+
 ## Moderation
 Ban & moderator lists can be managed using commands.
 - Command: ```defluencer-cli moderation --help ``` for more info.
 
-## Content Feed
-Add, update or delete content from your feed.
-- Command: ```defluencer-cli content --help``` for more info
+## Friends
+Add or Remove friends from your list.
+- Command: ```defluencer-cli friends --help ``` for more info.
 
 ## Availability
 The beacon and all your content must be reachable at all times. To achieve this you should leave your IPFS daemon running 24/7 and others can also help you by pinning some or all your content, the more the better. Because of the decentralized nature of IPFS, it does not matter who has your data or how much of it, it cannot be modified and everyone will help redistribute it.
@@ -49,7 +57,6 @@ If you already have a domain, the beacon CID can be used with ENS to associate y
 ## Configuration
 config.json will be created automatically when creating beacon.
 - Input socket address is the IP and Port the app will listen for FFMPEG on.
-- Topics are used for live stream and chat.
 
 ## FFMPEG
 - Output must be HLS.

@@ -15,7 +15,7 @@
 ## Testing
 ### Setup 1
 IPFS natively in Brave. (live streams won't work, cannot enable pubsub and IPNS is slow)
-- Install [Brave](https://brave.com/)
+- Install [Brave](https://brave.com/) browser
 - Go to brave://settings
 - Enable IPFS companion then when asked enable IPFS
 - Click companion extension icon then click My Node

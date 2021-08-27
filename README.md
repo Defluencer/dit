@@ -24,7 +24,7 @@ Most features are fonctionnal but still require testing.
 - Stream pre-recorded videos & past live streams with adaptative birate.
 - Display markdown file as blog post.
 - Multimedia content feed.
-- Comments on any content.
+- Comment on any content.
 - Fetch friends content & comments.
 
 For more info -> [Defluencer CLI](https://github.com/SionoiS/dit/blob/develop/defluencer-cli/README.md)
