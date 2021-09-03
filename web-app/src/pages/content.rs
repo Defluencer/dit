@@ -89,7 +89,7 @@ impl Component for Content {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if props.content != self.props.content {
+        if !Rc::ptr_eq(&props.content, &self.props.content) {
             self.props = props;
 
             self.get_comments();

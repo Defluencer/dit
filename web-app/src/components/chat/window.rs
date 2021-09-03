@@ -33,7 +33,10 @@ impl Component for ChatWindow {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if props.beacon != self.beacon || props.bans != self.bans || props.mods != self.mods {
+        if !Rc::ptr_eq(&self.beacon, &props.beacon)
+            || !Rc::ptr_eq(&self.mods, &props.mods)
+            || !Rc::ptr_eq(&self.bans, &props.bans)
+        {
             *self = props;
 
             return true;

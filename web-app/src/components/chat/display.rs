@@ -98,9 +98,9 @@ impl Component for Display {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if props.beacon != self.props.beacon
-            || props.bans != self.props.bans
-            || props.mods != self.props.mods
+        if !Rc::ptr_eq(&self.props.beacon, &props.beacon)
+            || !Rc::ptr_eq(&self.props.mods, &props.mods)
+            || !Rc::ptr_eq(&self.props.bans, &props.bans)
         {
             self.props = props;
 

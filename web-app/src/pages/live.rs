@@ -32,7 +32,10 @@ impl Component for Live {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if props.beacon != self.beacon || props.bans != self.bans || props.mods != self.mods {
+        if !Rc::ptr_eq(&props.beacon, &self.beacon)
+            || !Rc::ptr_eq(&props.bans, &self.bans)
+            || !Rc::ptr_eq(&props.mods, &self.mods)
+        {
             *self = props;
 
             return true;

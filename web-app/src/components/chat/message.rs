@@ -2,11 +2,9 @@ use std::rc::Rc;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use yewtil::NeqAssign;
-
 use cid::multibase::Base;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct MessageData {
     pub id: usize,
     img_data: Rc<str>,
@@ -39,7 +37,7 @@ impl MessageData {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Properties)]
+#[derive(Clone, Properties)]
 pub struct UIMessage {
     pub message_data: MessageData,
 }
@@ -53,11 +51,23 @@ impl Component for UIMessage {
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
-        unimplemented!()
+        false
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        self.neq_assign(props)
+        if !Rc::ptr_eq(&self.message_data.img_data, &props.message_data.img_data)
+            || !Rc::ptr_eq(
+                &self.message_data.sender_name,
+                &props.message_data.sender_name,
+            )
+            || !Rc::ptr_eq(&self.message_data.message, &props.message_data.message)
+        {
+            *self = props;
+
+            return true;
+        }
+
+        false
     }
 
     fn view(&self) -> Html {

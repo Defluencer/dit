@@ -121,7 +121,7 @@ impl Component for Inputs {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if props.beacon != self.props.beacon {
+        if !Rc::ptr_eq(&self.props.beacon, &props.beacon) {
             self.props = props;
 
             return true;

@@ -21,7 +21,7 @@ impl Component for Comment {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if self.comment != props.comment {
+        if !Rc::ptr_eq(&self.comment, &props.comment) || !Rc::ptr_eq(&self.name, &props.name) {
             *self = props;
 
             return true;
