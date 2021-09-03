@@ -123,16 +123,14 @@ impl IpfsService {
 
         let url = self.base_url.join("dag/put")?;
 
-        let response: DagPutResponse = self
-            .client
-            .post(url)
-            .multipart(form)
-            .send()
-            .await?
-            .json()
-            .await?;
+        let res = self.client.post(url).multipart(form).send().await?;
 
-        let cid = Cid::try_from(response.cid.cid_string)?;
+        let res = match res.json::<DagPutResponse>().await {
+            Ok(res) => res,
+            Err(e) => return Err(e.into()),
+        };
+
+        let cid = Cid::try_from(res.cid.cid_string)?;
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("IPFS: dag put => {}", cid));
@@ -176,14 +174,17 @@ impl IpfsService {
     {
         let url = self.base_url.join("name/resolve")?;
 
-        let res: NameResolveResponse = self
+        let res = self
             .client
             .post(url)
             .query(&[("arg", &ipns.to_string())])
             .send()
-            .await?
-            .json()
             .await?;
+
+        let res = match res.json::<NameResolveResponse>().await {
+            Ok(res) => res,
+            Err(e) => return Err(e.into()),
+        };
 
         let cid = Cid::try_from(res.path)?;
 
@@ -245,7 +246,7 @@ impl IpfsService {
 
             let response = match serde_json::from_str::<PubsubSubResponse>(&line) {
                 Ok(node) => node,
-                Err(_) => match serde_json::from_str::<PubsubSubError>(&line) {
+                Err(_) => match serde_json::from_str::<IPFSError>(&line) {
                     Ok(e) => {
                         cb.emit(Err(e.into()));
                         return;
@@ -300,15 +301,14 @@ impl IpfsService {
     pub async fn ipfs_node_id(&self) -> Result<String> {
         let url = self.base_url.join("id")?;
 
-        let response = self
-            .client
-            .post(url)
-            .send()
-            .await?
-            .json::<IdResponse>()
-            .await?;
+        let res = self.client.post(url).send().await?;
 
-        Ok(response.id)
+        let res = match res.json::<IdResponse>().await {
+            Ok(res) => res,
+            Err(e) => return Err(e.into()),
+        };
+
+        Ok(res.id)
     }
 }
 
@@ -343,7 +343,7 @@ struct IdResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct PubsubSubError {
+struct IPFSError {
     #[serde(rename = "Message")]
     pub message: String,
 
@@ -354,9 +354,9 @@ struct PubsubSubError {
     pub error_type: String,
 }
 
-impl std::error::Error for PubsubSubError {}
+impl std::error::Error for IPFSError {}
 
-impl fmt::Display for PubsubSubError {
+impl fmt::Display for IPFSError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match serde_json::to_string_pretty(&self) {
             Ok(e) => write!(f, "{}", e),
