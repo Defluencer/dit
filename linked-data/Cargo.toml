@@ -3,7 +3,6 @@ name = "linked-data"
 version = "0.1.0"
 authors = ["SionoiS <SionoiS@users.noreply.github.com>"]
 edition = "2018"
-licence = "MIT OR Apache-2.0"
 
 [dependencies]
 either = { version = "1.6", features = ["serde"] }

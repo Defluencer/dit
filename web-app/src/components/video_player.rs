@@ -474,7 +474,7 @@ impl VideoPlayer {
         let mut audio_buffer = None;
         let mut video_buffer = None;
 
-        for (level, track) in setup_node.tracks.iter().enumerate() {
+        for track in setup_node.tracks.iter() {
             if !MediaSource::is_type_supported(&track.codec) {
                 ConsoleService::error(&format!("MIME Type {:?} unsupported", &track.codec));
                 continue;
@@ -482,8 +482,8 @@ impl VideoPlayer {
 
             #[cfg(debug_assertions)]
             ConsoleService::info(&format!(
-                "Level {} Name {} Codec {} Bandwidth {}",
-                level, track.name, track.codec, track.bandwidth
+                "Name {} Codec {} Bandwidth {}",
+                track.name, track.codec, track.bandwidth
             ));
 
             if video_buffer.is_some() {

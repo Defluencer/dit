@@ -3,7 +3,6 @@ name = "web-app"
 version = "0.1.0"
 authors = ["SionoiS <SionoiS@users.noreply.github.com>"]
 edition = "2018"
-licence = "MIT OR Apache-2.0"
 
 [dependencies]
 blockies = "0.3"
@@ -35,6 +34,7 @@ web-sys = { version = "0.3", features = [
     "HtmlTextAreaElement",
     "KeyboardEvent",
 ]}
+ybc = "0.2"
 yew = "0.18"
 yew-router = "0.15"
 yewtil = "0.4"
