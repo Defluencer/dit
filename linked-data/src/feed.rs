@@ -141,12 +141,12 @@ impl ContentCache {
 
         let idx = idx.as_ref()?;
 
-        let name = &self.name_table[self.names[*idx]];
+        let name = &self.name_table[*idx];
 
         Some(name)
     }
 
-    pub fn get_comment_count(&self, origin: &Cid) -> usize {
+    pub fn get_comments_count(&self, origin: &Cid) -> usize {
         match self.origin_indexing.get(origin) {
             Some((_, vec)) => vec.len(),
             None => 0,

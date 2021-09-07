@@ -4,7 +4,7 @@ use crate::app::AppRoute;
 use crate::components::Image;
 use crate::utils::seconds_to_timecode;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew_router::components::RouterAnchor;
 
 use linked_data::blog::{FullPost, MicroPost};
@@ -60,44 +60,82 @@ impl Thumbnail {
         let (hour, minute, second) = seconds_to_timecode(metadata.duration);
 
         html! {
-            <div class="thumbnail">
-                <div class="thumbnail_author"> { &self.name } </div>
-                <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
-                    <div class="video_thumbnail_title"> { &metadata.title } </div>
-                    <div class="video_thumbnail_image">
-                        <Image image_cid=metadata.image.link />
-                    </div>
-                    <div class="video_thumbnail_duration"> { &format!("{}:{}:{}", hour, minute, second) } </div>
-                    <div class="comment_count"> { &format!("{} Comments", self.count) } </div>
-                </Anchor>
-            </div>
+            <Anchor /* classes="has-text-white" */ route=AppRoute::Content(self.cid)>
+                <ybc::Box>
+                    <ybc::Media>
+                        <ybc::MediaLeft>
+                            <ybc::Block>
+                                { &self.name }
+                            </ybc::Block>
+                            <ybc::Block>
+                                { &format!("{} Comments", self.count) }
+                            </ybc::Block>
+                            <ybc::Block>
+                                { &format!("{}:{}:{}", hour, minute, second) }
+                            </ybc::Block>
+                        </ybc::MediaLeft>
+                        <ybc::MediaContent>
+                            <ybc::Title classes=classes!("is-6") >
+                                { &metadata.title }
+                            </ybc::Title>
+                            <ybc::Image size=ybc::ImageSize::Is16by9 >
+                                <Image image_cid=metadata.image.link />
+                            </ybc::Image>
+                        </ybc::MediaContent>
+                    </ybc::Media>
+                </ybc::Box>
+            </Anchor>
         }
     }
 
     fn render_blog(&self, metadata: &FullPost) -> Html {
         html! {
-            <div class="thumbnail">
-                <div class="thumbnail_author"> { &self.name } </div>
-                <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
-                    <div class="post_thumbnail_title"> { &metadata.title } </div>
-                    <div class="post_thumbnail_image">
-                        <Image image_cid=metadata.image.link />
-                    </div>
-                    <div class="comment_count"> { &format!("{} Comments", self.count) } </div>
-                </Anchor>
-            </div>
+            <Anchor /* classes="has-text-white" */ route=AppRoute::Content(self.cid)>
+                <ybc::Box>
+                    <ybc::Media>
+                        <ybc::MediaLeft>
+                            <ybc::Block>
+                                { &self.name }
+                            </ybc::Block>
+                            <ybc::Block>
+                                { &format!("{} Comments", self.count) }
+                            </ybc::Block>
+                        </ybc::MediaLeft>
+                        <ybc::MediaContent>
+                                <ybc::Title classes=classes!("is-6") >
+                                    { &metadata.title }
+                                </ybc::Title>
+                                <ybc::Image size=ybc::ImageSize::Is16by9 >
+                                    <Image image_cid=metadata.image.link />
+                                </ybc::Image>
+                        </ybc::MediaContent>
+                    </ybc::Media>
+                </ybc::Box>
+            </Anchor>
         }
     }
 
     fn render_statement(&self, metadata: &MicroPost) -> Html {
         html! {
-            <div class="thumbnail">
-                <div class="thumbnail_author"> { &self.name } </div>
-                <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
-                    <div class="statement_text"> { &metadata.content } </div>
-                    <div class="comment_count"> { &format!("{} Comments", self.count) } </div>
-                </Anchor>
-            </div>
+            <Anchor /* classes="has-text-white" */ route=AppRoute::Content(self.cid)>
+                <ybc::Box>
+                    <ybc::Media>
+                        <ybc::MediaLeft>
+                            { &self.name }
+                        </ybc::MediaLeft>
+                    <ybc::MediaContent>
+                        { &metadata.content }
+                        <ybc::Level>
+                            <ybc::LevelLeft>
+                                <ybc::LevelItem>
+                                    { &format!("{} Comments", self.count) }
+                                </ybc::LevelItem>
+                            </ybc::LevelLeft>
+                        </ybc::Level>
+                    </ybc::MediaContent>
+                    </ybc::Media>
+                </ybc::Box>
+            </Anchor>
         }
     }
 }

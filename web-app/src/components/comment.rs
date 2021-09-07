@@ -32,10 +32,16 @@ impl Component for Comment {
 
     fn view(&self) -> Html {
         html! {
-            <div class="comment">
-                <div class="comment_name"> { &self.name } </div>
-                <div class="comment_text"> { &self.comment.comment } </div>
-            </div>
+            <ybc::Box>
+                <ybc::Media>
+                    <ybc::MediaLeft>
+                        { &self.name }
+                    </ybc::MediaLeft>
+                    <ybc::MediaContent>
+                        { &self.comment.comment }
+                    </ybc::MediaContent>
+                </ybc::Media>
+            </ybc::Box>
         }
     }
 }

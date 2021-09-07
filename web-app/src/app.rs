@@ -214,9 +214,6 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Name Resolve");
-
         spawn_local({
             let cb = self.beacon_cb.clone();
             let ipfs = self.props.ipfs.clone();
@@ -230,6 +227,9 @@ impl App {
         });
 
         self.props.storage.set_cid(&name, &beacon_cid);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App ENS Name Resolved");
 
         false
     }
@@ -247,9 +247,6 @@ impl App {
         if !self.beacon_set.insert(beacon_cid) {
             return false;
         }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Beacon Update");
 
         spawn_local({
             let cb = self.feed_cb.clone();
@@ -379,6 +376,9 @@ impl App {
             self.beacon = Rc::from(beacon).into();
         }
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Beacon Updated");
+
         false
     }
 
@@ -396,12 +396,12 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Content Feed Update");
-
         Rc::make_mut(&mut self.content).insert_content(name, feed);
 
         self.props.storage.set_cid(&ipns.to_string(), &feed_cid);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Content Feed Updated");
 
         true
     }
@@ -420,12 +420,12 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Comment List Update");
-
         Rc::make_mut(&mut self.content).insert_comments(name, comments);
 
         self.props.storage.set_cid(&ipns.to_string(), &comments_cid);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Comment List Updated");
 
         true
     }
@@ -441,13 +441,13 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Ban List Update");
-
         self.props.storage.set_cid(&ipns.to_string(), &bans_cid);
 
         self.bans_cid = bans_cid.into();
         self.bans = Rc::from(bans);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Ban List Updated");
 
         true
     }
@@ -463,13 +463,13 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Moderator List Update");
-
         self.props.storage.set_cid(&ipns.to_string(), &mods_cid);
 
         self.mods_cid = mods_cid.into();
         self.mods = Rc::from(mods);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Moderator List Updated");
 
         true
     }
@@ -484,9 +484,6 @@ impl App {
         if Some(friends_cid) == self.friends_cid {
             return false;
         }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Friend List Update");
 
         for friend in friends.friends.iter() {
             match &friend.friend {
@@ -511,6 +508,9 @@ impl App {
 
         self.friends_cid = friends_cid.into();
         self.friends = Rc::from(friends);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Friend List Updated");
 
         true
     }

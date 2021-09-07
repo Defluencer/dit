@@ -1,25 +1,20 @@
 use crate::components::Navbar;
 use crate::utils::LocalStorage;
 
-use web_sys::HtmlInputElement;
-
-use wasm_bindgen::JsCast;
-
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
-use yew::services::ConsoleService;
-use yew::ChangeData;
-
-use reqwest::Url;
+use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender, classes};
 
 /// Page with app settings and options.
 pub struct Settings {
     link: ComponentLink<Self>,
 
+    address: String,
+    valid: bool,
+
     storage: LocalStorage,
 }
 
 pub enum Msg {
-    Addrs(ChangeData),
+    Addrs(String),
 }
 
 #[derive(Properties, Clone)]
@@ -34,7 +29,14 @@ impl Component for Settings {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let Props { storage } = props;
 
-        Self { link, storage }
+        let address = match storage.get_local_ipfs_addrs() {
+            Some(addrs) => addrs,
+            None => crate::utils::DEFAULT_URI.to_owned(),
+        };
+
+        let valid = reqwest::Url::parse(&address).is_ok();
+
+        Self { link, address, valid, storage }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -48,82 +50,36 @@ impl Component for Settings {
     }
 
     fn view(&self) -> Html {
+        let error_class = match self.valid {
+            true => None,
+            false => Some(classes!("is-danger")),
+        };
+
         html! {
-            <div class="settings_page">
+            <>
                 <Navbar />
-                <div class="settings">
-                    <h3> { "Settings" } </h3>
-                    <div>
-                        <label for="ipfs_addrs"> { "IPFS API address: " } </label>
-                        <input type="text" id="ipfs_addrs" name="ipfs_addrs"
-                            onchange=self.link.callback(Msg::Addrs)
-                            placeholder="IPFS API address" />
-                    </div>
-                    <div> { "Refresh the page for the changes to take effect." } </div>
-                </div>
-            </div>
-        }
-    }
-
-    fn rendered(&mut self, first_render: bool) {
-        if first_render {
-            let window = match web_sys::window() {
-                Some(window) => window,
-                None => {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::error("No Window Object");
-                    return;
-                }
-            };
-
-            let document = match window.document() {
-                Some(document) => document,
-                None => {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::error("No Document Object");
-                    return;
-                }
-            };
-
-            let element = match document.get_element_by_id("ipfs_addrs") {
-                Some(document) => document,
-                None => {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::error("No Element by Id");
-                    return;
-                }
-            };
-
-            let text_area: HtmlInputElement = match element.dyn_into() {
-                Ok(document) => document,
-                Err(e) => {
-                    ConsoleService::error(&format!("{:#?}", e));
-                    return;
-                }
-            };
-
-            if let Some(addrs) = self.storage.get_local_ipfs_addrs() {
-                text_area.set_value(&addrs);
-            }
+                <ybc::Section>
+                    <ybc::Field label="IPFS API".to_owned() help="Refresh to apply changes".to_owned() help_classes=error_class.clone() >
+                        <ybc::Control>
+                            <ybc::Input classes=error_class name="ipfs_addrs" value=self.address.clone() update=self.link.callback(Msg::Addrs) placeholder=crate::utils::DEFAULT_URI />
+                        </ybc::Control>
+                    </ybc::Field>
+                </ybc::Section>
+            </>
         }
     }
 }
 
 impl Settings {
-    fn addrs(&mut self, msg: ChangeData) -> bool {
-        match msg {
-            ChangeData::Value(addrs) => match Url::parse(&addrs) {
-                Ok(_) => self.storage.set_local_ipfs_addrs(&addrs),
-                Err(e) => {
-                    ConsoleService::error(&format!("{:#?}", e));
-                    return false;
-                }
-            },
+    fn addrs(&mut self, msg: String) -> bool {
+        self.valid = reqwest::Url::parse(&msg).is_ok();
 
-            ChangeData::Select(_) => {}
-            ChangeData::Files(_) => {}
+        if self.valid {
+            self.storage.set_local_ipfs_addrs(&msg);
         }
+        
+        self.address = msg;
 
-        false
+        true
     }
 }

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::components::{ChatWindow, Navbar, VideoPlayer};
 use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender, classes};
 
 use linked_data::beacon::Beacon;
 use linked_data::moderation::{Bans, Moderators};
@@ -46,13 +46,17 @@ impl Component for Live {
 
     fn view(&self) -> Html {
         html! {
-            <div class="live_page">
+            <>
                 <Navbar />
-                <div class="live_stream">
-                    <VideoPlayer ipfs=self.ipfs.clone() beacon=self.beacon.clone() />
-                    <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() beacon=self.beacon.clone() bans=self.bans.clone() mods=self.mods.clone() />
-                </div>
-            </div>
+                <ybc::Columns>
+                    <ybc::Column>
+                        <VideoPlayer ipfs=self.ipfs.clone() beacon=self.beacon.clone() />
+                    </ybc::Column>
+                    <ybc::Column classes=classes!("is-one-fifth") >
+                        <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() beacon=self.beacon.clone() bans=self.bans.clone() mods=self.mods.clone() />
+                    </ybc::Column>
+                </ybc::Columns>
+            </>
         }
     }
 }

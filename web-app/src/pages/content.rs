@@ -30,9 +30,11 @@ enum State {
 pub struct Content {
     props: Props,
 
-    cb: Callback<(Cid, Result<Comment>)>,
+    content_cb: Callback<Result<Media>>,
+    comments_cb: Callback<(Cid, Result<Comment>)>,
 
     state: State,
+    author: Rc<str>,
 
     comments_set: HashSet<Cid>,
     comments: Vec<(Rc<str>, Rc<Comment>)>,
@@ -57,28 +59,26 @@ impl Component for Content {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        spawn_local({
-            let cb = link.callback_once(Msg::Metadata);
-            let ipfs = props.ipfs.clone();
-            let cid = props.cid;
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Content Page Created");
 
-            async move { cb.emit(ipfs.dag_get(cid, Option::<String>::None).await) }
-        });
-
-        let mut content = Self {
+        let mut comp = Self {
             props,
 
-            cb: link.callback(Msg::Comment),
+            content_cb: link.callback(Msg::Metadata),
+            comments_cb: link.callback(Msg::Comment),
 
             state: State::Loading,
+            author: Rc::from(String::default()),
 
             comments_set: HashSet::with_capacity(10),
             comments: Vec::with_capacity(10),
         };
 
-        content.get_comments();
+        comp.get_content();
+        comp.get_comments();
 
-        content
+        comp
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -90,8 +90,15 @@ impl Component for Content {
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if !Rc::ptr_eq(&props.content, &self.props.content) {
+            #[cfg(debug_assertions)]
+            ConsoleService::info("Content Page Changed");
+
+            ConsoleService::info(&format!("Old {:?}", self.props.content));
+            ConsoleService::info(&format!("New {:?}", props.content));
+
             self.props = props;
 
+            self.get_content();
             self.get_comments();
         }
 
@@ -100,8 +107,9 @@ impl Component for Content {
 
     fn view(&self) -> Html {
         html! {
-            <div class="content_page">
+            <>
                 <Navbar />
+                <ybc::Section>
                 {
                     match &self.state {
                         State::Loading => html! { <Loading /> },
@@ -113,26 +121,44 @@ impl Component for Content {
                         State::Error => html! { <Error /> },
                     }
                 }
-                <div class="comment_section">
-                {
-                    for self.comments.iter().rev().map(|(name, comment)| {
-                        html! { <crate::components::Comment name=name.clone() comment=comment.clone() /> }
-                    })
-                }
-                </div>
-            </div>
+                </ybc::Section>
+                <ybc::Section>
+                    <ybc::Container>
+                    {
+                        for self.comments.iter().rev().map(|(name, comment)| {
+                            html! { <crate::components::Comment name=name.clone() comment=comment.clone() /> }
+                        })
+                    }
+                    </ybc::Container>
+                </ybc::Section>
+            </>
         }
     }
 }
 
 impl Content {
+    fn get_content(&mut self) {
+        spawn_local({
+            let cb = self.content_cb.clone();
+            let ipfs = self.props.ipfs.clone();
+            let cid = self.props.cid;
+
+            async move { cb.emit(ipfs.dag_get(cid, Option::<String>::None).await) }
+        });
+
+        self.author = match self.props.content.get_content_author(&self.props.cid) {
+            Some(auth) => Rc::from(auth),
+            None => Rc::from(String::default()),
+        };
+    }
+
     /// IPFS dag get all comments starting by newest.
     fn get_comments(&mut self) {
         for ipld in self.props.content.iter_comments(&self.props.cid) {
             if self.comments_set.insert(ipld.link) {
                 spawn_local({
                     let ipfs = self.props.ipfs.clone();
-                    let cb = self.cb.clone();
+                    let cb = self.comments_cb.clone();
                     let cid = ipld.link;
 
                     async move { cb.emit((cid, ipfs.dag_get(cid, Option::<String>::None).await)) }
@@ -150,6 +176,9 @@ impl Content {
             }
         };
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Content Metadata Updated");
+
         true
     }
 
@@ -161,9 +190,6 @@ impl Content {
                 return false;
             }
         };
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Comment Update");
 
         /* if !signed_comment.verify() {
             return false;
@@ -182,36 +208,57 @@ impl Content {
         self.comments
             .insert(index, (Rc::from(name), Rc::from(comment)));
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Content Comments Updated");
+
         true
     }
 
     fn render_blog(&self, metadata: &FullPost) -> Html {
         html! {
-            <div class="blog">
-                <div class="post_title"> { &metadata.title } </div>
-                <div class="post_image">
-                    <Image image_cid=metadata.image.link />
-                </div>
-                <div class="post_content">
-                    <Markdown ipfs=self.props.ipfs.clone() markdown_cid=metadata.content.link />
-                </div>
-            </div>
+            <ybc::Container>
+                <ybc::Box>
+                    <ybc::Title>
+                        { &metadata.title }
+                    </ybc::Title>
+                    <ybc::Image size=ybc::ImageSize::Is16by9 >
+                        <Image image_cid=metadata.image.link />
+                    </ybc::Image>
+                    <ybc::Content>
+                        <Markdown ipfs=self.props.ipfs.clone() markdown_cid=metadata.content.link />
+                    </ybc::Content>
+                </ybc::Box>
+            </ybc::Container>
         }
     }
 
     fn render_video(&self, metadata: &VideoMetadata) -> Html {
         html! {
-            <div class="video">
-                <VideoPlayer ipfs=self.props.ipfs.clone() metadata=Rc::from(metadata.clone())/*TODO find a way to fix this weird clonning issue*/ />
-            </div>
+            <ybc::Container>
+                <ybc::Box>
+                    <ybc::Title>
+                        { &metadata.title }
+                    </ybc::Title>
+                    <VideoPlayer ipfs=self.props.ipfs.clone() metadata=Rc::from(metadata.clone())/*TODO find a way to fix this weird clonning issue*/ />
+                </ybc::Box>
+            </ybc::Container>
         }
     }
 
     fn render_microblog(&self, metadata: &MicroPost) -> Html {
         html! {
-            <div class="micro_blog">
-                <div class="post_content"> { &metadata.content } </div>
-            </div>
+            <ybc::Container>
+                <ybc::Box>
+                    <ybc::Media>
+                        <ybc::MediaLeft>
+                            { &*self.author }
+                        </ybc::MediaLeft>
+                    <ybc::MediaContent>
+                        { &metadata.content }
+                    </ybc::MediaContent>
+                    </ybc::Media>
+                </ybc::Box>
+            </ybc::Container>
         }
     }
 }

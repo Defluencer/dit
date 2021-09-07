@@ -13,7 +13,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url};
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender, classes};
 use yew::services::ConsoleService;
 
 use linked_data::beacon::Beacon;
@@ -207,7 +207,9 @@ impl Component for VideoPlayer {
 
     fn view(&self) -> Html {
         html! {
-            <video class="video_player" id="video_player" autoplay="true" controls=true poster=self.poster_link.clone() />
+            <ybc::Image size=ybc::ImageSize::Is16by9>
+                <video class=classes!("has-ratio") width=640 height=360 id="video_player" autoplay="true" controls=true poster=self.poster_link.clone() />
+            </ybc::Image>
         }
     }
 

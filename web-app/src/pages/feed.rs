@@ -91,12 +91,14 @@ impl Component for ContentFeed {
         };
 
         html! {
-            <div class="content_feed_page">
+            <>
                 <Navbar />
-                <div class="feed">
-                    { content }
-                </div>
-            </div>
+                <ybc::Section /* classes=classes!("has-background-grey-dark") */ >
+                    <ybc::Container>
+                        { content }
+                    </ybc::Container>
+                </ybc::Section>
+            </>
         }
     }
 }
@@ -127,9 +129,6 @@ impl ContentFeed {
             }
         };
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Metadata Update");
-
         let index = self
             .content
             .binary_search_by(|(_, _, probe, _)| probe.timestamp().cmp(&metadata.timestamp()))
@@ -140,10 +139,13 @@ impl ContentFeed {
             None => return false,
         };
 
-        let count = self.props.content.get_comment_count(&cid);
+        let count = self.props.content.get_comments_count(&cid);
 
         self.content
             .insert(index, (cid, Rc::from(name), Rc::from(metadata), count));
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Feed Metadata Updated");
 
         true
     }

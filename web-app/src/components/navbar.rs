@@ -1,7 +1,6 @@
 use crate::app::AppRoute;
 
-use ybc::NavbarFixed::Top;
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender, classes};
 use yew_router::components::RouterAnchor;
 
 type Anchor = RouterAnchor<AppRoute>;
@@ -29,7 +28,7 @@ impl Component for Navbar {
     fn view(&self) -> Html {
         let brand = html! {
             <ybc::NavbarItem>
-                <Anchor route=AppRoute::Home>
+                <Anchor classes="has-text-white" route=AppRoute::Home>
                     {"Defluencer"}
                 </Anchor>
             </ybc::NavbarItem>
@@ -38,12 +37,12 @@ impl Component for Navbar {
         let start = html! {
             <>
             <ybc::NavbarItem tab=true >
-                <Anchor route=AppRoute::Feed>
+                <Anchor classes="has-text-white" route=AppRoute::Feed>
                     {"Content Feed"}
                 </Anchor>
             </ybc::NavbarItem>
             <ybc::NavbarItem tab=true >
-                <Anchor route=AppRoute::Live>
+                <Anchor classes="has-text-white" route=AppRoute::Live>
                     {"Live"}
                 </Anchor>
             </ybc::NavbarItem>
@@ -52,14 +51,14 @@ impl Component for Navbar {
 
         let end = html! {
             <ybc::NavbarItem tab=true >
-                <Anchor route=AppRoute::Settings>
+                <Anchor classes="has-text-white" route=AppRoute::Settings>
                     {"Settings"}
                 </Anchor>
             </ybc::NavbarItem>
         };
 
         html! {
-            <ybc::Navbar fixed=Top transparent=false spaced=true padded=false navbrand=brand navstart=start navend=end navburger=true />
+            <ybc::Navbar classes=classes!("is-dark") transparent=false spaced=true padded=false navbrand=brand navstart=start navend=end navburger=true />
         }
     }
 }
