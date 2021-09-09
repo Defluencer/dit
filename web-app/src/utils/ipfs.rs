@@ -2,7 +2,6 @@ use core::fmt;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::utils::local_storage::LocalStorage;
 
@@ -201,7 +200,7 @@ impl IpfsService {
         &self,
         topic: U,
         cb: Callback<Result<(String, Vec<u8>)>>,
-        drop_sig: Rc<AtomicBool>,
+        drop_sig: Rc<()>,
     ) where
         U: Into<Cow<'static, str>>,
     {
@@ -231,8 +230,13 @@ impl IpfsService {
         let mut line_stream = stream.err_into().into_async_read().lines();
 
         while let Some(result) = line_stream.next().await {
-            if drop_sig.load(Ordering::Relaxed) {
+            if Rc::strong_count(&drop_sig) < 2 {
                 // Hacky way I found to close the stream
+                // Could try channels
+
+                #[cfg(debug_assertions)]
+                ConsoleService::info("Stream Dropped");
+
                 return;
             }
 

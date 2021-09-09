@@ -15,6 +15,8 @@ use linked_data::comments::Comment;
 use linked_data::feed::{ContentCache, Media};
 use linked_data::video::VideoMetadata;
 
+use either::Either;
+
 use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -59,9 +61,6 @@ impl Component for Content {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Content Page Created");
-
         let mut comp = Self {
             props,
 
@@ -77,6 +76,9 @@ impl Component for Content {
 
         comp.get_content();
         comp.get_comments();
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Content Page Created");
 
         comp
     }
@@ -224,6 +226,8 @@ impl Content {
                     <ybc::Image size=ybc::ImageSize::Is16by9 >
                         <Image image_cid=metadata.image.link />
                     </ybc::Image>
+                </ybc::Box>
+                <ybc::Box>
                     <ybc::Content>
                         <Markdown ipfs=self.props.ipfs.clone() markdown_cid=metadata.content.link />
                     </ybc::Content>
@@ -239,7 +243,7 @@ impl Content {
                     <ybc::Title>
                         { &metadata.title }
                     </ybc::Title>
-                    <VideoPlayer ipfs=self.props.ipfs.clone() metadata=Rc::from(metadata.clone())/*TODO find a way to fix this weird clonning issue*/ />
+                    <VideoPlayer ipfs=self.props.ipfs.clone() beacon_or_metadata=Either::Right(Rc::from(metadata.clone()))/*TODO find a way to fix this weird clonning issue*/ />
                 </ybc::Box>
             </ybc::Container>
         }

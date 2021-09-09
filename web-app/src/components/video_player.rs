@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use std::str;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::utils::seconds_to_timecode;
 use crate::utils::{ExponentialMovingAverage, IpfsService};
@@ -13,11 +12,13 @@ use wasm_bindgen_futures::spawn_local;
 
 use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer, Url};
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender, classes};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 
 use linked_data::beacon::Beacon;
 use linked_data::video::{SetupNode, Track, VideoMetadata};
+
+use either::Either;
 
 use cid::Cid;
 
@@ -49,7 +50,7 @@ struct LiveStream {
 
     buffer: VecDeque<Cid>,
 
-    drop_sig: Rc<AtomicBool>,
+    drop_sig: Rc<()>,
 }
 
 /// Video player for live streams and on demand.
@@ -57,8 +58,8 @@ pub struct VideoPlayer {
     link: ComponentLink<Self>,
 
     ipfs: IpfsService,
-    metadata: Option<Rc<VideoMetadata>>,
-    live_stream: Option<LiveStream>,
+
+    player_type: Either<LiveStream, Rc<VideoMetadata>>,
 
     media_element: Option<HtmlMediaElement>,
     media_source: MediaSource,
@@ -92,8 +93,7 @@ pub enum Msg {
 #[derive(Clone, Properties)]
 pub struct Props {
     pub ipfs: IpfsService,
-    pub metadata: Option<Rc<VideoMetadata>>,
-    pub beacon: Option<Rc<Beacon>>,
+    pub beacon_or_metadata: Either<Rc<Beacon>, Rc<VideoMetadata>>,
 }
 
 impl Component for VideoPlayer {
@@ -103,8 +103,7 @@ impl Component for VideoPlayer {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let Props {
             ipfs,
-            metadata,
-            beacon,
+            beacon_or_metadata,
         } = props;
 
         let ema = ExponentialMovingAverage::new();
@@ -125,48 +124,38 @@ impl Component for VideoPlayer {
             }
         };
 
-        let mut poster_link = String::from("ipfs://");
-
-        if let Some(md) = metadata.as_ref() {
-            poster_link.push_str(&md.image.link.to_string());
-        } else {
-            //TODO default thumbnail image
-            poster_link.push_str("bafkreicovb5qdvrine4vidt77xahhvovahmekvsojbiqewp7ih7pzvnn7i");
-        }
-
         let cb = link.callback(|_| Msg::SourceOpen);
         let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
         media_source.set_onsourceopen(Some(closure.as_ref().unchecked_ref()));
         let source_open_closure = Some(closure);
 
-        let live_stream = match beacon {
-            Some(beacon) => {
-                let drop_sig = Rc::from(AtomicBool::new(false));
+        let mut poster_link = String::from("ipfs://");
 
-                spawn_local({
-                    let ipfs = ipfs.clone();
-                    let topic = beacon.topics.video.clone();
-                    let cb = link.callback(Msg::PubSub);
-                    let sig = drop_sig.clone();
-
-                    async move { ipfs.pubsub_sub(topic, cb, sig).await }
-                });
-
-                Some(LiveStream {
+        let player_type = match beacon_or_metadata {
+            Either::Left(beacon) => {
+                let live = LiveStream {
                     beacon,
                     buffer: VecDeque::with_capacity(5),
-                    drop_sig,
-                })
+                    drop_sig: Rc::from(()),
+                };
+
+                //TODO default thumbnail image
+                poster_link.push_str("bafkreicovb5qdvrine4vidt77xahhvovahmekvsojbiqewp7ih7pzvnn7i");
+
+                Either::Left(live)
             }
-            None => None,
+            Either::Right(metadata) => {
+                poster_link.push_str(&metadata.image.link.to_string());
+
+                Either::Right(metadata)
+            }
         };
 
-        Self {
+        let comp = Self {
             link,
 
             ipfs,
-            metadata,
-            live_stream,
+            player_type,
 
             media_element: None,
             media_source,
@@ -183,7 +172,14 @@ impl Component for VideoPlayer {
             update_end_closure: None,
             timeout_closure: None,
             handle: 0,
+        };
+
+        match comp.player_type {
+            Either::Left(_) => comp.subscribe(),
+            _ => {}
         }
+
+        comp
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -201,8 +197,30 @@ impl Component for VideoPlayer {
         false
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
-        false
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        let live = match &mut self.player_type {
+            Either::Left(live) => live,
+            _ => return false,
+        };
+
+        let beacon = match props.beacon_or_metadata {
+            Either::Left(beacon) => beacon,
+            _ => return false,
+        };
+
+        if Rc::ptr_eq(&live.beacon, &beacon) {
+            return false;
+        }
+
+        live.beacon = beacon;
+        live.drop_sig = Rc::from(());
+
+        self.subscribe();
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Video Player Changed");
+
+        true
     }
 
     fn view(&self) -> Html {
@@ -252,15 +270,15 @@ impl Component for VideoPlayer {
 
             media_element.set_src(&self.object_url);
 
-            self.seeking_closure = match self.metadata.as_ref() {
-                Some(_) => {
+            self.seeking_closure = match self.player_type {
+                Either::Right(_) => {
                     let cb = self.link.callback(|_| Msg::Seeking);
                     let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
                     media_element.set_onseeking(Some(closure.as_ref().unchecked_ref()));
 
                     Some(closure)
                 }
-                None => None,
+                _ => None,
             };
 
             self.media_element = Some(media_element);
@@ -268,13 +286,6 @@ impl Component for VideoPlayer {
     }
 
     fn destroy(&mut self) {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Dropping Video Player");
-
-        if let Some(live) = self.live_stream.as_ref() {
-            live.drop_sig.store(true, Ordering::Relaxed);
-        }
-
         let window = match web_sys::window() {
             Some(window) => window,
             None => {
@@ -291,6 +302,27 @@ impl Component for VideoPlayer {
 }
 
 impl VideoPlayer {
+    fn subscribe(&self) {
+        let live = match &self.player_type {
+            Either::Left(live) => live,
+            _ => return,
+        };
+
+        let topic = live.beacon.topics.video.clone();
+
+        if topic.is_empty() {
+            return;
+        }
+
+        spawn_local({
+            let ipfs = self.ipfs.clone();
+            let cb = self.link.callback(Msg::PubSub);
+            let sig = live.drop_sig.clone();
+
+            async move { ipfs.pubsub_sub(topic, cb, sig).await }
+        });
+    }
+
     /// Callback when MediaSource is linked to video element.
     fn on_source_open(&mut self) {
         #[cfg(debug_assertions)]
@@ -299,7 +331,7 @@ impl VideoPlayer {
         self.media_source.set_onsourceopen(None);
         self.source_open_closure = None;
 
-        if let Some(metadata) = self.metadata.as_ref() {
+        if let Either::Right(metadata) = &self.player_type {
             self.media_source.set_duration(metadata.duration);
 
             spawn_local({
@@ -327,9 +359,9 @@ impl VideoPlayer {
 
         let (from, data) = res;
 
-        let live = match self.live_stream.as_mut() {
-            Some(live) => live,
-            None => {
+        let live = match &mut self.player_type {
+            Either::Left(live) => live,
+            _ => {
                 #[cfg(debug_assertions)]
                 ConsoleService::error("No Live Stream");
                 return;
@@ -574,18 +606,17 @@ impl VideoPlayer {
 
     /// Load either live or VOD segment.
     fn load_segment(&mut self) {
-        if self.metadata.is_some() {
-            return self.load_vod_segment();
+        match self.player_type {
+            Either::Right(_) => self.load_vod_segment(),
+            Either::Left(_) => self.load_live_segment(),
         }
-
-        self.load_live_segment()
     }
 
     /// Try get cid from live buffer then fetch video data from ipfs.
     fn load_live_segment(&mut self) {
-        let live = match self.live_stream.as_mut() {
-            Some(live) => live,
-            None => {
+        let live = match &mut self.player_type {
+            Either::Left(live) => live,
+            _ => {
                 #[cfg(debug_assertions)]
                 ConsoleService::error("No Live Stream");
                 return;
@@ -684,9 +715,9 @@ impl VideoPlayer {
             hours, minutes, seconds
         ));
 
-        let cid_string = match self.metadata.as_ref() {
-            Some(metadata) => metadata.video.link.to_string(),
-            None => {
+        let cid_string = match &self.player_type {
+            Either::Right(metadata) => metadata.video.link.to_string(),
+            _ => {
                 #[cfg(debug_assertions)]
                 ConsoleService::error("No Metadata");
                 return;
@@ -842,7 +873,7 @@ impl VideoPlayer {
             return self.flush_buffer();
         }
 
-        if let Some(metadata) = self.metadata.as_ref() {
+        if let Either::Right(metadata) = &self.player_type {
             if buff_end >= metadata.duration {
                 #[cfg(debug_assertions)]
                 ConsoleService::info("End Of Video");

@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 use std::str;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::components::chat::message::{MessageData, UIMessage};
 use crate::utils::IpfsService;
@@ -10,6 +9,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
+use yew::Callback;
 
 use linked_data::beacon::Beacon;
 use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
@@ -23,7 +23,9 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct Display {
     props: Props,
-    link: ComponentLink<Self>,
+
+    msg_cb: Callback<(PeerId, Message, Result<SignedMessage<ChatId>>)>,
+    pubsub_cb: Callback<Result<(String, Vec<u8>)>>,
 
     img_gen: Ethereum,
 
@@ -32,7 +34,7 @@ pub struct Display {
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
 
-    drop_sig: Rc<AtomicBool>,
+    drop_sig: Rc<()>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -54,16 +56,8 @@ impl Component for Display {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let drop_sig = Rc::from(AtomicBool::new(false));
-
-        spawn_local({
-            let ipfs = props.ipfs.clone();
-            let sub_topic = props.beacon.topics.chat.clone();
-            let cb = link.callback(Msg::PubSub);
-            let sig = drop_sig.clone();
-
-            async move { ipfs.pubsub_sub(sub_topic, cb, sig).await }
-        });
+        //let drop_sig = Rc::from(AtomicBool::new(false));
+        let drop_sig = Rc::from(());
 
         //https://github.com/ethereum/blockies
         //https://docs.rs/blockies/0.3.0/blockies/struct.Ethereum.html
@@ -75,9 +69,13 @@ impl Component for Display {
             spot_color: None,
         };
 
-        Self {
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Chat Display Created");
+
+        let comp = Self {
             props,
-            link,
+            msg_cb: link.callback(Msg::Origin),
+            pubsub_cb: link.callback(Msg::PubSub),
 
             img_gen,
 
@@ -87,7 +85,11 @@ impl Component for Display {
             next_id: 0,
 
             drop_sig,
-        }
+        };
+
+        comp.subscribe();
+
+        comp
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -104,6 +106,13 @@ impl Component for Display {
         {
             self.props = props;
 
+            self.drop_sig = Rc::from(());
+
+            self.subscribe();
+
+            #[cfg(debug_assertions)]
+            ConsoleService::info("Chat Display Changed");
+
             return true;
         }
 
@@ -112,25 +121,32 @@ impl Component for Display {
 
     fn view(&self) -> Html {
         html! {
-        <div class="chat_display">
-        {
-        for self.chat_messages.iter().map(|cm| html! {
-            <UIMessage key=cm.id.to_string() message_data=cm.clone() />
-        })
+            <div class="box" style="overflow-y: scroll; height: 60vh" >
+            {
+                for self.chat_messages.iter().map(|cm| html! {
+                    <UIMessage key=cm.id.to_string() message_data=cm.clone() />
+                })
+            }
+            </div>
         }
-        </div>
-        }
-    }
-
-    fn destroy(&mut self) {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Dropping Live Chat");
-
-        self.drop_sig.store(true, Ordering::Relaxed);
     }
 }
 
 impl Display {
+    fn subscribe(&self) {
+        let sub_topic = self.props.beacon.topics.chat.clone();
+
+        if sub_topic.is_empty() {
+            return;
+        }
+
+        let ipfs = self.props.ipfs.clone();
+        let cb = self.pubsub_cb.clone();
+        let sig = self.drop_sig.clone();
+
+        spawn_local(async move { ipfs.pubsub_sub(sub_topic, cb, sig).await });
+    }
+
     /// Callback when GossipSub receive a message.
     fn on_pubsub_update(&mut self, result: Result<(String, Vec<u8>)>) -> bool {
         let res = match result {
@@ -171,7 +187,7 @@ impl Display {
 
     fn get_origin(&self, from: String, msg: Message) {
         spawn_local({
-            let cb = self.link.callback_once(Msg::Origin);
+            let cb = self.msg_cb.clone();
             let ipfs = self.props.ipfs.clone();
             let cid = msg.origin.link;
 
@@ -235,7 +251,7 @@ impl Display {
         match msg.msg_type {
             MessageType::Unsigned(msg) => self.update_display(&peer, &msg),
             MessageType::Ban(ban) => self.update_bans(&peer, ban),
-            MessageType::Mod(_) => false,
+            MessageType::Mod(_) => false, //TODO
         }
     }
 
