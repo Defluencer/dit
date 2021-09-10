@@ -22,7 +22,14 @@ impl Component for Loading {
 
     fn view(&self) -> Html {
         html! {
-            <div class="center_text"> { "Loading..." } </div>
+            <ybc::Box>
+                <div>
+                    { "Loading..." }
+                </div>
+                <progress class="progress is-info">
+                    { "0%" }
+                </progress>
+            </ybc::Box>
         }
     }
 }

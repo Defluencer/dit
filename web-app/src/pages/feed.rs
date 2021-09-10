@@ -16,18 +16,29 @@ use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+#[derive(PartialEq)]
+pub enum FilterType {
+    None,
+    Videos,
+    Blogs,
+    Statements,
+}
+
 /// Page displaying content thumbnails from you and your friends.
 pub struct ContentFeed {
     props: Props,
 
-    cb: Callback<(Cid, Result<Media>)>,
+    media_cb: Callback<(Cid, Result<Media>)>,
+    link: ComponentLink<Self>,
 
     content_set: HashSet<Cid>,
     content: Vec<(Cid, Rc<str>, Rc<Media>, usize)>,
+    filter: FilterType,
 }
 
 pub enum Msg {
     Metadata((Cid, Result<Media>)),
+    Filter(FilterType),
 }
 
 #[derive(Properties, Clone)]
@@ -44,10 +55,13 @@ impl Component for ContentFeed {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let mut feed = Self {
             props,
-            cb: link.callback(Msg::Metadata),
+
+            media_cb: link.callback(Msg::Metadata),
+            link,
 
             content_set: HashSet::with_capacity(100),
             content: Vec::with_capacity(100),
+            filter: FilterType::None,
         };
 
         feed.get_content();
@@ -58,6 +72,15 @@ impl Component for ContentFeed {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Metadata(result) => self.on_metadata(result),
+            Msg::Filter(filter) => {
+                if self.filter != filter {
+                    self.filter = filter;
+
+                    return true;
+                }
+
+                false
+            }
         }
     }
 
@@ -79,13 +102,19 @@ impl Component for ContentFeed {
         } else {
             html! {
                 <>
-                    {
-                        for self.content.iter().rev().map(
-                            |(cid, name, metadata, count)|
-                            html! { <Thumbnail cid=*cid name=name.clone()  metadata=metadata.clone() count=*count />
-                        })
+                {
+                    self.content.iter().rev().filter_map(|(cid, name, metadata, count)| {
+                        let thumbnail = html! { <Thumbnail cid=*cid name=name.clone()  metadata=metadata.clone() count=*count /> };
 
-                    }
+                        match (metadata.as_ref(), &self.filter) {
+                            (_, FilterType::None) => Some(thumbnail),
+                            (Media::Video(_), FilterType::Videos) => Some(thumbnail),
+                            (Media::Blog(_), FilterType::Blogs) => Some(thumbnail),
+                            (Media::Statement(_), FilterType::Statements) => Some(thumbnail),
+                            (_, _) => None,
+                        }
+                    }).collect::<Html>()
+                }
                 </>
             }
         };
@@ -95,6 +124,30 @@ impl Component for ContentFeed {
                 <Navbar />
                 <ybc::Section /* classes=classes!("has-background-grey-dark") */ >
                     <ybc::Container>
+                        <ybc::Tabs toggle=true fullwidth=true >
+                            <ul>
+                                <li class={ if let FilterType::None = self.filter { "is-active"} else {""} } >
+                                    <a onclick=self.link.callback(|_| Msg::Filter(FilterType::None)) >
+                                        <span>{ "No Filter" }</span>
+                                    </a>
+                                </li>
+                                <li class={ if let FilterType::Videos = self.filter { "is-active"} else {""} } >
+                                    <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Videos)) >
+                                        <span>{ "Videos" }</span>
+                                    </a>
+                                </li>
+                                <li class={ if let FilterType::Blogs = self.filter { "is-active"} else {""} } >
+                                    <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Blogs)) >
+                                        <span>{ "Blogs" }</span>
+                                    </a>
+                                </li>
+                                <li class={ if let FilterType::Statements = self.filter { "is-active"} else {""} } >
+                                    <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Statements)) >
+                                        <span>{ "Statements" }</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </ybc::Tabs>
                         { content }
                     </ybc::Container>
                 </ybc::Section>
@@ -109,7 +162,7 @@ impl ContentFeed {
         for cid in self.props.content.iter_content() {
             if self.content_set.insert(*cid) {
                 spawn_local({
-                    let cb = self.cb.clone();
+                    let cb = self.media_cb.clone();
                     let ipfs = self.props.ipfs.clone();
                     let cid = *cid;
 

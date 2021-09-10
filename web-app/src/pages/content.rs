@@ -139,6 +139,56 @@ impl Component for Content {
 }
 
 impl Content {
+    fn render_video(&self, metadata: &VideoMetadata) -> Html {
+        html! {
+            <ybc::Container>
+                <ybc::Box>
+                    <ybc::Title>
+                        { &metadata.title }
+                    </ybc::Title>
+                    <VideoPlayer ipfs=self.props.ipfs.clone() beacon_or_metadata=Either::Right(Rc::from(metadata.clone()))/*TODO find a way to fix this weird clonning issue*/ />
+                </ybc::Box>
+            </ybc::Container>
+        }
+    }
+
+    fn render_blog(&self, metadata: &FullPost) -> Html {
+        html! {
+            <ybc::Container>
+                <ybc::Box>
+                    <ybc::Title>
+                        { &metadata.title }
+                    </ybc::Title>
+                    <ybc::Image size=ybc::ImageSize::Is16by9 >
+                        <Image image_cid=metadata.image.link />
+                    </ybc::Image>
+                </ybc::Box>
+                <ybc::Box>
+                    <ybc::Content>
+                        <Markdown ipfs=self.props.ipfs.clone() markdown_cid=metadata.content.link />
+                    </ybc::Content>
+                </ybc::Box>
+            </ybc::Container>
+        }
+    }
+
+    fn render_microblog(&self, metadata: &MicroPost) -> Html {
+        html! {
+            <ybc::Container>
+                <ybc::Box>
+                    <ybc::Media>
+                        <ybc::MediaLeft>
+                            { &*self.author }
+                        </ybc::MediaLeft>
+                    <ybc::MediaContent>
+                        { &metadata.content }
+                    </ybc::MediaContent>
+                    </ybc::Media>
+                </ybc::Box>
+            </ybc::Container>
+        }
+    }
+
     fn get_content(&mut self) {
         spawn_local({
             let cb = self.content_cb.clone();
@@ -214,55 +264,5 @@ impl Content {
         ConsoleService::info("Content Comments Updated");
 
         true
-    }
-
-    fn render_blog(&self, metadata: &FullPost) -> Html {
-        html! {
-            <ybc::Container>
-                <ybc::Box>
-                    <ybc::Title>
-                        { &metadata.title }
-                    </ybc::Title>
-                    <ybc::Image size=ybc::ImageSize::Is16by9 >
-                        <Image image_cid=metadata.image.link />
-                    </ybc::Image>
-                </ybc::Box>
-                <ybc::Box>
-                    <ybc::Content>
-                        <Markdown ipfs=self.props.ipfs.clone() markdown_cid=metadata.content.link />
-                    </ybc::Content>
-                </ybc::Box>
-            </ybc::Container>
-        }
-    }
-
-    fn render_video(&self, metadata: &VideoMetadata) -> Html {
-        html! {
-            <ybc::Container>
-                <ybc::Box>
-                    <ybc::Title>
-                        { &metadata.title }
-                    </ybc::Title>
-                    <VideoPlayer ipfs=self.props.ipfs.clone() beacon_or_metadata=Either::Right(Rc::from(metadata.clone()))/*TODO find a way to fix this weird clonning issue*/ />
-                </ybc::Box>
-            </ybc::Container>
-        }
-    }
-
-    fn render_microblog(&self, metadata: &MicroPost) -> Html {
-        html! {
-            <ybc::Container>
-                <ybc::Box>
-                    <ybc::Media>
-                        <ybc::MediaLeft>
-                            { &*self.author }
-                        </ybc::MediaLeft>
-                    <ybc::MediaContent>
-                        { &metadata.content }
-                    </ybc::MediaContent>
-                    </ybc::Media>
-                </ybc::Box>
-            </ybc::Container>
-        }
     }
 }

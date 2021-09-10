@@ -28,7 +28,7 @@ impl MessageData {
 
     fn render(&self) -> Html {
         html! {
-            <ybc::Message>
+            <article class="message is-small" style="overflow-wrap: break-word" >
                 <ybc::MessageHeader>
                     <ybc::Image size=ybc::ImageSize::IsSquare >
                         <img src=self.img_data.to_string() height="32" width="32" />
@@ -38,7 +38,7 @@ impl MessageData {
                 <ybc::MessageBody>
                     { &self.message }
                 </ybc::MessageBody>
-            </ybc::Message>
+            </article>
         }
     }
 }

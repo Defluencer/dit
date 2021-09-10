@@ -75,7 +75,7 @@ impl Component for Inputs {
             None => (None, DisplayState::Connect),
         };
 
-        //TODO should verify that the node has not been garbage collected in between session.
+        //TODO should verify that the signed message has not been garbage collected in between session.
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Chat Inputs Created");
@@ -174,7 +174,7 @@ impl Inputs {
             <>
                 <ybc::Field>
                     <ybc::Control>
-                        <ybc::TextArea name="chat_msg" value=self.temp_msg.clone() update=self.link.callback(Msg::Set) rows=5 size=ybc::Size::Small fixed_size=true />
+                        <ybc::TextArea name="chat_msg" value=String::default() update=self.link.callback(Msg::Set) rows=3 fixed_size=true />
                     </ybc::Control>
                 </ybc::Field>
                 <ybc::Field>
@@ -195,14 +195,14 @@ impl Inputs {
             return self.send_message();
         }
 
+        self.temp_msg = msg;
+
         false
     }
 
     /// Send chat message via gossipsub.
     fn send_message(&mut self) -> bool {
         let message = self.temp_msg.clone();
-
-        self.temp_msg = String::default();
 
         let cid = match self.sign_msg_cid {
             Some(cid) => cid,

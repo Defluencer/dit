@@ -6,6 +6,7 @@ use crate::components::chat::message::{MessageData, UIMessage};
 use crate::utils::IpfsService;
 
 use wasm_bindgen_futures::spawn_local;
+use web_sys::Element;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
@@ -30,6 +31,8 @@ pub struct Display {
     img_gen: Ethereum,
 
     mod_db: ChatModerationCache,
+
+    chat_element: Option<Element>,
 
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
@@ -81,6 +84,8 @@ impl Component for Display {
 
             mod_db: ChatModerationCache::new(100, 100),
 
+            chat_element: None,
+
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
 
@@ -121,7 +126,7 @@ impl Component for Display {
 
     fn view(&self) -> Html {
         html! {
-            <div class="box" style="overflow-y: scroll; height: 60vh" >
+            <div id="chat_display" class="box" style="overflow-y: scroll;height: 60vh;scroll-behavior: smooth;" >
             {
                 for self.chat_messages.iter().map(|cm| html! {
                     <UIMessage key=cm.id.to_string() message_data=cm.clone() />
@@ -129,6 +134,45 @@ impl Component for Display {
             }
             </div>
         }
+    }
+
+    fn rendered(&mut self, first_render: bool) {
+        if !first_render {
+            if let Some(element) = self.chat_element.as_mut() {
+                element.set_scroll_top(element.scroll_height());
+            }
+
+            return;
+        }
+
+        let window = match web_sys::window() {
+            Some(window) => window,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Window Object");
+                return;
+            }
+        };
+
+        let document = match window.document() {
+            Some(document) => document,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Document Object");
+                return;
+            }
+        };
+
+        let element = match document.get_element_by_id("chat_display") {
+            Some(document) => document,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Element by Id");
+                return;
+            }
+        };
+
+        self.chat_element = Some(element);
     }
 }
 
