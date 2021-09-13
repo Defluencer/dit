@@ -26,7 +26,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 type FeedCallback = Callback<(String, Cid, Result<(Cid, FeedAnchor)>)>;
 type CommentCallback = Callback<(String, Cid, Result<(Cid, Commentary)>)>;
 
-#[derive(Switch, Debug, Clone)]
+#[derive(Switch, Debug, Clone, PartialEq)]
 pub enum AppRoute {
     #[to = "/#/content/{cid}"]
     Content(Cid),

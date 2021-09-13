@@ -6,7 +6,7 @@ use crate::utils::{IpfsService, LocalStorage};
 
 use wasm_bindgen_futures::spawn_local;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 use yew::Callback;
 
@@ -122,31 +122,29 @@ impl Component for ContentFeed {
         html! {
             <>
                 <Navbar />
-                <ybc::Section /* classes=classes!("has-background-grey-dark") */ >
+                <ybc::Section>
                     <ybc::Container>
-                        <ybc::Tabs toggle=true fullwidth=true >
-                            <ul>
-                                <li class={ if let FilterType::None = self.filter { "is-active"} else {""} } >
-                                    <a onclick=self.link.callback(|_| Msg::Filter(FilterType::None)) >
-                                        <span>{ "No Filter" }</span>
-                                    </a>
-                                </li>
-                                <li class={ if let FilterType::Videos = self.filter { "is-active"} else {""} } >
-                                    <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Videos)) >
-                                        <span>{ "Videos" }</span>
-                                    </a>
-                                </li>
-                                <li class={ if let FilterType::Blogs = self.filter { "is-active"} else {""} } >
-                                    <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Blogs)) >
-                                        <span>{ "Blogs" }</span>
-                                    </a>
-                                </li>
-                                <li class={ if let FilterType::Statements = self.filter { "is-active"} else {""} } >
-                                    <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Statements)) >
-                                        <span>{ "Statements" }</span>
-                                    </a>
-                                </li>
-                            </ul>
+                        <ybc::Tabs classes=classes!("is-small") toggle=true fullwidth=true >
+                            <li class={if let FilterType::None = self.filter {"is-active"} else {""}} >
+                                <a onclick=self.link.callback(|_| Msg::Filter(FilterType::None)) >
+                                    <span>{ "No Filter" }</span>
+                                </a>
+                            </li>
+                            <li class={if let FilterType::Videos = self.filter {"is-active"} else {""}} >
+                                <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Videos)) >
+                                    <span>{ "Videos" }</span>
+                                </a>
+                            </li>
+                            <li class={if let FilterType::Blogs = self.filter {"is-active"} else {""}} >
+                                <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Blogs)) >
+                                    <span>{ "Blogs" }</span>
+                                </a>
+                            </li>
+                            <li class={if let FilterType::Statements = self.filter {"is-active"} else {""}} >
+                                <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Statements)) >
+                                    <span>{ "Statements" }</span>
+                                </a>
+                            </li>
                         </ybc::Tabs>
                         { content }
                     </ybc::Container>

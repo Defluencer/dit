@@ -1,11 +1,34 @@
 @charset "utf-8";
 
 // Set your brand colors
-$purple: #8A4D76;
-$pink: #FA7C91;
-$brown: #757763;
-$beige-light: #D0D1CD;
-$beige-lighter: #EFF0EB;
+$scheme-main: #0d1117;
+$scheme-main-bis: #161b22;
+$scheme-main-ter: #c83895;
+
+$border: #30363d;
+$border-light: #c9d1d9;
+$border-hover: #949596;
+
+$text-strong: #f0f6fc;
+$text: #c9d1d9;
+$text-light: #949596;
+
+$link: $scheme-main-ter;
+//$link-invert: ;
+//$link-hover: ;
+//$link-hover-border: ;
+//$link-focus: ;
+//$link-focus-hover: ;
+//$link-active: ;
+//$link-active-border: ;
+
+$background: $scheme-main-ter;
+//$shadow: inset 0px -5px 5px 0px $scheme-main-ter;
+
+//$primary: 
+
+// Update some of Bulma's component variables
+
 
 // Import the rest of Bulma
 @import "bulma/bulma.sass";
