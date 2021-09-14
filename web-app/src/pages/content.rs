@@ -6,7 +6,7 @@ use crate::utils::IpfsService;
 
 use wasm_bindgen_futures::spawn_local;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 use yew::Callback;
 
@@ -142,7 +142,7 @@ impl Content {
     fn render_video(&self, metadata: &VideoMetadata) -> Html {
         html! {
             <ybc::Container>
-                <ybc::Box>
+                <ybc::Box classes=classes!("has-text-centered")>
                     <ybc::Title>
                         { &metadata.title }
                     </ybc::Title>
@@ -155,7 +155,7 @@ impl Content {
     fn render_blog(&self, metadata: &FullPost) -> Html {
         html! {
             <ybc::Container>
-                <ybc::Box>
+                <ybc::Box classes=classes!("has-text-centered") >
                     <ybc::Title>
                         { &metadata.title }
                     </ybc::Title>
@@ -178,11 +178,16 @@ impl Content {
                 <ybc::Box>
                     <ybc::Media>
                         <ybc::MediaLeft>
-                            { &*self.author }
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-user"></i></span>
+                                <span> { &*self.author } </span>
+                            </span>
                         </ybc::MediaLeft>
-                    <ybc::MediaContent>
-                        { &metadata.content }
-                    </ybc::MediaContent>
+                        <ybc::MediaContent>
+                            <ybc::Content classes=classes!("has-text-centered")>
+                                { &metadata.content }
+                            </ybc::Content>
+                        </ybc::MediaContent>
                     </ybc::Media>
                 </ybc::Box>
             </ybc::Container>

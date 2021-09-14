@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 #[derive(Clone, Properties)]
 pub struct Comment {
@@ -35,10 +35,15 @@ impl Component for Comment {
             <ybc::Box>
                 <ybc::Media>
                     <ybc::MediaLeft>
-                        { &self.name }
+                        <span class="icon-text">
+                            <span class="icon"><i class="fas fa-user"></i></span>
+                            <span> { &self.name } </span>
+                        </span>
                     </ybc::MediaLeft>
                     <ybc::MediaContent>
-                        { &self.comment.comment }
+                        <ybc::Content classes=classes!("has-text-centered") >
+                            { &self.comment.comment }
+                        </ybc::Content>
                     </ybc::MediaContent>
                 </ybc::Media>
             </ybc::Box>

@@ -1,6 +1,6 @@
 use crate::app::AppRoute;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew_router::components::RouterAnchor;
 
 type Anchor = RouterAnchor<AppRoute>;
@@ -27,38 +27,40 @@ impl Component for Navbar {
 
     fn view(&self) -> Html {
         let brand = html! {
-            <ybc::NavbarItem>
-                <Anchor route=AppRoute::Home>
-                    {"Defluencer"}
-                </Anchor>
-            </ybc::NavbarItem>
+            <Anchor classes="navbar-item" route=AppRoute::Home>
+                <img src="/img/defluencer_logo.svg" alt="defluencer-logo" width="133" height="56" />
+                {"Defluencer"}
+            </Anchor>
         };
 
         let start = html! {
             <>
-            <ybc::NavbarItem tab=true >
-                <Anchor route=AppRoute::Feed>
-                    {"Content Feed"}
+                <Anchor classes="navbar-item" route=AppRoute::Feed>
+                    <span class="icon-text">
+                        <span class="icon"><i class="fas fa-rss"></i></span>
+                        <span> {"Content Feed"} </span>
+                    </span>
                 </Anchor>
-            </ybc::NavbarItem>
-            <ybc::NavbarItem tab=true >
-                <Anchor route=AppRoute::Live>
-                    {"Live"}
+                <Anchor classes="navbar-item" route=AppRoute::Live>
+                    <span class="icon-text">
+                        <span class="icon"><i class="fas fa-broadcast-tower"></i></span>
+                        <span> {"Live"} </span>
+                    </span>
                 </Anchor>
-            </ybc::NavbarItem>
             </>
         };
 
         let end = html! {
-            <ybc::NavbarItem tab=true >
-                <Anchor route=AppRoute::Settings>
-                    {"Settings"}
-                </Anchor>
-            </ybc::NavbarItem>
+            <Anchor classes="navbar-item" route=AppRoute::Settings>
+                <span class="icon-text" >
+                    <span class="icon"><i class="fas fa-cog"></i></span>
+                    <span> {"Settings"} </span>
+                </span>
+            </Anchor>
         };
 
         html! {
-            <ybc::Navbar transparent=false spaced=true padded=false navbrand=brand navstart=start navend=end navburger=true />
+            <ybc::Navbar classes=classes!("is-spaced") transparent=false spaced=true padded=false navbrand=brand navstart=start navend=end navburger=true />
         }
     }
 }

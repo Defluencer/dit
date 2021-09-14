@@ -127,22 +127,34 @@ impl Component for ContentFeed {
                         <ybc::Tabs classes=classes!("is-small") toggle=true fullwidth=true >
                             <li class={if let FilterType::None = self.filter {"is-active"} else {""}} >
                                 <a onclick=self.link.callback(|_| Msg::Filter(FilterType::None)) >
-                                    <span>{ "No Filter" }</span>
+                                    <span class="icon-text">
+                                        <span class="icon"><i class="fas fa-stream"></i></span>
+                                        <span> { "No Filter" } </span>
+                                    </span>
                                 </a>
                             </li>
                             <li class={if let FilterType::Videos = self.filter {"is-active"} else {""}} >
                                 <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Videos)) >
-                                    <span>{ "Videos" }</span>
+                                    <span class="icon-text">
+                                        <span class="icon"><i class="fas fa-video"></i></span>
+                                        <span> { "Videos" } </span>
+                                    </span>
                                 </a>
                             </li>
                             <li class={if let FilterType::Blogs = self.filter {"is-active"} else {""}} >
                                 <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Blogs)) >
-                                    <span>{ "Blogs" }</span>
+                                    <span class="icon-text">
+                                        <span class="icon"><i class="fas fa-blog"></i></span>
+                                        <span> { "Blogs" } </span>
+                                    </span>
                                 </a>
                             </li>
                             <li class={if let FilterType::Statements = self.filter {"is-active"} else {""}} >
                                 <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Statements)) >
-                                    <span>{ "Statements" }</span>
+                                    <span class="icon-text">
+                                        <span class="icon"><i class="fas fa-comment"></i></span>
+                                        <span> { "Statements" } </span>
+                                    </span>
                                 </a>
                             </li>
                         </ybc::Tabs>

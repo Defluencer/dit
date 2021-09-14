@@ -60,21 +60,30 @@ impl Thumbnail {
         let (hour, minute, second) = seconds_to_timecode(metadata.duration);
 
         html! {
-            <Anchor /* classes="has-text-white" */ route=AppRoute::Content(self.cid)>
+            <Anchor route=AppRoute::Content(self.cid)>
                 <ybc::Box>
                     <ybc::Media>
                         <ybc::MediaLeft>
                             <ybc::Block>
-                                { &self.name }
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-user"></i></span>
+                                    <span> { &self.name } </span>
+                                </span>
                             </ybc::Block>
                             <ybc::Block>
-                                { &format!("{} Comments", self.count) }
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-comments"></i></span>
+                                    <span> { &format!("{} Comment", self.count) } </span>
+                                </span>
                             </ybc::Block>
                             <ybc::Block>
-                                { &format!("{}:{}:{}", hour, minute, second) }
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-video"></i></span>
+                                    <span> { &format!("{}:{}:{}", hour, minute, second) } </span>
+                                </span>
                             </ybc::Block>
                         </ybc::MediaLeft>
-                        <ybc::MediaContent>
+                        <ybc::MediaContent classes=classes!("has-text-centered") >
                             <ybc::Title classes=classes!("is-6") >
                                 { &metadata.title }
                             </ybc::Title>
@@ -90,18 +99,24 @@ impl Thumbnail {
 
     fn render_blog(&self, metadata: &FullPost) -> Html {
         html! {
-            <Anchor /* classes="has-text-white" */ route=AppRoute::Content(self.cid)>
+            <Anchor route=AppRoute::Content(self.cid)>
                 <ybc::Box>
                     <ybc::Media>
                         <ybc::MediaLeft>
                             <ybc::Block>
-                                { &self.name }
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-user"></i></span>
+                                    <span> { &self.name } </span>
+                                </span>
                             </ybc::Block>
                             <ybc::Block>
-                                { &format!("{} Comments", self.count) }
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-comments"></i></span>
+                                    <span> { &format!("{} Comment", self.count) } </span>
+                                </span>
                             </ybc::Block>
                         </ybc::MediaLeft>
-                        <ybc::MediaContent>
+                        <ybc::MediaContent classes=classes!("has-text-centered") >
                                 <ybc::Title classes=classes!("is-6") >
                                     { &metadata.title }
                                 </ybc::Title>
@@ -117,22 +132,28 @@ impl Thumbnail {
 
     fn render_statement(&self, metadata: &MicroPost) -> Html {
         html! {
-            <Anchor /* classes="has-text-white" */ route=AppRoute::Content(self.cid)>
+            <Anchor route=AppRoute::Content(self.cid)>
                 <ybc::Box>
                     <ybc::Media>
                         <ybc::MediaLeft>
-                            { &self.name }
+                             <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-user"></i></span>
+                                    <span> { &self.name } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-comments"></i></span>
+                                    <span> { &format!("{} Comment", self.count) } </span>
+                                </span>
+                            </ybc::Block>
                         </ybc::MediaLeft>
-                    <ybc::MediaContent>
-                        { &metadata.content }
-                        <ybc::Level>
-                            <ybc::LevelLeft>
-                                <ybc::LevelItem>
-                                    { &format!("{} Comments", self.count) }
-                                </ybc::LevelItem>
-                            </ybc::LevelLeft>
-                        </ybc::Level>
-                    </ybc::MediaContent>
+                        <ybc::MediaContent>
+                            <ybc::Content classes=classes!("has-text-centered")>
+                                { &metadata.content }
+                            </ybc::Content>
+                        </ybc::MediaContent>
                     </ybc::Media>
                 </ybc::Box>
             </Anchor>
