@@ -1,20 +1,29 @@
 use crate::components::Navbar;
 use crate::utils::LocalStorage;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender, classes};
+use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::{Callback, ChangeData};
+
+#[derive(PartialEq)]
+pub enum NodeType {
+    Brave,
+    External,
+}
 
 /// Page with app settings and options.
 pub struct Settings {
-    link: ComponentLink<Self>,
-
     address: String,
-    valid: bool,
+    addrs_cb: Callback<ChangeData>,
+
+    node_cb: Callback<ChangeData>,
+    node_type: NodeType,
 
     storage: LocalStorage,
 }
 
 pub enum Msg {
-    Addrs(String),
+    NodeType(ChangeData),
+    Addrs(ChangeData),
 }
 
 #[derive(Properties, Clone)]
@@ -34,14 +43,29 @@ impl Component for Settings {
             None => crate::utils::DEFAULT_URI.to_owned(),
         };
 
-        let valid = reqwest::Url::parse(&address).is_ok();
+        let node_type = {
+            if address == crate::utils::BRAVE_URI {
+                NodeType::Brave
+            } else {
+                NodeType::External
+            }
+        };
 
-        Self { link, address, valid, storage }
+        Self {
+            address,
+            addrs_cb: link.callback(Msg::Addrs),
+
+            node_cb: link.callback(Msg::NodeType),
+            node_type,
+
+            storage,
+        }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Addrs(msg) => self.addrs(msg),
+            Msg::NodeType(msg) => self.node_type(msg),
         }
     }
 
@@ -50,20 +74,34 @@ impl Component for Settings {
     }
 
     fn view(&self) -> Html {
-        let error_class = match self.valid {
-            true => None,
-            false => Some(classes!("is-danger")),
-        };
+        let brave_slt = self.node_type == NodeType::Brave;
+        let ext_slt = self.node_type == NodeType::External;
 
         html! {
             <>
                 <Navbar />
                 <ybc::Section>
-                    <ybc::Field label="IPFS API".to_owned() help="Refresh to apply changes".to_owned() help_classes=error_class.clone() >
-                        <ybc::Control>
-                            <ybc::Input classes=error_class name="ipfs_addrs" value=self.address.clone() update=self.link.callback(Msg::Addrs) placeholder=crate::utils::DEFAULT_URI />
-                        </ybc::Control>
-                    </ybc::Field>
+                    <ybc::Container>
+                        <div class="field">
+                            <label class="label"> { "IPFS Node" } </label>
+                            <div class="control is-expanded">
+                                <div class="select is-fullwidth">
+                                    <select id="node_type" onchange=self.node_cb.clone() >
+                                        <option selected=brave_slt value="Brave"> { "Brave" } </option>
+                                        <option selected=ext_slt value="External"> { "External" } </option>
+                                    </select>
+                                </div>
+                            </div>
+                            <p class="help"> { "External nodes can be configured for better performace but Brave browser nodes are more conveniant." } </p>
+                        </div>
+                        <div class="field">
+                            <label class="label"> { "IPFS API" } </label>
+                            <div class="control is-expanded">
+                                <input name="ipfs_addrs" value=self.address.clone() onchange=self.addrs_cb.clone() class="input" type="text" readonly=brave_slt />
+                            </div>
+                            <p class="help"> { "Refresh to apply changes." } </p>
+                        </div>
+                    </ybc::Container>
                 </ybc::Section>
             </>
         }
@@ -71,15 +109,41 @@ impl Component for Settings {
 }
 
 impl Settings {
-    fn addrs(&mut self, msg: String) -> bool {
-        self.valid = reqwest::Url::parse(&msg).is_ok();
+    fn node_type(&mut self, msg: ChangeData) -> bool {
+        let element = match msg {
+            ChangeData::Select(element) => element,
+            _ => return false,
+        };
 
-        if self.valid {
-            self.storage.set_local_ipfs_addrs(&msg);
+        match element.selected_index() {
+            0 => {
+                self.node_type = NodeType::Brave;
+                self.address = crate::utils::BRAVE_URI.to_owned();
+                self.storage.set_local_ipfs_addrs(&self.address);
+                return true;
+            }
+            1 => {
+                self.node_type = NodeType::External;
+                self.address = crate::utils::DEFAULT_URI.to_owned();
+                self.storage.set_local_ipfs_addrs(&self.address);
+                return true;
+            }
+            _ => return false,
         }
-        
-        self.address = msg;
+    }
 
-        true
+    fn addrs(&mut self, msg: ChangeData) -> bool {
+        let value = match msg {
+            ChangeData::Value(value) => value,
+            _ => return false,
+        };
+
+        if reqwest::Url::parse(&value).is_ok() {
+            self.storage.set_local_ipfs_addrs(&value);
+        }
+
+        self.address = value;
+
+        false
     }
 }

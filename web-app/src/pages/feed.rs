@@ -96,24 +96,20 @@ impl Component for ContentFeed {
 
     fn view(&self) -> Html {
         let content = if self.content.is_empty() {
-            html! {
-                <Loading />
-            }
+            html! {  <Loading /> }
         } else {
             html! {
                 <>
                 {
-                    self.content.iter().rev().filter_map(|(cid, name, metadata, count)| {
-                        let thumbnail = html! { <Thumbnail cid=*cid name=name.clone()  metadata=metadata.clone() count=*count /> };
-
-                        match (metadata.as_ref(), &self.filter) {
-                            (_, FilterType::None) => Some(thumbnail),
-                            (Media::Video(_), FilterType::Videos) => Some(thumbnail),
-                            (Media::Blog(_), FilterType::Blogs) => Some(thumbnail),
-                            (Media::Statement(_), FilterType::Statements) => Some(thumbnail),
-                            (_, _) => None,
-                        }
-                    }).collect::<Html>()
+                self.content.iter().rev().filter_map(|(cid, name, metadata, count)| {
+                    match (metadata.as_ref(), &self.filter) {
+                        (_, FilterType::None) => Some(render_thumbnail(*cid, name.clone(), metadata.clone(), *count)),
+                        (Media::Video(_), FilterType::Videos) => Some(render_thumbnail(*cid, name.clone(), metadata.clone(), *count)),
+                        (Media::Blog(_), FilterType::Blogs) => Some(render_thumbnail(*cid, name.clone(), metadata.clone(), *count)),
+                        (Media::Statement(_), FilterType::Statements) => Some(render_thumbnail(*cid, name.clone(), metadata.clone(), *count)),
+                        (_, _) => None,
+                    }
+                }).collect::<Html>()
                 }
                 </>
             }
@@ -211,5 +207,11 @@ impl ContentFeed {
         ConsoleService::info("Feed Metadata Updated");
 
         true
+    }
+}
+
+fn render_thumbnail(cid: Cid, name: Rc<str>, metadata: Rc<Media>, count: usize) -> Html {
+    html! {
+        <Thumbnail cid=cid name=name  metadata=metadata count=count />
     }
 }

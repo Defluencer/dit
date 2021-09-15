@@ -21,6 +21,7 @@ use reqwest::multipart::Form;
 use reqwest::{Client, Url};
 
 pub const DEFAULT_URI: &str = "http://127.0.0.1:5001/api/v0/";
+pub const BRAVE_URI: &str = "http://127.0.0.1:45005/api/v0/";
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

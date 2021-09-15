@@ -103,13 +103,9 @@ impl Component for Home {
                                 </a>
                             </ybc::Column>
                             <ybc::Column classes=classes!("is-half") >
-                                <ul>
-                                    <li><a href="https://ipfs.io/"> { "IPFS" } </a></li>
-                                    <li><a href="https://ipld.io/"> { "IPLD" } </a></li>
-                                    <li><a href="https://docs.ipfs.io/concepts/ipns/"> { "IPNS" } </a></li>
-                                    <li><a href="https://metamask.io/"> { "Metamask" } </a></li>
-                                    <li><a href="https://ens.domains/"> { "Ethereum Name service" } </a></li>
-                                </ul>
+                                <a href="https://bulma.io">
+                                    <img src="https://bulma.io/images/made-with-bulma.png" alt="Made with Bulma" width="128" height="24" />
+                                </a>
                             </ybc::Column>
                         </ybc::Columns>
                     </ybc::Container>

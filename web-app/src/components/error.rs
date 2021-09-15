@@ -1,4 +1,4 @@
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 /// Error indicator.
 #[derive(Clone, Properties)]
@@ -22,7 +22,14 @@ impl Component for Error {
 
     fn view(&self) -> Html {
         html! {
-            <div class="center_text"> { "Error..." } </div>
+            <ybc::Container classes=classes!("has-text-centered") >
+                <ybc::Box>
+                {
+                    "An Error was encounted.
+                    Please verify your connection to the Ethereum and IPFS networks"
+                }
+                </ybc::Box>
+            </ybc::Container>
         }
     }
 }

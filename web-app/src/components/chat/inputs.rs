@@ -143,7 +143,7 @@ impl Inputs {
     fn connect_dialog(&self) -> Html {
         html! {
             <ybc::Field label="To chat, please connect Metamask".to_owned() >
-                <ybc::Button classes=classes!("is-success") onclick=self.link.callback(|_| Msg::Connect) >
+                <ybc::Button classes=classes!("is-primary") onclick=self.link.callback(|_| Msg::Connect) >
                     { "Connect" }
                 </ybc::Button>
             </ybc::Field>
@@ -160,7 +160,7 @@ impl Inputs {
                 </ybc::Field>
                 <ybc::Field label="Confirm your name by signing it".to_owned() >
                     <ybc::Control>
-                        <ybc::Button classes=classes!("is-success") onclick=self.link.callback(|_| Msg::SubmitName)>
+                        <ybc::Button classes=classes!("is-primary") onclick=self.link.callback(|_| Msg::SubmitName)>
                             { "Sign" }
                         </ybc::Button>
                     </ybc::Control>
@@ -179,7 +179,7 @@ impl Inputs {
                 </ybc::Field>
                 <ybc::Field>
                     <ybc::Control>
-                        <ybc::Button classes=classes!("is-success") onclick=self.link.callback(|_| Msg::Enter)>
+                        <ybc::Button classes=classes!("is-primary") onclick=self.link.callback(|_| Msg::Enter)>
                             { "Send" }
                         </ybc::Button>
                     </ybc::Control>

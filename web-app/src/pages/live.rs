@@ -4,6 +4,8 @@ use crate::components::{ChatWindow, Navbar, VideoPlayer};
 use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
+
+#[cfg(debug_assertions)]
 use yew::services::ConsoleService;
 
 use linked_data::beacon::Beacon;
