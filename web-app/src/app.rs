@@ -167,7 +167,7 @@ impl Component for App {
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
                             AppRoute::Content(cid) => html! { <Content ipfs=ipfs.clone() cid=cid content=content.clone() /> },
-                            AppRoute::Settings => html! { <Settings storage=storage.clone() /> },
+                            AppRoute::Settings => html! { <Settings storage=storage.clone() ipfs=ipfs.clone() /> },
                             AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() beacon=beacon.clone() bans=bans.clone() mods=mods.clone() /> },
                             AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() content=content.clone()  /> },
                             AppRoute::Home => html! { <Home /> },

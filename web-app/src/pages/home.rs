@@ -38,7 +38,7 @@ impl Component for Home {
                     With immutable and interoperable content, your data cannot be changed and will follow you to any app or website built on the protocol."
                 }
                 </ybc::Subtitle>
-                <ybc::ButtonRouter<AppRoute> route=AppRoute::Feed classes=classes!("is-primary") >
+                <ybc::ButtonRouter<AppRoute> route=AppRoute::Settings classes=classes!("is-primary") >
                     {"Get Started"}
                 </ybc::ButtonRouter<AppRoute>>
             </ybc::Container>
@@ -47,7 +47,7 @@ impl Component for Home {
         let live_card = feature_card(
             "Live Streaming",
             "Custom resolution, quality and codecs.
-            No central server, peer to peer only.",
+            No central server, 100% peer to peer",
         );
 
         let chat_card = feature_card(
