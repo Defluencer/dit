@@ -6,7 +6,7 @@ mod web3;
 
 pub use self::web3::Web3Service;
 pub use ema::ExponentialMovingAverage;
-pub use ipfs::{IpfsService, BRAVE_URI, DEFAULT_URI};
+pub use ipfs::{IpfsService, DEFAULT_URI};
 pub use local_storage::LocalStorage;
 pub use markdown::render_markdown;
 

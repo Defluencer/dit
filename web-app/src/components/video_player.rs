@@ -6,6 +6,9 @@ use std::str::FromStr;
 use crate::utils::seconds_to_timecode;
 use crate::utils::{ExponentialMovingAverage, IpfsService};
 
+use futures::channel::oneshot;
+use futures::channel::oneshot::Sender;
+
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
@@ -14,6 +17,7 @@ use web_sys::{HtmlMediaElement, MediaSource, MediaSourceReadyState, SourceBuffer
 
 use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
+use yew::Callback;
 
 use linked_data::beacon::Beacon;
 use linked_data::video::{SetupNode, Track, VideoMetadata};
@@ -48,24 +52,29 @@ struct MediaBuffers {
 struct LiveStream {
     beacon: Rc<Beacon>,
 
+    pubsub_cb: Callback<Result<(String, Vec<u8>)>>,
     buffer: VecDeque<Cid>,
 
-    drop_sig: Rc<()>,
+    tx: Option<Sender<()>>,
 }
 
 /// Video player for live streams and on demand.
 pub struct VideoPlayer {
-    link: ComponentLink<Self>,
-
     ipfs: IpfsService,
 
     player_type: Either<LiveStream, Rc<VideoMetadata>>,
 
+    object_url: String,
     media_element: Option<HtmlMediaElement>,
     media_source: MediaSource,
     media_buffers: Option<MediaBuffers>,
-    object_url: String,
-    poster_link: String,
+
+    seeking_cb: Callback<()>,
+    update_end_cb: Callback<()>,
+    timeout_cb: Callback<()>,
+    setup_cb: Callback<Result<SetupNode>>,
+    append_cb: Callback<Result<(Vec<u8>, Vec<u8>)>>,
+    append_video_cb: Callback<Result<Vec<u8>>>,
 
     /// Level >= 1 since 0 is audio
     level: usize,
@@ -129,31 +138,33 @@ impl Component for VideoPlayer {
         media_source.set_onsourceopen(Some(closure.as_ref().unchecked_ref()));
         let source_open_closure = Some(closure);
 
-        let mut poster_link = String::from("ipfs://");
-
         let player_type = match beacon_or_metadata {
             Either::Left(beacon) => {
+                let (tx, rx) = oneshot::channel::<()>();
+
                 let live = LiveStream {
                     beacon,
+                    pubsub_cb: link.callback(Msg::PubSub),
                     buffer: VecDeque::with_capacity(5),
-                    drop_sig: Rc::from(()),
+                    tx: Some(tx),
                 };
 
-                //TODO default thumbnail image
-                poster_link.push_str("bafkreicovb5qdvrine4vidt77xahhvovahmekvsojbiqewp7ih7pzvnn7i");
+                if !live.beacon.topics.video.is_empty() {
+                    spawn_local({
+                        let ipfs = ipfs.clone();
+                        let topic = live.beacon.topics.video.clone();
+                        let cb = live.pubsub_cb.clone();
+
+                        async move { ipfs.pubsub_sub(topic, cb, rx).await }
+                    });
+                }
 
                 Either::Left(live)
             }
-            Either::Right(metadata) => {
-                poster_link.push_str(&metadata.image.link.to_string());
-
-                Either::Right(metadata)
-            }
+            Either::Right(metadata) => Either::Right(metadata),
         };
 
-        let comp = Self {
-            link,
-
+        Self {
             ipfs,
             player_type,
 
@@ -161,7 +172,13 @@ impl Component for VideoPlayer {
             media_source,
             media_buffers: None,
             object_url,
-            poster_link,
+
+            seeking_cb: link.callback(|()| Msg::Seeking),
+            update_end_cb: link.callback(|()| Msg::UpdateEnd),
+            timeout_cb: link.callback(|()| Msg::Timeout),
+            setup_cb: link.callback(Msg::SetupNode),
+            append_cb: link.callback(Msg::Append),
+            append_video_cb: link.callback(Msg::AppendVideo),
 
             level: 1, // start at 1 since 0 is audio
             state: MachineState::Timeout,
@@ -172,14 +189,7 @@ impl Component for VideoPlayer {
             update_end_closure: None,
             timeout_closure: None,
             handle: 0,
-        };
-
-        match comp.player_type {
-            Either::Left(_) => comp.subscribe(),
-            _ => {}
         }
-
-        comp
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -212,21 +222,36 @@ impl Component for VideoPlayer {
             return false;
         }
 
-        live.beacon = beacon;
-        live.drop_sig = Rc::from(());
+        if let Some(tx) = live.tx.take() {
+            let _ = tx.send(()); // Drop the previous stream
+        }
 
-        self.subscribe();
+        live.beacon = beacon;
+
+        if !live.beacon.topics.video.is_empty() {
+            let (tx, rx) = oneshot::channel::<()>();
+
+            live.tx = Some(tx);
+
+            spawn_local({
+                let ipfs = self.ipfs.clone();
+                let topic = live.beacon.topics.video.clone();
+                let cb = live.pubsub_cb.clone();
+
+                async move { ipfs.pubsub_sub(topic, cb, rx).await }
+            });
+        }
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Video Player Changed");
 
-        true
+        false
     }
 
     fn view(&self) -> Html {
         html! {
             <ybc::Image size=ybc::ImageSize::Is16by9>
-                <video class=classes!("has-ratio") width=640 height=360 id="video_player" autoplay="true" controls=true poster=self.poster_link.clone() />
+                <video class=classes!("has-ratio") src=self.object_url.clone() width=640 height=360 id="video_player" autoplay="true" controls=true />
             </ybc::Image>
         }
     }
@@ -268,11 +293,9 @@ impl Component for VideoPlayer {
                 }
             };
 
-            media_element.set_src(&self.object_url);
-
             self.seeking_closure = match self.player_type {
                 Either::Right(_) => {
-                    let cb = self.link.callback(|_| Msg::Seeking);
+                    let cb = self.seeking_cb.clone();
                     let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
                     media_element.set_onseeking(Some(closure.as_ref().unchecked_ref()));
 
@@ -286,6 +309,12 @@ impl Component for VideoPlayer {
     }
 
     fn destroy(&mut self) {
+        if let Either::Left(live) = &mut self.player_type {
+            if let Some(tx) = live.tx.take() {
+                let _ = tx.send(()); // Drop the pubsub stream
+            }
+        }
+
         let window = match web_sys::window() {
             Some(window) => window,
             None => {
@@ -302,27 +331,6 @@ impl Component for VideoPlayer {
 }
 
 impl VideoPlayer {
-    fn subscribe(&self) {
-        let live = match &self.player_type {
-            Either::Left(live) => live,
-            _ => return,
-        };
-
-        let topic = live.beacon.topics.video.clone();
-
-        if topic.is_empty() {
-            return;
-        }
-
-        spawn_local({
-            let ipfs = self.ipfs.clone();
-            let cb = self.link.callback(Msg::PubSub);
-            let sig = live.drop_sig.clone();
-
-            async move { ipfs.pubsub_sub(topic, cb, sig).await }
-        });
-    }
-
     /// Callback when MediaSource is linked to video element.
     fn on_source_open(&mut self) {
         #[cfg(debug_assertions)]
@@ -335,7 +343,7 @@ impl VideoPlayer {
             self.media_source.set_duration(metadata.duration);
 
             spawn_local({
-                let cb = self.link.callback_once(Msg::SetupNode);
+                let cb = self.setup_cb.clone();
                 let ipfs = self.ipfs.clone();
                 let cid = metadata.video.link;
 
@@ -400,7 +408,7 @@ impl VideoPlayer {
 
         if self.media_buffers.is_none() {
             spawn_local({
-                let cb = self.link.callback_once(Msg::SetupNode);
+                let cb = self.setup_cb.clone();
                 let ipfs = self.ipfs.clone();
 
                 async move { cb.emit(ipfs.dag_get(cid, Some("/setup/")).await) }
@@ -453,7 +461,7 @@ impl VideoPlayer {
             return;
         }
 
-        let cb = self.link.callback_once(|_| Msg::Timeout);
+        let cb = self.timeout_cb.clone();
 
         let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
 
@@ -567,7 +575,7 @@ impl VideoPlayer {
             tracks: setup_node.tracks,
         };
 
-        let cb = self.link.callback(|_| Msg::UpdateEnd);
+        let cb = self.update_end_cb.clone();
         let closure = Closure::wrap(Box::new(move || cb.emit(())) as Box<dyn Fn()>);
         media_buffer
             .video
@@ -597,7 +605,7 @@ impl VideoPlayer {
         self.state = MachineState::Load;
 
         spawn_local({
-            let cb = self.link.callback_once(Msg::Append);
+            let cb = self.append_cb.clone();
             let ipfs = self.ipfs.clone();
 
             async move { cb.emit(ipfs.double_path_cat(audio_path, video_path).await) }
@@ -654,7 +662,7 @@ impl VideoPlayer {
         self.ema.start_timer();
 
         spawn_local({
-            let cb = self.link.callback_once(Msg::Append);
+            let cb = self.append_cb.clone();
             let ipfs = self.ipfs.clone();
 
             async move { cb.emit(ipfs.double_path_cat(audio_path, video_path).await) }
@@ -747,7 +755,7 @@ impl VideoPlayer {
         self.ema.start_timer();
 
         spawn_local({
-            let cb = self.link.callback_once(Msg::Append);
+            let cb = self.append_cb.clone();
             let ipfs = self.ipfs.clone();
 
             async move { cb.emit(ipfs.double_path_cat(audio_path, video_path).await) }
@@ -994,7 +1002,7 @@ impl VideoPlayer {
         self.state = MachineState::Load;
 
         spawn_local({
-            let cb = self.link.callback_once(Msg::AppendVideo);
+            let cb = self.append_video_cb.clone();
             let ipfs = self.ipfs.clone();
 
             async move { cb.emit(ipfs.cid_cat(cid).await) }

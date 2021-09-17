@@ -5,6 +5,9 @@ use std::str;
 use crate::components::chat::message::{MessageData, UIMessage};
 use crate::utils::IpfsService;
 
+use futures::channel::oneshot;
+use futures::channel::oneshot::Sender;
+
 use wasm_bindgen_futures::spawn_local;
 use web_sys::Element;
 
@@ -26,7 +29,9 @@ pub struct Display {
     props: Props,
 
     msg_cb: Callback<(PeerId, Message, Result<SignedMessage<ChatId>>)>,
+
     pubsub_cb: Callback<Result<(String, Vec<u8>)>>,
+    tx: Option<Sender<()>>,
 
     img_gen: Ethereum,
 
@@ -36,8 +41,6 @@ pub struct Display {
 
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
-
-    drop_sig: Rc<()>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -59,9 +62,6 @@ impl Component for Display {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        //let drop_sig = Rc::from(AtomicBool::new(false));
-        let drop_sig = Rc::from(());
-
         //https://github.com/ethereum/blockies
         //https://docs.rs/blockies/0.3.0/blockies/struct.Ethereum.html
         let img_gen = Ethereum {
@@ -72,13 +72,26 @@ impl Component for Display {
             spot_color: None,
         };
 
+        let pubsub_cb = link.callback(Msg::PubSub);
+        let (tx, rx) = oneshot::channel::<()>();
+
+        if !props.beacon.topics.chat.is_empty() {
+            spawn_local({
+                let ipfs = props.ipfs.clone();
+                let sub_topic = props.beacon.topics.chat.clone();
+                let cb = pubsub_cb.clone();
+
+                async move { ipfs.pubsub_sub(sub_topic, cb, rx).await }
+            });
+        }
+
         #[cfg(debug_assertions)]
         ConsoleService::info("Chat Display Created");
 
-        let comp = Self {
+        Self {
             props,
             msg_cb: link.callback(Msg::Origin),
-            pubsub_cb: link.callback(Msg::PubSub),
+            pubsub_cb,
 
             img_gen,
 
@@ -89,12 +102,8 @@ impl Component for Display {
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
 
-            drop_sig,
-        };
-
-        comp.subscribe();
-
-        comp
+            tx: Some(tx),
+        }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -105,20 +114,29 @@ impl Component for Display {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if !Rc::ptr_eq(&self.props.beacon, &props.beacon)
-            || !Rc::ptr_eq(&self.props.mods, &props.mods)
-            || !Rc::ptr_eq(&self.props.bans, &props.bans)
-        {
+        if !Rc::ptr_eq(&self.props.beacon, &props.beacon) {
+            if let Some(tx) = self.tx.take() {
+                let _ = tx.send(()); // Drop previous pubsub stream
+            }
+
             self.props = props;
 
-            self.drop_sig = Rc::from(());
+            if !self.props.beacon.topics.chat.is_empty() {
+                let (tx, rx) = oneshot::channel::<()>();
 
-            self.subscribe();
+                self.tx = Some(tx);
+
+                spawn_local({
+                    let ipfs = self.props.ipfs.clone();
+                    let sub_topic = self.props.beacon.topics.chat.clone();
+                    let cb = self.pubsub_cb.clone();
+
+                    async move { ipfs.pubsub_sub(sub_topic, cb, rx).await }
+                });
+            }
 
             #[cfg(debug_assertions)]
             ConsoleService::info("Chat Display Changed");
-
-            return true;
         }
 
         false
@@ -174,23 +192,15 @@ impl Component for Display {
 
         self.chat_element = Some(element);
     }
+
+    fn destroy(&mut self) {
+        if let Some(tx) = self.tx.take() {
+            let _ = tx.send(()); // Drop the pubsub stream
+        }
+    }
 }
 
 impl Display {
-    fn subscribe(&self) {
-        let sub_topic = self.props.beacon.topics.chat.clone();
-
-        if sub_topic.is_empty() {
-            return;
-        }
-
-        let ipfs = self.props.ipfs.clone();
-        let cb = self.pubsub_cb.clone();
-        let sig = self.drop_sig.clone();
-
-        spawn_local(async move { ipfs.pubsub_sub(sub_topic, cb, sig).await });
-    }
-
     /// Callback when GossipSub receive a message.
     fn on_pubsub_update(&mut self, result: Result<(String, Vec<u8>)>) -> bool {
         let res = match result {
