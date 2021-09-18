@@ -30,6 +30,7 @@ impl Component for Home {
                     "Build social media applications and websites on the web 3.0"
                 }
                 </ybc::Title>
+                 <br />
                 <ybc::Subtitle tag="h2" >
                 {
                     "Defluencer is a protocol for decentralized social media.
@@ -46,8 +47,7 @@ impl Component for Home {
 
         let live_card = feature_card(
             "Live Streaming",
-            "Custom resolution, quality and codecs.
-            No central server, 100% peer to peer",
+            "Set custom resolution, quality and codecs.",
         );
 
         let chat_card = feature_card(
@@ -57,12 +57,12 @@ impl Component for Home {
 
         let streaming_card = feature_card(
             "On Demand Streaming",
-            "Live streams can be saved and viewed later or you can host your own videos.",
+            "Host your own videos or save live streams to be viewed later.",
         );
 
         let blog_card = feature_card(
             "Blogs",
-            "Twitter-style micro blog or for more lengthy posts, markdown files.",
+            "Twitter-style micro blog posts or lengthy articles.",
         );
 
         let feed_card = feature_card(
@@ -89,6 +89,45 @@ impl Component for Home {
                             { feed_card }
                             { comments_card }
                         </ybc::Columns>
+                    </ybc::Container>
+                </ybc::Section>
+                <ybc::Section>
+                    <ybc::Container>
+                        <ybc::Title size=ybc::HeaderSize::Is5 >
+                            { "How does it work?" }
+                        </ybc::Title>
+                        <br />
+                        <ybc::Subtitle size=ybc::HeaderSize::Is6 >
+                            { "With " }
+                            <a href="https://ipfs.io/"> { "IPFS" } </a>
+                            { " & " }
+                            <a href="https://ipld.io/"> { "IPLD" } </a>
+                            {
+                                " you get a network of content-addressable data that can be linked together in a web and
+                                as a by-product immutability, which means your content cannot be changed, you can share it with your friends
+                                and they will redistribute it, as you do for them.
+                                The defluencer protocol include standard data formats for social media content but can be easily extended."
+                            }
+                        </ybc::Subtitle>
+                        <br />
+                        <ybc::Title size=ybc::HeaderSize::Is5 >
+                            { "This is too good to be true! Is there a catch?" }
+                        </ybc::Title>
+                        <br />
+                        <ybc::Subtitle size=ybc::HeaderSize::Is6 >
+                            {
+                                "Yes! Since there's is no company, no server and no authority that freedom comes with responsabilities."
+                            }
+                            <ul>
+                                <li>
+                                {
+                                    "First, AT LEAST one person on the ENTIRE network MUST be online with that content or it cannot be accessed.
+                                    It doesn't have to be you, they don't need ALL your content but more the better, friends should help each others." }
+                                </li>
+                                <li> { "Second, the network is PUBLIC, anyone can share your content even if you don't want to and what's on the internet is forever." } </li>
+                                <li> { "Third, what happen in cyberspace is not separate from the real world, cyberspace IS the real world!" } </li>
+                            </ul>
+                        </ybc::Subtitle>
                     </ybc::Container>
                 </ybc::Section>
                 <ybc::Footer>
