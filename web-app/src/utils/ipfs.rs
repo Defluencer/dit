@@ -6,8 +6,8 @@ use std::rc::Rc;
 use crate::utils::local_storage::LocalStorage;
 
 use futures::channel::oneshot::Receiver;
-use futures::{join, try_join};
-use futures_util::{AsyncBufReadExt, StreamExt, TryStreamExt};
+use futures::join;
+use futures_util::{AsyncBufReadExt, TryStreamExt};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -233,10 +233,9 @@ impl IpfsService {
     ) where
         U: Into<Cow<'static, str>>,
     {
-        let fut1 = self.pubsub_stream(topic, cb);
-        let fut2 = wait_for_stream(rx);
-
-        let _ = try_join!(fut1, fut2);
+        if let Err(e) = self.pubsub_stream(topic, cb.clone(), rx).await {
+            cb.emit(Err(e.into()));
+        }
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Stream Dropped");
@@ -246,6 +245,7 @@ impl IpfsService {
         &self,
         topic: U,
         cb: Callback<Result<(String, Vec<u8>)>>,
+        mut rx: Receiver<()>,
     ) -> Result<()>
     where
         U: Into<Cow<'static, str>>,
@@ -263,39 +263,37 @@ impl IpfsService {
 
         let mut line_stream = stream.err_into().into_async_read().lines();
 
-        while let Some(result) = line_stream.next().await {
-            let line = result?;
-
-            let response = match serde_json::from_str::<PubsubSubResponse>(&line) {
-                Ok(node) => node,
-                Err(_) => match serde_json::from_str::<IPFSError>(&line) {
-                    Ok(e) => {
-                        cb.emit(Err(e.into()));
-                        continue;
+        while let Some(line) = line_stream.try_next().await? {
+            match rx.try_recv() {
+                Ok(result) => {
+                    if result.is_some() {
+                        break;
                     }
-                    Err(e) => return Err(e.into()),
-                },
-            };
+                }
+                Err(_) => break,
+            }
 
-            let PubsubSubResponse { from, data } = response;
+            if let Ok(response) = serde_json::from_str::<PubsubSubResponse>(&line) {
+                let PubsubSubResponse { from, data } = response;
 
-            let from = Base::decode(&Base::Base64Pad, from)?;
-            let data = Base::decode(&Base::Base64Pad, data)?;
+                let from = Base::decode(&Base::Base64Pad, from)?;
+                let data = Base::decode(&Base::Base64Pad, data)?;
 
-            //This is the most common encoding for PeerIds
-            let from = Base::encode(&Base::Base58Btc, from);
+                //This is the most common encoding for PeerIds
+                let from = Base::encode(&Base::Base58Btc, from);
 
-            cb.emit(Ok((from, data)))
+                cb.emit(Ok((from, data)));
+
+                continue;
+            }
+
+            let ipfs_error = serde_json::from_str::<IPFSError>(&line)?;
+
+            cb.emit(Err(ipfs_error.into()));
         }
 
         Ok(())
     }
-}
-
-async fn wait_for_stream(rx: futures::channel::oneshot::Receiver<()>) -> Result<()> {
-    let _ = rx.await;
-
-    Err(std::io::Error::from(std::io::ErrorKind::Interrupted).into())
 }
 
 #[derive(Deserialize)]
