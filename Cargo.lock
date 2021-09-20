@@ -276,6 +276,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8100e46ff92eb85bf6dc2930c73f2a4f7176393c84a9446b3d501e1b354e7b34"
 
 [[package]]
+name = "chrono"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "670ad68c9088c2a963aaa298cb369688cf3f9465ce5e2d4ca10e6e0098a1ce73"
+dependencies = [
+ "js-sys",
+ "libc",
+ "num-integer",
+ "num-traits",
+ "wasm-bindgen",
+ "winapi",
+]
+
+[[package]]
 name = "cid"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2581,6 +2595,7 @@ name = "web-app"
 version = "0.1.0"
 dependencies = [
  "blockies",
+ "chrono",
  "cid",
  "either",
  "futures",

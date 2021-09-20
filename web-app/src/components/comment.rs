@@ -31,14 +31,24 @@ impl Component for Comment {
     }
 
     fn view(&self) -> Html {
+        let dt = crate::utils::timestamp_to_datetime(self.comment.timestamp);
+
         html! {
             <ybc::Box>
                 <ybc::Media>
                     <ybc::MediaLeft>
-                        <span class="icon-text">
-                            <span class="icon"><i class="fas fa-user"></i></span>
-                            <span> { &self.name } </span>
-                        </span>
+                        <ybc::Block>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-user"></i></span>
+                                <span> { &self.name } </span>
+                            </span>
+                        </ybc::Block>
+                        <ybc::Block>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-clock"></i></span>
+                                <span> { dt } </span>
+                            </span>
+                        </ybc::Block>
                     </ybc::MediaLeft>
                     <ybc::MediaContent>
                         <ybc::Content classes=classes!("has-text-centered") >

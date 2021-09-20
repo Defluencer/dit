@@ -162,6 +162,12 @@ impl Component for ContentFeed {
     }
 }
 
+fn render_thumbnail(cid: Cid, name: Rc<str>, metadata: Rc<Media>, count: usize) -> Html {
+    html! {
+        <Thumbnail cid=cid name=name  metadata=metadata count=count />
+    }
+}
+
 impl ContentFeed {
     /// IPFS dag get all metadata from content feed starting by newest.
     fn get_content(&mut self) {
@@ -207,11 +213,5 @@ impl ContentFeed {
         ConsoleService::info("Feed Metadata Updated");
 
         true
-    }
-}
-
-fn render_thumbnail(cid: Cid, name: Rc<str>, metadata: Rc<Media>, count: usize) -> Html {
-    html! {
-        <Thumbnail cid=cid name=name  metadata=metadata count=count />
     }
 }

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::components::{Error, Image, Loading, Markdown, Navbar, VideoPlayer};
-use crate::utils::IpfsService;
+use crate::utils::{timestamp_to_datetime, IpfsService};
 
 use wasm_bindgen_futures::spawn_local;
 
@@ -115,11 +115,14 @@ impl Component for Content {
                 {
                     match &self.state {
                         State::Loading => html! { <Loading /> },
-                        State::Ready(media) => match media {
-                            Media::Video(video) => self.render_video(video),
-                            Media::Blog(blog) => self.render_blog(blog),
-                            Media::Statement(twit) => self.render_microblog(twit),
-                        },
+                        State::Ready(media) => {
+                            let dt = timestamp_to_datetime(media.timestamp());
+
+                            match media {
+                            Media::Video(video) => self.render_video(dt, video),
+                            Media::Blog(blog) => self.render_blog(dt, blog),
+                            Media::Statement(twit) => self.render_microblog(dt, twit),
+                        }},
                         State::Error => html! { <Error /> },
                     }
                 }
@@ -139,20 +142,34 @@ impl Component for Content {
 }
 
 impl Content {
-    fn render_video(&self, metadata: &VideoMetadata) -> Html {
+    fn render_video(&self, dt: String, metadata: &VideoMetadata) -> Html {
         html! {
             <ybc::Container>
                 <ybc::Box classes=classes!("has-text-centered")>
                     <ybc::Title>
                         { &metadata.title }
                     </ybc::Title>
+                    <ybc::Level>
+                        <ybc::LevelLeft>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-user"></i></span>
+                                <span> { &*self.author } </span>
+                            </span>
+                        </ybc::LevelLeft>
+                        <ybc::LevelRight>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-clock"></i></span>
+                                <span> { dt } </span>
+                            </span>
+                        </ybc::LevelRight>
+                    </ybc::Level>
                     <VideoPlayer ipfs=self.props.ipfs.clone() beacon_or_metadata=Either::Right(Rc::from(metadata.clone()))/*TODO find a way to fix this weird clonning issue*/ />
                 </ybc::Box>
             </ybc::Container>
         }
     }
 
-    fn render_blog(&self, metadata: &FullPost) -> Html {
+    fn render_blog(&self, dt: String, metadata: &FullPost) -> Html {
         html! {
             <ybc::Container>
                 <ybc::Box classes=classes!("has-text-centered") >
@@ -162,6 +179,20 @@ impl Content {
                     <ybc::Image size=ybc::ImageSize::Is16by9 >
                         <Image image_cid=metadata.image.link />
                     </ybc::Image>
+                    <ybc::Level>
+                        <ybc::LevelLeft>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-user"></i></span>
+                                <span> { &*self.author } </span>
+                            </span>
+                        </ybc::LevelLeft>
+                        <ybc::LevelRight>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-clock"></i></span>
+                                <span> { dt } </span>
+                            </span>
+                        </ybc::LevelRight>
+                    </ybc::Level>
                 </ybc::Box>
                 <ybc::Box>
                     <ybc::Content>
@@ -172,16 +203,24 @@ impl Content {
         }
     }
 
-    fn render_microblog(&self, metadata: &MicroPost) -> Html {
+    fn render_microblog(&self, dt: String, metadata: &MicroPost) -> Html {
         html! {
             <ybc::Container>
                 <ybc::Box>
                     <ybc::Media>
                         <ybc::MediaLeft>
-                            <span class="icon-text">
-                                <span class="icon"><i class="fas fa-user"></i></span>
-                                <span> { &*self.author } </span>
-                            </span>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-user"></i></span>
+                                    <span> { &*self.author } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-clock"></i></span>
+                                    <span> { dt } </span>
+                                </span>
+                            </ybc::Block>
                         </ybc::MediaLeft>
                         <ybc::MediaContent>
                             <ybc::Content classes=classes!("has-text-centered")>

@@ -24,3 +24,14 @@ pub fn seconds_to_timecode(seconds: f64) -> (u8, u8, u8) {
 
     (hours, minutes, seconds)
 }
+
+/// Unix time in total number of seconds to date time string.
+pub fn timestamp_to_datetime(seconds: u64) -> String {
+    use chrono::{DateTime, Local, TimeZone, Utc};
+
+    let d_t_unix = Utc.timestamp(seconds as i64, 0);
+
+    let local_d_t = DateTime::<Local>::from(d_t_unix);
+
+    local_d_t.format("%Y-%m-%d %H:%M:%S").to_string()
+}

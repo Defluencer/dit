@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 blockies = "0.3"
+chrono ={ version = "0.4", default-features = false, features = ["clock", "wasmbind"] }
 cid = { version = "0.7", default-features = false, features = [] }
 either = { version = "1.6", default-features = false, features = [] }
 futures = { version = "0.3", default-features = false, features = ["async-await"] }
