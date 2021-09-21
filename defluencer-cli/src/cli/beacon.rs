@@ -354,10 +354,16 @@ fn pin(
     handles: &mut Vec<JoinHandle<Result<PinAddResponse, Error>>>,
 ) {
     if let Some(cid) = cid {
-        let ipfs = ipfs.clone();
-        let cid = cid.to_string();
+        let handle = tokio::spawn({
+            let ipfs = ipfs.clone();
+            let cid = cid.to_string();
 
-        let handle = tokio::spawn(async move { ipfs.pin_add(&cid, false).await });
+            async move {
+                let res = ipfs.name_resolve(Some(&cid), false, false).await?;
+
+                ipfs.pin_add(&res.path, false).await
+            }
+        });
 
         handles.push(handle);
     }
@@ -369,10 +375,16 @@ fn unpin(
     handles: &mut Vec<JoinHandle<Result<PinRmResponse, Error>>>,
 ) {
     if let Some(cid) = cid {
-        let ipfs = ipfs.clone();
-        let cid = cid.to_string();
+        let handle = tokio::spawn({
+            let ipfs = ipfs.clone();
+            let cid = cid.to_string();
 
-        let handle = tokio::spawn(async move { ipfs.pin_rm(&cid, false).await });
+            async move {
+                let res = ipfs.name_resolve(Some(&cid), false, false).await?;
+
+                ipfs.pin_rm(&res.path, false).await
+            }
+        });
 
         handles.push(handle);
     }
