@@ -217,11 +217,7 @@ async fn pin_beacon(args: Pin) -> Result<(), Error> {
         let ipfs = ipfs.clone();
         let cid = cid.to_string();
 
-        async move {
-            let res = ipfs.name_resolve(Some(&cid), false, false).await?;
-
-            ipfs.pin_add(&res.path, false).await
-        }
+        async move { ipfs.pin_add(&cid, false).await }
     });
 
     handles.push(handle);
@@ -335,11 +331,7 @@ async fn unpin_beacon(args: Unpin) -> Result<(), Error> {
         let ipfs = ipfs.clone();
         let cid = cid.to_string();
 
-        async move {
-            let res = ipfs.name_resolve(Some(&cid), false, false).await?;
-
-            ipfs.pin_rm(&res.path, false).await
-        }
+        async move { ipfs.pin_rm(&cid, false).await }
     });
 
     handles.push(handle);
