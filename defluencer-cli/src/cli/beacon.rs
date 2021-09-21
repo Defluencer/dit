@@ -213,7 +213,19 @@ async fn pin_beacon(args: Pin) -> Result<(), Error> {
         }
     }
 
-    pin(&ipfs, Some(cid), &mut handles);
+    let handle = tokio::spawn({
+        let ipfs = ipfs.clone();
+        let cid = cid.to_string();
+
+        async move {
+            let res = ipfs.name_resolve(Some(&cid), false, false).await?;
+
+            ipfs.pin_add(&res.path, false).await
+        }
+    });
+
+    handles.push(handle);
+
     pin(&ipfs, comments, &mut handles);
     pin(&ipfs, friends, &mut handles);
     pin(&ipfs, bans, &mut handles);
@@ -319,7 +331,19 @@ async fn unpin_beacon(args: Unpin) -> Result<(), Error> {
         }
     }
 
-    unpin(&ipfs, Some(cid), &mut handles);
+    let handle = tokio::spawn({
+        let ipfs = ipfs.clone();
+        let cid = cid.to_string();
+
+        async move {
+            let res = ipfs.name_resolve(Some(&cid), false, false).await?;
+
+            ipfs.pin_rm(&res.path, false).await
+        }
+    });
+
+    handles.push(handle);
+
     unpin(&ipfs, comments, &mut handles);
     unpin(&ipfs, friends, &mut handles);
     unpin(&ipfs, bans, &mut handles);
