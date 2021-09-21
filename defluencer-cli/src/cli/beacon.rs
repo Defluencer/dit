@@ -167,40 +167,49 @@ async fn pin_beacon(args: Pin) -> Result<(), Error> {
 
     println!("Resolving Content Feed...");
 
-    let res = ipfs
+    if let Ok(res) = ipfs
         .name_resolve(Some(&content_feed.to_string()), false, false)
-        .await?;
+        .await
+    {
+        println!("Getting Content Feed...");
 
-    println!("Getting Content Feed...");
+        if let Ok(feed) = ipfs_dag_get_node_async::<FeedAnchor>(&ipfs, &res.path).await {
+            for ipld in feed.content.into_iter() {
+                let ipfs = ipfs.clone();
 
-    let feed = ipfs_dag_get_node_async::<FeedAnchor>(&ipfs, &res.path).await?;
+                let handle =
+                    tokio::spawn(async move { ipfs.pin_add(&ipld.link.to_string(), true).await });
 
-    for ipld in feed.content.into_iter() {
-        let ipfs = ipfs.clone();
-
-        let handle = tokio::spawn(async move { ipfs.pin_add(&ipld.link.to_string(), true).await });
-
-        handles.push(handle);
+                handles.push(handle);
+            }
+        }
+    } else {
+        println!("Cannot Resolve Content Feed");
     }
 
     if let Some(comments) = comments {
         println!("Resolving Comments...");
 
-        let res = ipfs
+        if let Ok(res) = ipfs
             .name_resolve(Some(&comments.to_string()), false, false)
-            .await?;
+            .await
+        {
+            println!("Getting Comments...");
 
-        println!("Getting Comments...");
+            if let Ok(comments) = ipfs_dag_get_node_async::<Commentary>(&ipfs, &res.path).await {
+                for ipld in comments.comments.into_values().flatten() {
+                    let ipfs = ipfs.clone();
 
-        let comments = ipfs_dag_get_node_async::<Commentary>(&ipfs, &res.path).await?;
+                    let handle =
+                        tokio::spawn(
+                            async move { ipfs.pin_add(&ipld.link.to_string(), false).await },
+                        );
 
-        for ipld in comments.comments.into_values().flatten() {
-            let ipfs = ipfs.clone();
-
-            let handle =
-                tokio::spawn(async move { ipfs.pin_add(&ipld.link.to_string(), false).await });
-
-            handles.push(handle);
+                    handles.push(handle);
+                }
+            }
+        } else {
+            println!("Cannot Resolve Comments");
         }
     }
 
@@ -213,13 +222,19 @@ async fn pin_beacon(args: Pin) -> Result<(), Error> {
     println!("Pinning...");
 
     for handle in handles {
-        let _ = match handle.await {
-            Ok(res) => res?,
+        match handle.await {
+            Ok(result) => match result {
+                Ok(_) => continue,
+                Err(ipfs_err) => {
+                    eprintln!("❗ IPFS: {}", ipfs_err);
+                    continue;
+                }
+            },
             Err(e) => {
                 eprintln!("❗ Tokio: {}", e);
                 continue;
             }
-        };
+        }
     }
 
     println!("✅ Pinned Beacon {}", &cid);
@@ -258,40 +273,49 @@ async fn unpin_beacon(args: Unpin) -> Result<(), Error> {
 
     println!("Resolving Content Feed...");
 
-    let res = ipfs
+    if let Ok(res) = ipfs
         .name_resolve(Some(&content_feed.to_string()), false, false)
-        .await?;
+        .await
+    {
+        println!("Getting Content Feed...");
 
-    println!("Getting Content Feed...");
+        if let Ok(feed) = ipfs_dag_get_node_async::<FeedAnchor>(&ipfs, &res.path).await {
+            for ipld in feed.content.into_iter() {
+                let ipfs = ipfs.clone();
 
-    let feed = ipfs_dag_get_node_async::<FeedAnchor>(&ipfs, &res.path).await?;
+                let handle =
+                    tokio::spawn(async move { ipfs.pin_rm(&ipld.link.to_string(), true).await });
 
-    for ipld in feed.content.into_iter() {
-        let ipfs = ipfs.clone();
-
-        let handle = tokio::spawn(async move { ipfs.pin_rm(&ipld.link.to_string(), true).await });
-
-        handles.push(handle);
+                handles.push(handle);
+            }
+        }
+    } else {
+        println!("Cannot Resolve Content Feed");
     }
 
     if let Some(comments) = comments {
         println!("Resolving Comments...");
 
-        let res = ipfs
+        if let Ok(res) = ipfs
             .name_resolve(Some(&comments.to_string()), false, false)
-            .await?;
+            .await
+        {
+            println!("Getting Comments...");
 
-        println!("Getting Comments...");
+            if let Ok(comments) = ipfs_dag_get_node_async::<Commentary>(&ipfs, &res.path).await {
+                for ipld in comments.comments.into_values().flatten() {
+                    let ipfs = ipfs.clone();
 
-        let comments = ipfs_dag_get_node_async::<Commentary>(&ipfs, &res.path).await?;
+                    let handle =
+                        tokio::spawn(
+                            async move { ipfs.pin_rm(&ipld.link.to_string(), false).await },
+                        );
 
-        for ipld in comments.comments.into_values().flatten() {
-            let ipfs = ipfs.clone();
-
-            let handle =
-                tokio::spawn(async move { ipfs.pin_rm(&ipld.link.to_string(), false).await });
-
-            handles.push(handle);
+                    handles.push(handle);
+                }
+            }
+        } else {
+            println!("Cannot Resolve Comments");
         }
     }
 
@@ -304,13 +328,19 @@ async fn unpin_beacon(args: Unpin) -> Result<(), Error> {
     println!("Unpinning...");
 
     for handle in handles {
-        let _ = match handle.await {
-            Ok(res) => res?,
+        match handle.await {
+            Ok(result) => match result {
+                Ok(_) => continue,
+                Err(ipfs_err) => {
+                    eprintln!("❗ IPFS: {}", ipfs_err);
+                    continue;
+                }
+            },
             Err(e) => {
                 eprintln!("❗ Tokio: {}", e);
                 continue;
             }
-        };
+        }
     }
 
     println!("✅ Unpinned Beacon {}", &cid);
