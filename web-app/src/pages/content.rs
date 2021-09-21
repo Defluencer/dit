@@ -177,7 +177,7 @@ impl Content {
                         { &metadata.title }
                     </ybc::Title>
                     <ybc::Image size=ybc::ImageSize::Is16by9 >
-                        <Image image_cid=metadata.image.link />
+                        <Image image_cid=metadata.image.link ipfs=self.props.ipfs.clone() />
                     </ybc::Image>
                     <ybc::Level>
                         <ybc::LevelLeft>

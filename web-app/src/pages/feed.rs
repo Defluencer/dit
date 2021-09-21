@@ -8,7 +8,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
-use yew::Callback;
+use yew::{Callback, MouseEvent};
 
 use linked_data::feed::{ContentCache, Media};
 
@@ -29,10 +29,13 @@ pub struct ContentFeed {
     props: Props,
 
     media_cb: Callback<(Cid, Result<Media>)>,
-    link: ComponentLink<Self>,
-
     content_set: HashSet<Cid>,
     content: Vec<(Cid, Rc<str>, Rc<Media>, usize)>,
+
+    no_filter_cb: Callback<MouseEvent>,
+    vid_filter_cb: Callback<MouseEvent>,
+    blog_filter_cb: Callback<MouseEvent>,
+    micro_filter_cb: Callback<MouseEvent>,
     filter: FilterType,
 }
 
@@ -57,10 +60,14 @@ impl Component for ContentFeed {
             props,
 
             media_cb: link.callback(Msg::Metadata),
-            link,
-
             content_set: HashSet::with_capacity(100),
             content: Vec::with_capacity(100),
+
+            no_filter_cb: link.callback(|_event: MouseEvent| Msg::Filter(FilterType::None)),
+            vid_filter_cb: link.callback(|_event: MouseEvent| Msg::Filter(FilterType::Videos)),
+            blog_filter_cb: link.callback(|_event: MouseEvent| Msg::Filter(FilterType::Blogs)),
+            micro_filter_cb: link
+                .callback(|_event: MouseEvent| Msg::Filter(FilterType::Statements)),
             filter: FilterType::None,
         };
 
@@ -98,21 +105,7 @@ impl Component for ContentFeed {
         let content = if self.content.is_empty() {
             html! {  <Loading /> }
         } else {
-            html! {
-                <>
-                {
-                self.content.iter().rev().filter_map(|(cid, name, metadata, count)| {
-                    match (metadata.as_ref(), &self.filter) {
-                        (_, FilterType::None) => Some(render_thumbnail(*cid, name.clone(), metadata.clone(), *count)),
-                        (Media::Video(_), FilterType::Videos) => Some(render_thumbnail(*cid, name.clone(), metadata.clone(), *count)),
-                        (Media::Blog(_), FilterType::Blogs) => Some(render_thumbnail(*cid, name.clone(), metadata.clone(), *count)),
-                        (Media::Statement(_), FilterType::Statements) => Some(render_thumbnail(*cid, name.clone(), metadata.clone(), *count)),
-                        (_, _) => None,
-                    }
-                }).collect::<Html>()
-                }
-                </>
-            }
+            self.render_thumbnails()
         };
 
         html! {
@@ -122,7 +115,7 @@ impl Component for ContentFeed {
                     <ybc::Container>
                         <ybc::Tabs classes=classes!("is-small") toggle=true fullwidth=true >
                             <li class={if let FilterType::None = self.filter {"is-active"} else {""}} >
-                                <a onclick=self.link.callback(|_| Msg::Filter(FilterType::None)) >
+                                <a onclick=self.no_filter_cb.clone() >
                                     <span class="icon-text">
                                         <span class="icon"><i class="fas fa-stream"></i></span>
                                         <span> { "No Filter" } </span>
@@ -130,7 +123,7 @@ impl Component for ContentFeed {
                                 </a>
                             </li>
                             <li class={if let FilterType::Videos = self.filter {"is-active"} else {""}} >
-                                <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Videos)) >
+                                <a onclick=self.vid_filter_cb.clone() >
                                     <span class="icon-text">
                                         <span class="icon"><i class="fas fa-video"></i></span>
                                         <span> { "Videos" } </span>
@@ -138,7 +131,7 @@ impl Component for ContentFeed {
                                 </a>
                             </li>
                             <li class={if let FilterType::Blogs = self.filter {"is-active"} else {""}} >
-                                <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Blogs)) >
+                                <a onclick=self.blog_filter_cb.clone() >
                                     <span class="icon-text">
                                         <span class="icon"><i class="fas fa-blog"></i></span>
                                         <span> { "Blogs" } </span>
@@ -146,7 +139,7 @@ impl Component for ContentFeed {
                                 </a>
                             </li>
                             <li class={if let FilterType::Statements = self.filter {"is-active"} else {""}} >
-                                <a onclick=self.link.callback(|_| Msg::Filter(FilterType::Statements)) >
+                                <a onclick=self.micro_filter_cb.clone() >
                                     <span class="icon-text">
                                         <span class="icon"><i class="fas fa-comment"></i></span>
                                         <span> { "Statements" } </span>
@@ -162,13 +155,25 @@ impl Component for ContentFeed {
     }
 }
 
-fn render_thumbnail(cid: Cid, name: Rc<str>, metadata: Rc<Media>, count: usize) -> Html {
-    html! {
-        <Thumbnail cid=cid name=name  metadata=metadata count=count />
-    }
-}
-
 impl ContentFeed {
+    fn render_thumbnails(&self) -> Html {
+        html! {
+            <>
+            {
+            self.content.iter().rev().filter_map(|(cid, name, metadata, count)| {
+                match (metadata.as_ref(), &self.filter) {
+                    (_, FilterType::None) => Some(html! { <Thumbnail cid=*cid name=name.clone()  metadata=metadata.clone() count=*count ipfs=self.props.ipfs.clone() />}),
+                    (Media::Video(_), FilterType::Videos) => Some(html! { <Thumbnail cid=*cid name=name.clone()  metadata=metadata.clone() count=*count ipfs=self.props.ipfs.clone() />}),
+                    (Media::Blog(_), FilterType::Blogs) => Some(html! { <Thumbnail cid=*cid name=name.clone()  metadata=metadata.clone() count=*count ipfs=self.props.ipfs.clone() />}),
+                    (Media::Statement(_), FilterType::Statements) => Some(html! { <Thumbnail cid=*cid name=name.clone()  metadata=metadata.clone() count=*count ipfs=self.props.ipfs.clone() />}),
+                    (_, _) => None,
+                }
+            }).collect::<Html>()
+            }
+            </>
+        }
+    }
+
     /// IPFS dag get all metadata from content feed starting by newest.
     fn get_content(&mut self) {
         for cid in self.props.content.iter_content() {

@@ -28,8 +28,12 @@ impl Component for Navbar {
     fn view(&self) -> Html {
         let brand = html! {
             <Anchor classes="navbar-item" route=AppRoute::Home>
-                <img src="/img/defluencer_logo.svg" alt="defluencer-logo" width="133" height="56" />
-                {"Defluencer"}
+                //<img src="/img/defluencer_logo.svg" alt="defluencer-logo" width="133" height="56" />
+                //{"Defluencer"}
+                <span class="icon-text">
+                    <span class="icon"><i class="fas fa-home"></i></span>
+                    <span> {"Home"} </span>
+                </span>
             </Anchor>
         };
 

@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::app::AppRoute;
 use crate::components::Image;
-use crate::utils::{seconds_to_timecode, timestamp_to_datetime};
+use crate::utils::{seconds_to_timecode, timestamp_to_datetime, IpfsService};
 
 use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew_router::components::RouterAnchor;
@@ -22,6 +22,7 @@ pub struct Thumbnail {
     pub name: Rc<str>,
     pub metadata: Rc<Media>,
     pub count: usize,
+    pub ipfs: IpfsService,
 }
 
 impl Component for Thumbnail {
@@ -98,7 +99,7 @@ impl Thumbnail {
                                 { &metadata.title }
                             </ybc::Title>
                             <ybc::Image size=ybc::ImageSize::Is16by9 >
-                                <Image image_cid=metadata.image.link />
+                                <Image image_cid=metadata.image.link ipfs=self.ipfs.clone() />
                             </ybc::Image>
                         </ybc::MediaContent>
                     </ybc::Media>
@@ -137,7 +138,7 @@ impl Thumbnail {
                                     { &metadata.title }
                                 </ybc::Title>
                                 <ybc::Image size=ybc::ImageSize::Is16by9 >
-                                    <Image image_cid=metadata.image.link />
+                                    <Image image_cid=metadata.image.link ipfs=self.ipfs.clone() />
                                 </ybc::Image>
                         </ybc::MediaContent>
                     </ybc::Media>

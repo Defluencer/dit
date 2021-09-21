@@ -3,9 +3,9 @@ use crate::utils::{IpfsService, LocalStorage};
 
 use wasm_bindgen_futures::spawn_local;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
-use yew::{Callback, ChangeData};
+use yew::{Callback, ChangeData, MouseEvent};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -14,6 +14,12 @@ pub enum NodeType {
     Brave,
     External,
 } */
+
+#[derive(PartialEq)]
+pub enum OsType {
+    Unix,
+    Windows,
+}
 
 /// Page with app settings and options.
 pub struct Settings {
@@ -29,12 +35,16 @@ pub struct Settings {
     addrs_cb: Callback<ChangeData>,
     //node_cb: Callback<ChangeData>,
     //node_type: NodeType,
+    os_type: OsType,
+    window_cb: Callback<MouseEvent>,
+    unix_cb: Callback<MouseEvent>,
 }
 
 pub enum Msg {
     //NodeType(ChangeData),
     Addrs(ChangeData),
     PeerID(Result<String>),
+    OsType(OsType),
 }
 
 #[derive(Properties, Clone)]
@@ -76,8 +86,8 @@ impl Component for Settings {
             storage,
             ipfs,
 
-            peer_id: None,
             peer_id_cb: link.callback(Msg::PeerID),
+            peer_id: None,
 
             origin,
 
@@ -85,6 +95,9 @@ impl Component for Settings {
             addrs_cb: link.callback(Msg::Addrs),
             //node_cb: link.callback(Msg::NodeType),
             //node_type,
+            window_cb: link.callback(|__event: MouseEvent| Msg::OsType(OsType::Windows)),
+            unix_cb: link.callback(|_event: MouseEvent| Msg::OsType(OsType::Unix)),
+            os_type: OsType::Unix,
         };
 
         comp.check_ipfs();
@@ -97,6 +110,15 @@ impl Component for Settings {
             Msg::Addrs(msg) => self.on_addrs(msg),
             //Msg::NodeType(msg) => self.on_node_type(msg),
             Msg::PeerID(msg) => self.on_peer_id(msg),
+            Msg::OsType(os_type) => {
+                let changed = self.os_type != os_type;
+
+                if changed {
+                    self.os_type = os_type;
+                }
+
+                changed
+            }
         }
     }
 
@@ -158,6 +180,20 @@ impl Settings {
         }
     }
 
+    fn render_code(&self) -> Html {
+        let (deliminator, separator) = match self.os_type {
+            OsType::Unix => (r#"'"#, r#"""#),
+            OsType::Windows => (r#"""#, r#"""""#),
+        };
+
+        html! {
+            <div style="white-space: nowrap;overflow-x: auto;overflow-y: hidden;">
+                <code style="display: block"> { format!(r#"ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods {delim}[{sep}POST{sep}]{delim}"#, sep = separator, delim = deliminator) } </code>
+                <code style="display: block"> { format!(r#"ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin {delim}[{sep}https://webui.ipfs.io{sep}, {sep}http://127.0.0.1:5001{sep}, {sep}{url}{sep}]{delim}"#, sep = separator, delim = deliminator, url = self.origin) } </code>
+            </div>
+        }
+    }
+
     fn render_not_connected(&self) -> Html {
         /* let port = if self.node_type == NodeType::Brave {
             "45005"
@@ -196,10 +232,29 @@ impl Settings {
                             </a>
                             {"? If not, run these terminal commands and restart your daemon."}
                         </p>
-                        <div style="white-space: nowrap;overflow-x: auto;overflow-y: hidden;">
-                            <code style="display: block"> { r#"ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["POST"]'"# } </code>
-                            <code style="display: block"> { format!(r#"ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["https://webui.ipfs.io", "http://127.0.0.1:5001", "{}"]'"#, self.origin) } </code>
-                        </div>
+                        <ybc::Tabs classes=classes!("is-small")>
+                            <li class={if let OsType::Unix = self.os_type {"is-active"} else {""}} >
+                                <a onclick=self.unix_cb.clone() >
+                                    <span class="icon-text">
+                                        <span class="icon"><i class="fab fa-linux"></i></span>
+                                        <span> { "Linux" } </span>
+                                    </span>
+                                    <span class="icon-text">
+                                        <span class="icon"><i class="fab fa-apple"></i></span>
+                                        <span> { "MacOs" } </span>
+                                    </span>
+                                </a>
+                            </li>
+                            <li class={if let OsType::Windows = self.os_type {"is-active"} else {""}} >
+                                <a onclick=self.window_cb.clone() >
+                                    <span class="icon-text">
+                                        <span class="icon"><i class="fab fa-windows"></i></span>
+                                        <span> { "Windows" } </span>
+                                    </span>
+                                </a>
+                            </li>
+                        </ybc::Tabs>
+                        { self.render_code() }
                     </li>
                 </ol>
                 </ybc::Block>
