@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::rc::Rc;
 
 use crate::pages::{Content, ContentFeed, Home, Live, Settings};
@@ -92,7 +93,7 @@ pub struct Props {
     pub web3: Web3Service,
     pub ipfs: IpfsService,
     pub storage: LocalStorage,
-    pub ens_name: Rc<str>,
+    pub beacon: &'static str,
 }
 
 impl Component for App {
@@ -130,7 +131,7 @@ impl Component for App {
             friends_cb: link.callback(AppMsg::Friends),
         };
 
-        app.get_beacon(&app.props.ens_name);
+        app.get_beacon(&app.props.beacon);
 
         app
     }
@@ -180,17 +181,28 @@ impl Component for App {
 }
 
 impl App {
-    /// Resolve ENS name and check local storage.
-    fn get_beacon(&self, ens_name: &str) {
+    /// Resolve ENS name and check local storage for a beacon.
+    fn get_beacon(&self, beacon: &str) {
+        if let Ok(cid) = Cid::try_from(beacon) {
+            spawn_local({
+                let beacon_cb = self.beacon_cb.clone();
+                let ipfs = self.props.ipfs.clone();
+
+                async move { beacon_cb.emit((cid, ipfs.dag_get(cid, Option::<&str>::None).await)) }
+            });
+
+            return;
+        };
+
         spawn_local({
             let cb = self.name_cb.clone();
             let web3 = self.props.web3.clone();
-            let name = ens_name.to_owned();
+            let name = beacon.to_owned();
 
             async move { cb.emit((name.clone(), web3.get_ipfs_content(name).await)) }
         });
 
-        if let Some(cid) = self.props.storage.get_cid(ens_name) {
+        if let Some(cid) = self.props.storage.get_cid(beacon) {
             spawn_local({
                 let cb = self.beacon_cb.clone();
                 let ipfs = self.props.ipfs.clone();
