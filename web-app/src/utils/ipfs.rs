@@ -113,7 +113,7 @@ impl IpfsService {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
             "Serde: Serialize => {}",
-            serde_json::to_string_pretty(node).unwrap()
+            serde_json::to_string(node).unwrap()
         ));
 
         let data = serde_json::to_string(node)?;

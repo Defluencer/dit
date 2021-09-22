@@ -38,15 +38,15 @@ impl Web3Service {
     where
         U: Into<Cow<'static, str>>,
     {
-        let name = &format!("defluencer.{}.eth", name.into());
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("ENS get => {}", name));
-
         let client = match &self.client {
             Some(clt) => clt,
             None => return Err(NoWeb3.into()),
         };
+
+        let name = &format!("defluencer.{}.eth", name.into());
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info(&format!("ENS get => {}", name));
 
         let hash = client.ens().get_content_hash(name).await?;
 
@@ -86,12 +86,12 @@ impl Web3Service {
     where
         T: Serialize,
     {
-        let data = serde_json::to_vec(&content)?;
-
         let client = match &self.client {
             Some(clt) => clt,
             None => return Err(NoWeb3.into()),
         };
+
+        let data = serde_json::to_vec(&content)?;
 
         let sign = client.personal().sign(addrs, data.into()).await?;
 
