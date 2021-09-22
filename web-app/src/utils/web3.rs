@@ -20,6 +20,29 @@ pub struct Web3Service {
 
 impl Web3Service {
     pub fn new() -> Self {
+        let window = match web_sys::window() {
+            Some(window) => window,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Window Object");
+                return Self { client: None };
+            }
+        };
+
+        let ethereum = match window.get("ethereum") {
+            Some(document) => document,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Ethereum Object");
+                return Self { client: None };
+            }
+        };
+
+        if ethereum.is_undefined() {
+            ConsoleService::error("Ethereum Object is Undefined");
+            return Self { client: None };
+        }
+
         let provider = match Provider::default() {
             Ok(provider) => provider,
             Err(e) => {
