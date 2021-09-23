@@ -1062,9 +1062,9 @@ dependencies = [
 
 [[package]]
 name = "instant"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bee0328b1209d157ef001c94dd85b4f8f64139adb0eac2659f4b08382b2f474d"
+checksum = "716d3d89f35ac6a34fd0eed635395f4c3b76fa889338a4632e5231a8684216bd"
 dependencies = [
  "cfg-if 1.0.0",
 ]
@@ -1848,7 +1848,7 @@ dependencies = [
 [[package]]
 name = "reqwest"
 version = "0.11.3"
-source = "git+http://github.com/SionoiS/reqwest?branch=better_wasm#1aba5c96c1bb9824fafe9a20039fc436112021c3"
+source = "git+http://github.com/SionoiS/reqwest?branch=better_wasm#6f4c32293ef2c4701865ac2a93291012ea5f838f"
 dependencies = [
  "base64 0.13.0",
  "bytes",
@@ -2624,9 +2624,9 @@ checksum = "0237232789cf037d5480773fe568aac745bfe2afbc11a863e97901780a6b47cc"
 
 [[package]]
 name = "wasm-streams"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2c6ae10c25a5ee38f767d82ae79023ae3032afbdcd915e8373144950e0a483d"
+checksum = "5c9686ad57df75972718ccfe0b475515f64e2228955d97bd028debc6544851b8"
 dependencies = [
  "futures",
  "js-sys",

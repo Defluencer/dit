@@ -5,8 +5,9 @@ use std::rc::Rc;
 
 use crate::utils::local_storage::LocalStorage;
 
-use futures::channel::oneshot::Receiver;
+use futures::future::Abortable;
 use futures::join;
+use futures::stream::AbortRegistration;
 use futures_util::{AsyncBufReadExt, TryStreamExt};
 
 use serde::de::DeserializeOwned;
@@ -229,11 +230,11 @@ impl IpfsService {
         &self,
         topic: U,
         cb: Callback<Result<(String, Vec<u8>)>>,
-        rx: Receiver<()>,
+        regis: AbortRegistration,
     ) where
         U: Into<Cow<'static, str>>,
     {
-        if let Err(e) = self.pubsub_stream(topic, cb.clone(), rx).await {
+        if let Err(e) = self.pubsub_stream(topic, cb.clone(), regis).await {
             cb.emit(Err(e.into()));
         }
 
@@ -245,7 +246,7 @@ impl IpfsService {
         &self,
         topic: U,
         cb: Callback<Result<(String, Vec<u8>)>>,
-        mut rx: Receiver<()>,
+        regis: AbortRegistration,
     ) -> Result<()>
     where
         U: Into<Cow<'static, str>>,
@@ -261,18 +262,11 @@ impl IpfsService {
 
         let stream = response.bytes_stream();
 
-        let mut line_stream = stream.err_into().into_async_read().lines();
+        let line_stream = stream.err_into().into_async_read().lines();
 
-        while let Some(line) = line_stream.try_next().await? {
-            match rx.try_recv() {
-                Ok(result) => {
-                    if result.is_some() {
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
+        let mut abortable_stream = Abortable::new(line_stream, regis);
 
+        while let Some(line) = abortable_stream.try_next().await? {
             if let Ok(response) = serde_json::from_str::<PubsubSubResponse>(&line) {
                 let PubsubSubResponse { from, data } = response;
 

@@ -5,8 +5,7 @@ use std::str;
 use crate::components::chat::message::{MessageData, UIMessage};
 use crate::utils::IpfsService;
 
-use futures::channel::oneshot;
-use futures::channel::oneshot::Sender;
+use futures::future::AbortHandle;
 
 use wasm_bindgen_futures::spawn_local;
 use web_sys::Element;
@@ -31,7 +30,7 @@ pub struct Display {
     msg_cb: Callback<(PeerId, Message, Result<SignedMessage<ChatId>>)>,
 
     pubsub_cb: Callback<Result<(String, Vec<u8>)>>,
-    tx: Option<Sender<()>>,
+    handle: AbortHandle,
 
     img_gen: Ethereum,
 
@@ -73,7 +72,7 @@ impl Component for Display {
         };
 
         let pubsub_cb = link.callback(Msg::PubSub);
-        let (tx, rx) = oneshot::channel::<()>();
+        let (handle, regis) = AbortHandle::new_pair();
 
         if !props.beacon.topics.chat.is_empty() {
             spawn_local({
@@ -81,7 +80,7 @@ impl Component for Display {
                 let sub_topic = props.beacon.topics.chat.clone();
                 let cb = pubsub_cb.clone();
 
-                async move { ipfs.pubsub_sub(sub_topic, cb, rx).await }
+                async move { ipfs.pubsub_sub(sub_topic, cb, regis).await }
             });
         }
 
@@ -90,8 +89,11 @@ impl Component for Display {
 
         Self {
             props,
+
             msg_cb: link.callback(Msg::Origin),
+
             pubsub_cb,
+            handle,
 
             img_gen,
 
@@ -101,8 +103,6 @@ impl Component for Display {
 
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
-
-            tx: Some(tx),
         }
     }
 
@@ -115,23 +115,21 @@ impl Component for Display {
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if !Rc::ptr_eq(&self.props.beacon, &props.beacon) {
-            if let Some(tx) = self.tx.take() {
-                let _ = tx.send(()); // Drop previous pubsub stream
-            }
+            self.handle.abort();
 
             self.props = props;
 
             if !self.props.beacon.topics.chat.is_empty() {
-                let (tx, rx) = oneshot::channel::<()>();
+                let (handle, regis) = AbortHandle::new_pair();
 
-                self.tx = Some(tx);
+                self.handle = handle;
 
                 spawn_local({
                     let ipfs = self.props.ipfs.clone();
                     let sub_topic = self.props.beacon.topics.chat.clone();
                     let cb = self.pubsub_cb.clone();
 
-                    async move { ipfs.pubsub_sub(sub_topic, cb, rx).await }
+                    async move { ipfs.pubsub_sub(sub_topic, cb, regis).await }
                 });
             }
 
@@ -194,9 +192,7 @@ impl Component for Display {
     }
 
     fn destroy(&mut self) {
-        if let Some(tx) = self.tx.take() {
-            let _ = tx.send(()); // Drop the pubsub stream
-        }
+        self.handle.abort()
     }
 }
 

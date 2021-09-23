@@ -6,8 +6,7 @@ use std::str::FromStr;
 use crate::utils::seconds_to_timecode;
 use crate::utils::{ExponentialMovingAverage, IpfsService};
 
-use futures::channel::oneshot;
-use futures::channel::oneshot::Sender;
+use futures::future::AbortHandle;
 
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -55,7 +54,7 @@ struct LiveStream {
     pubsub_cb: Callback<Result<(String, Vec<u8>)>>,
     buffer: VecDeque<Cid>,
 
-    tx: Option<Sender<()>>,
+    handle: AbortHandle,
 }
 
 /// Video player for live streams and on demand.
@@ -140,13 +139,13 @@ impl Component for VideoPlayer {
 
         let player_type = match beacon_or_metadata {
             Either::Left(beacon) => {
-                let (tx, rx) = oneshot::channel::<()>();
+                let (handle, regis) = AbortHandle::new_pair();
 
                 let live = LiveStream {
                     beacon,
                     pubsub_cb: link.callback(Msg::PubSub),
                     buffer: VecDeque::with_capacity(5),
-                    tx: Some(tx),
+                    handle,
                 };
 
                 if !live.beacon.topics.video.is_empty() {
@@ -155,7 +154,7 @@ impl Component for VideoPlayer {
                         let topic = live.beacon.topics.video.clone();
                         let cb = live.pubsub_cb.clone();
 
-                        async move { ipfs.pubsub_sub(topic, cb, rx).await }
+                        async move { ipfs.pubsub_sub(topic, cb, regis).await }
                     });
                 }
 
@@ -222,23 +221,21 @@ impl Component for VideoPlayer {
             return false;
         }
 
-        if let Some(tx) = live.tx.take() {
-            let _ = tx.send(()); // Drop the previous stream
-        }
+        live.handle.abort();
 
         live.beacon = beacon;
 
         if !live.beacon.topics.video.is_empty() {
-            let (tx, rx) = oneshot::channel::<()>();
+            let (handle, regis) = AbortHandle::new_pair();
 
-            live.tx = Some(tx);
+            live.handle = handle;
 
             spawn_local({
                 let ipfs = self.ipfs.clone();
                 let topic = live.beacon.topics.video.clone();
                 let cb = live.pubsub_cb.clone();
 
-                async move { ipfs.pubsub_sub(topic, cb, rx).await }
+                async move { ipfs.pubsub_sub(topic, cb, regis).await }
             });
         }
 
@@ -310,9 +307,7 @@ impl Component for VideoPlayer {
 
     fn destroy(&mut self) {
         if let Either::Left(live) = &mut self.player_type {
-            if let Some(tx) = live.tx.take() {
-                let _ = tx.send(()); // Drop the pubsub stream
-            }
+            live.handle.abort();
         }
 
         let window = match web_sys::window() {
