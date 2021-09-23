@@ -28,11 +28,17 @@ impl MessageData {
 
     fn render(&self) -> Html {
         html! {
-            <div class="chat_message">
-                <img src=self.img_data.to_string() height="32" width="32" />
-                <h3>{ &self.sender_name }</h3>
-                <p>{ &self.message }</p>
-            </div>
+            <article class="message is-small" style="overflow-wrap: break-word" >
+                <ybc::MessageHeader>
+                    <ybc::Image size=ybc::ImageSize::IsSquare >
+                        <img src=self.img_data.to_string() height="32" width="32" />
+                    </ybc::Image>
+                    <h3>{ &self.sender_name }</h3>
+                </ybc::MessageHeader>
+                <ybc::MessageBody>
+                    { &self.message }
+                </ybc::MessageBody>
+            </article>
         }
     }
 }

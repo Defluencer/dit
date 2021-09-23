@@ -194,7 +194,7 @@ async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {
 
     ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
-    println!("✅ Comments Cleared & Updated Weblog {}", cid);
+    println!("✅ Comments Cleared & Updated Weblog");
 
     Ok(())
 }
@@ -236,7 +236,7 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
 
     ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
-    println!("✅ Comments Cleared & Updated Weblog {}", cid);
+    println!("✅ Comments Cleared & Updated Weblog");
 
     Ok(())
 }
@@ -283,7 +283,7 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
 
     ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
 
-    println!("✅ Comments Cleared & Updated Video {}", cid);
+    println!("✅ Comments Cleared & Updated Video");
 
     Ok(())
 }

@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 #[derive(Clone, Properties)]
 pub struct Comment {
@@ -31,11 +31,32 @@ impl Component for Comment {
     }
 
     fn view(&self) -> Html {
+        let dt = crate::utils::timestamp_to_datetime(self.comment.timestamp);
+
         html! {
-            <div class="comment">
-                <div class="comment_name"> { &self.name } </div>
-                <div class="comment_text"> { &self.comment.comment } </div>
-            </div>
+            <ybc::Box>
+                <ybc::Media>
+                    <ybc::MediaLeft>
+                        <ybc::Block>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-user"></i></span>
+                                <span> { &self.name } </span>
+                            </span>
+                        </ybc::Block>
+                        <ybc::Block>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-clock"></i></span>
+                                <span> { dt } </span>
+                            </span>
+                        </ybc::Block>
+                    </ybc::MediaLeft>
+                    <ybc::MediaContent>
+                        <ybc::Content classes=classes!("has-text-centered") >
+                            { &self.comment.comment }
+                        </ybc::Content>
+                    </ybc::MediaContent>
+                </ybc::Media>
+            </ybc::Box>
         }
     }
 }

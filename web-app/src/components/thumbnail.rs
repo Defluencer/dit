@@ -2,9 +2,9 @@ use std::rc::Rc;
 
 use crate::app::AppRoute;
 use crate::components::Image;
-use crate::utils::seconds_to_timecode;
+use crate::utils::{seconds_to_timecode, timestamp_to_datetime, IpfsService};
 
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew_router::components::RouterAnchor;
 
 use linked_data::blog::{FullPost, MicroPost};
@@ -22,6 +22,7 @@ pub struct Thumbnail {
     pub name: Rc<str>,
     pub metadata: Rc<Media>,
     pub count: usize,
+    pub ipfs: IpfsService,
 }
 
 impl Component for Thumbnail {
@@ -47,57 +48,138 @@ impl Component for Thumbnail {
     }
 
     fn view(&self) -> Html {
-        match &*self.metadata {
-            Media::Video(metadata) => self.render_video(metadata),
-            Media::Blog(metadata) => self.render_blog(metadata),
-            Media::Statement(metadata) => self.render_statement(metadata),
+        let metadata = &*self.metadata;
+
+        let dt = timestamp_to_datetime(metadata.timestamp());
+
+        match metadata {
+            Media::Video(metadata) => self.render_video(dt, metadata),
+            Media::Blog(metadata) => self.render_blog(dt, metadata),
+            Media::Statement(metadata) => self.render_statement(dt, metadata),
         }
     }
 }
 
 impl Thumbnail {
-    fn render_video(&self, metadata: &VideoMetadata) -> Html {
+    fn render_video(&self, dt: String, metadata: &VideoMetadata) -> Html {
         let (hour, minute, second) = seconds_to_timecode(metadata.duration);
 
         html! {
-            <div class="thumbnail">
-                <div class="thumbnail_author"> { &self.name } </div>
-                <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
-                    <div class="video_thumbnail_title"> { &metadata.title } </div>
-                    <div class="video_thumbnail_image">
-                        <Image image_cid=metadata.image.link />
-                    </div>
-                    <div class="video_thumbnail_duration"> { &format!("{}:{}:{}", hour, minute, second) } </div>
-                    <div class="comment_count"> { &format!("{} Comments", self.count) } </div>
-                </Anchor>
-            </div>
+            <Anchor route=AppRoute::Content(self.cid)>
+                <ybc::Box>
+                    <ybc::Media>
+                        <ybc::MediaLeft>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-user"></i></span>
+                                    <span> { &self.name } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-clock"></i></span>
+                                    <span> { dt } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-video"></i></span>
+                                    <span> { &format!("{}:{}:{}", hour, minute, second) } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-comments"></i></span>
+                                    <span> { &format!("{} Comment", self.count) } </span>
+                                </span>
+                            </ybc::Block>
+                        </ybc::MediaLeft>
+                        <ybc::MediaContent classes=classes!("has-text-centered") >
+                            <ybc::Title classes=classes!("is-6") >
+                                { &metadata.title }
+                            </ybc::Title>
+                            <ybc::Image size=ybc::ImageSize::Is16by9 >
+                                <Image image_cid=metadata.image.link ipfs=self.ipfs.clone() />
+                            </ybc::Image>
+                        </ybc::MediaContent>
+                    </ybc::Media>
+                </ybc::Box>
+            </Anchor>
         }
     }
 
-    fn render_blog(&self, metadata: &FullPost) -> Html {
+    fn render_blog(&self, dt: String, metadata: &FullPost) -> Html {
         html! {
-            <div class="thumbnail">
-                <div class="thumbnail_author"> { &self.name } </div>
-                <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
-                    <div class="post_thumbnail_title"> { &metadata.title } </div>
-                    <div class="post_thumbnail_image">
-                        <Image image_cid=metadata.image.link />
-                    </div>
-                    <div class="comment_count"> { &format!("{} Comments", self.count) } </div>
-                </Anchor>
-            </div>
+            <Anchor route=AppRoute::Content(self.cid)>
+                <ybc::Box>
+                    <ybc::Media>
+                        <ybc::MediaLeft>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-user"></i></span>
+                                    <span> { &self.name } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-clock"></i></span>
+                                    <span> { dt } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-comments"></i></span>
+                                    <span> { &format!("{} Comment", self.count) } </span>
+                                </span>
+                            </ybc::Block>
+                        </ybc::MediaLeft>
+                        <ybc::MediaContent classes=classes!("has-text-centered") >
+                                <ybc::Title classes=classes!("is-6") >
+                                    { &metadata.title }
+                                </ybc::Title>
+                                <ybc::Image size=ybc::ImageSize::Is16by9 >
+                                    <Image image_cid=metadata.image.link ipfs=self.ipfs.clone() />
+                                </ybc::Image>
+                        </ybc::MediaContent>
+                    </ybc::Media>
+                </ybc::Box>
+            </Anchor>
         }
     }
 
-    fn render_statement(&self, metadata: &MicroPost) -> Html {
+    fn render_statement(&self, dt: String, metadata: &MicroPost) -> Html {
         html! {
-            <div class="thumbnail">
-                <div class="thumbnail_author"> { &self.name } </div>
-                <Anchor route=AppRoute::Content(self.cid) classes="thumbnail_link">
-                    <div class="statement_text"> { &metadata.content } </div>
-                    <div class="comment_count"> { &format!("{} Comments", self.count) } </div>
-                </Anchor>
-            </div>
+            <Anchor route=AppRoute::Content(self.cid)>
+                <ybc::Box>
+                    <ybc::Media>
+                        <ybc::MediaLeft>
+                             <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-user"></i></span>
+                                    <span> { &self.name } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-clock"></i></span>
+                                    <span> { dt } </span>
+                                </span>
+                            </ybc::Block>
+                            <ybc::Block>
+                                <span class="icon-text">
+                                    <span class="icon"><i class="fas fa-comments"></i></span>
+                                    <span> { &format!("{} Comment", self.count) } </span>
+                                </span>
+                            </ybc::Block>
+                        </ybc::MediaLeft>
+                        <ybc::MediaContent>
+                            <ybc::Content classes=classes!("has-text-centered")>
+                                { &metadata.content }
+                            </ybc::Content>
+                        </ybc::MediaContent>
+                    </ybc::Media>
+                </ybc::Box>
+            </Anchor>
         }
     }
 }

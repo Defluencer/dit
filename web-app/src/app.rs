@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::rc::Rc;
 
 use crate::pages::{Content, ContentFeed, Home, Live, Settings};
@@ -26,7 +27,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 type FeedCallback = Callback<(String, Cid, Result<(Cid, FeedAnchor)>)>;
 type CommentCallback = Callback<(String, Cid, Result<(Cid, Commentary)>)>;
 
-#[derive(Switch, Debug, Clone)]
+#[derive(Switch, Debug, Clone, PartialEq)]
 pub enum AppRoute {
     #[to = "/#/content/{cid}"]
     Content(Cid),
@@ -92,7 +93,7 @@ pub struct Props {
     pub web3: Web3Service,
     pub ipfs: IpfsService,
     pub storage: LocalStorage,
-    pub ens_name: Rc<str>,
+    pub beacon: &'static str,
 }
 
 impl Component for App {
@@ -130,7 +131,7 @@ impl Component for App {
             friends_cb: link.callback(AppMsg::Friends),
         };
 
-        app.get_beacon(&app.props.ens_name);
+        app.get_beacon(&app.props.beacon);
 
         app
     }
@@ -167,7 +168,7 @@ impl Component for App {
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
                             AppRoute::Content(cid) => html! { <Content ipfs=ipfs.clone() cid=cid content=content.clone() /> },
-                            AppRoute::Settings => html! { <Settings storage=storage.clone() /> },
+                            AppRoute::Settings => html! { <Settings storage=storage.clone() ipfs=ipfs.clone() /> },
                             AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() beacon=beacon.clone() bans=bans.clone() mods=mods.clone() /> },
                             AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() content=content.clone()  /> },
                             AppRoute::Home => html! { <Home /> },
@@ -180,17 +181,28 @@ impl Component for App {
 }
 
 impl App {
-    /// Resolve ENS name and check local storage.
-    fn get_beacon(&self, ens_name: &str) {
+    /// Resolve ENS name and check local storage for a beacon.
+    fn get_beacon(&self, beacon: &str) {
+        if let Ok(cid) = Cid::try_from(beacon) {
+            spawn_local({
+                let beacon_cb = self.beacon_cb.clone();
+                let ipfs = self.props.ipfs.clone();
+
+                async move { beacon_cb.emit((cid, ipfs.dag_get(cid, Option::<&str>::None).await)) }
+            });
+
+            return;
+        };
+
         spawn_local({
             let cb = self.name_cb.clone();
             let web3 = self.props.web3.clone();
-            let name = ens_name.to_owned();
+            let name = beacon.to_owned();
 
             async move { cb.emit((name.clone(), web3.get_ipfs_content(name).await)) }
         });
 
-        if let Some(cid) = self.props.storage.get_cid(ens_name) {
+        if let Some(cid) = self.props.storage.get_cid(beacon) {
             spawn_local({
                 let cb = self.beacon_cb.clone();
                 let ipfs = self.props.ipfs.clone();
@@ -214,9 +226,6 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Name Resolve");
-
         spawn_local({
             let cb = self.beacon_cb.clone();
             let ipfs = self.props.ipfs.clone();
@@ -230,6 +239,9 @@ impl App {
         });
 
         self.props.storage.set_cid(&name, &beacon_cid);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App ENS Name Resolved");
 
         false
     }
@@ -247,9 +259,6 @@ impl App {
         if !self.beacon_set.insert(beacon_cid) {
             return false;
         }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Beacon Update");
 
         spawn_local({
             let cb = self.feed_cb.clone();
@@ -379,6 +388,9 @@ impl App {
             self.beacon = Rc::from(beacon).into();
         }
 
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Beacon Updated");
+
         false
     }
 
@@ -396,12 +408,12 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Content Feed Update");
-
         Rc::make_mut(&mut self.content).insert_content(name, feed);
 
         self.props.storage.set_cid(&ipns.to_string(), &feed_cid);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Content Feed Updated");
 
         true
     }
@@ -420,12 +432,12 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Comment List Update");
-
         Rc::make_mut(&mut self.content).insert_comments(name, comments);
 
         self.props.storage.set_cid(&ipns.to_string(), &comments_cid);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Comment List Updated");
 
         true
     }
@@ -441,13 +453,13 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Ban List Update");
-
         self.props.storage.set_cid(&ipns.to_string(), &bans_cid);
 
         self.bans_cid = bans_cid.into();
         self.bans = Rc::from(bans);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Ban List Updated");
 
         true
     }
@@ -463,13 +475,13 @@ impl App {
             return false;
         }
 
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Moderator List Update");
-
         self.props.storage.set_cid(&ipns.to_string(), &mods_cid);
 
         self.mods_cid = mods_cid.into();
         self.mods = Rc::from(mods);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Moderator List Updated");
 
         true
     }
@@ -484,9 +496,6 @@ impl App {
         if Some(friends_cid) == self.friends_cid {
             return false;
         }
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Friend List Update");
 
         for friend in friends.friends.iter() {
             match &friend.friend {
@@ -511,6 +520,9 @@ impl App {
 
         self.friends_cid = friends_cid.into();
         self.friends = Rc::from(friends);
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("App Friend List Updated");
 
         true
     }

@@ -5,14 +5,8 @@ use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use wasm_bindgen_futures::spawn_local;
 
-use web_sys::{HtmlTextAreaElement, KeyboardEvent};
-
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
-
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
-use yew::InputData;
 
 use cid::Cid;
 
@@ -41,16 +35,13 @@ pub struct Inputs {
 
     state: DisplayState,
 
-    temp_msg: Option<String>,
+    temp_msg: String,
 
     address: Option<Address>,
     peer_id: Option<String>,
     name: Option<String>,
     sign_msg_content: Option<ChatId>,
     sign_msg_cid: Option<Cid>,
-
-    text_area: Option<HtmlTextAreaElement>,
-    text_closure: Option<Closure<dyn Fn(KeyboardEvent)>>,
 }
 
 pub enum Msg {
@@ -84,7 +75,10 @@ impl Component for Inputs {
             None => (None, DisplayState::Connect),
         };
 
-        //TODO should verify that the node has not been garbage collected in between session.
+        //TODO should verify that the signed message has not been garbage collected in between session.
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Chat Inputs Created");
 
         Self {
             props,
@@ -92,16 +86,13 @@ impl Component for Inputs {
 
             state,
 
-            temp_msg: None,
+            temp_msg: String::default(),
 
             address: None,
             peer_id: None,
             name: None,
             sign_msg_content: None,
             sign_msg_cid,
-
-            text_area: None,
-            text_closure: None,
         }
     }
 
@@ -124,6 +115,9 @@ impl Component for Inputs {
         if !Rc::ptr_eq(&self.props.beacon, &props.beacon) {
             self.props = props;
 
+            #[cfg(debug_assertions)]
+            ConsoleService::info("Chat Inputs Page Changed");
+
             return true;
         }
 
@@ -131,127 +125,84 @@ impl Component for Inputs {
     }
 
     fn view(&self) -> Html {
-        let content = match &self.state {
-            DisplayState::Chatting => {
-                html! {
-                <div>
-                    <textarea class="input_text" id="input_text"
-                    rows=5
-                    oninput=self.link.callback(|e: InputData| Msg::Set(e.value))
-                    placeholder="Input text here...">
-                    </textarea>
-                    <button class="send_button" onclick=self.link.callback(|_| Msg::Enter)>{ "Send" }</button>
-                </div> }
-            }
-            DisplayState::Connect => {
-                html! { <button class="connect_button" onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button> }
-            }
-            DisplayState::NameOk(name) => {
-                html! {
-                <div class="submit_name">
-                    <label class="name_label">{ "Name" }<input placeholder=name.clone() oninput=self.link.callback(|e: InputData|  Msg::SetName(e.value)) /></label>
-                    <button class="submit_button" onclick=self.link.callback_once(|_|  Msg::SubmitName)>{ "Confirm" }</button>
-                </div> }
-            }
-        };
-
         html! {
-            <div class="chat_inputs">
-            { content }
-            </div>
-        }
-    }
-
-    fn rendered(&mut self, _first_render: bool) {
-        if self.text_area.is_some() {
-            return;
-        }
-
-        if let DisplayState::Chatting = self.state {
-            let window = match web_sys::window() {
-                Some(window) => window,
-                None => {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::error("No Window Object");
-                    return;
-                }
-            };
-
-            let document = match window.document() {
-                Some(document) => document,
-                None => {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::error("No Document Object");
-                    return;
-                }
-            };
-
-            let element = match document.get_element_by_id("input_text") {
-                Some(document) => document,
-                None => {
-                    #[cfg(debug_assertions)]
-                    ConsoleService::error("No Element by Id");
-                    return;
-                }
-            };
-
-            let text_area: HtmlTextAreaElement = match element.dyn_into() {
-                Ok(document) => document,
-                Err(e) => {
-                    ConsoleService::error(&format!("{:#?}", e));
-                    return;
-                }
-            };
-
-            let cb = self.link.callback(|()| Msg::Enter);
-
-            let closure = Closure::wrap(Box::new(move |event: KeyboardEvent| {
-                if event.key() == "Enter" {
-                    cb.emit(());
-                }
-            }) as Box<dyn Fn(KeyboardEvent)>);
-
-            if let Err(e) = text_area
-                .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+            <ybc::Box>
             {
-                ConsoleService::error(&format!("{:#?}", e));
+                match &self.state {
+                    DisplayState::Connect => self.connect_dialog(),
+                    DisplayState::NameOk(name) => self.name_dialog(name),
+                    DisplayState::Chatting => self.chat_dialog(),
+                }
             }
-
-            self.text_area = Some(text_area);
-            self.text_closure = Some(closure);
+            </ybc::Box>
         }
     }
 }
 
 impl Inputs {
-    fn on_chat_input(&mut self, msg: String) -> bool {
-        if msg == "\n" {
-            if let Some(text_area) = self.text_area.as_ref() {
-                text_area.set_value("");
-            }
+    fn connect_dialog(&self) -> Html {
+        html! {
+            <ybc::Field label="To chat, please connect Metamask".to_owned() >
+                <ybc::Button classes=classes!("is-primary") onclick=self.link.callback(|_| Msg::Connect) >
+                    { "Connect" }
+                </ybc::Button>
+            </ybc::Field>
+        }
+    }
 
-            return false;
+    fn name_dialog(&self, name: &str) -> Html {
+        html! {
+            <>
+                <ybc::Field label="Display Name".to_owned() >
+                    <ybc::Control>
+                        <ybc::Input name="chat_name" value=name.to_owned() update=self.link.callback(Msg::SetName) />
+                    </ybc::Control>
+                </ybc::Field>
+                <ybc::Field label="Confirm your name by signing it".to_owned() >
+                    <ybc::Control>
+                        <ybc::Button classes=classes!("is-primary") onclick=self.link.callback(|_| Msg::SubmitName)>
+                            { "Sign" }
+                        </ybc::Button>
+                    </ybc::Control>
+                </ybc::Field>
+            </>
+        }
+    }
+
+    fn chat_dialog(&self) -> Html {
+        html! {
+            <>
+                <ybc::Field>
+                    <ybc::Control>
+                        <ybc::TextArea name="chat_msg" value=String::default() update=self.link.callback(Msg::Set) rows=3 fixed_size=true />
+                    </ybc::Control>
+                </ybc::Field>
+                <ybc::Field>
+                    <ybc::Control>
+                        <ybc::Button classes=classes!("is-primary") onclick=self.link.callback(|_| Msg::Enter)>
+                            { "Send" }
+                        </ybc::Button>
+                    </ybc::Control>
+                </ybc::Field>
+            </>
+        }
+    }
+
+    fn on_chat_input(&mut self, msg: String) -> bool {
+        if msg.ends_with("\n") {
+            self.temp_msg = msg;
+
+            return self.send_message();
         }
 
-        self.temp_msg = Some(msg);
+        self.temp_msg = msg;
 
         false
     }
 
     /// Send chat message via gossipsub.
     fn send_message(&mut self) -> bool {
-        let message = match self.temp_msg.take() {
-            Some(msg) => msg,
-            None => {
-                #[cfg(debug_assertions)]
-                ConsoleService::error("No Message");
-                return false;
-            }
-        };
-
-        if let Some(text_area) = self.text_area.as_ref() {
-            text_area.set_value("");
-        }
+        let message = self.temp_msg.clone();
 
         let cid = match self.sign_msg_cid {
             Some(cid) => cid,
@@ -290,7 +241,7 @@ impl Inputs {
             }
         });
 
-        false
+        true
     }
 
     /// Trigger ethereum request accounts.

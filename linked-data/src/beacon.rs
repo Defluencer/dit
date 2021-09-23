@@ -25,23 +25,23 @@ pub struct Beacon {
 
     /// Link to list of content metadata.
     #[serde_as(as = "DisplayFromStr")]
-    pub content_feed: IPNSLink, //IPNS path -> "/ipns/<hash>"
+    pub content_feed: IPNSLink,
 
     /// Link to list of comments.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub comments: Option<IPNSLink>, //IPNS path -> "/ipns/<hash>"
+    pub comments: Option<IPNSLink>,
 
     /// Link to list of your friend's beacons.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub friends: Option<IPNSLink>, //IPNS path -> "/ipns/<hash>"
+    pub friends: Option<IPNSLink>,
 
     /// Link to all banned addresses.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub bans: Option<IPNSLink>, //IPNS path -> "/ipns/<hash>"
+    pub bans: Option<IPNSLink>,
 
     /// Link to all moderator addresses.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub mods: Option<IPNSLink>, //IPNS path -> "/ipns/<hash>"
+    pub mods: Option<IPNSLink>,
 }
 
 #[cfg(test)]

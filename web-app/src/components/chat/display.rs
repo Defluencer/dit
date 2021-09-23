@@ -1,15 +1,18 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 use std::str;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::components::chat::message::{MessageData, UIMessage};
 use crate::utils::IpfsService;
 
+use futures::future::AbortHandle;
+
 use wasm_bindgen_futures::spawn_local;
+use web_sys::Element;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
+use yew::Callback;
 
 use linked_data::beacon::Beacon;
 use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
@@ -23,16 +26,20 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct Display {
     props: Props,
-    link: ComponentLink<Self>,
+
+    msg_cb: Callback<(PeerId, Message, Result<SignedMessage<ChatId>>)>,
+
+    pubsub_cb: Callback<Result<(String, Vec<u8>)>>,
+    handle: AbortHandle,
 
     img_gen: Ethereum,
 
     mod_db: ChatModerationCache,
 
+    chat_element: Option<Element>,
+
     next_id: usize,
     chat_messages: VecDeque<MessageData>,
-
-    drop_sig: Rc<AtomicBool>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -54,17 +61,6 @@ impl Component for Display {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let drop_sig = Rc::from(AtomicBool::new(false));
-
-        spawn_local({
-            let ipfs = props.ipfs.clone();
-            let sub_topic = props.beacon.topics.chat.clone();
-            let cb = link.callback(Msg::PubSub);
-            let sig = drop_sig.clone();
-
-            async move { ipfs.pubsub_sub(sub_topic, cb, sig).await }
-        });
-
         //https://github.com/ethereum/blockies
         //https://docs.rs/blockies/0.3.0/blockies/struct.Ethereum.html
         let img_gen = Ethereum {
@@ -75,18 +71,38 @@ impl Component for Display {
             spot_color: None,
         };
 
+        let pubsub_cb = link.callback(Msg::PubSub);
+        let (handle, regis) = AbortHandle::new_pair();
+
+        if !props.beacon.topics.chat.is_empty() {
+            spawn_local({
+                let ipfs = props.ipfs.clone();
+                let sub_topic = props.beacon.topics.chat.clone();
+                let cb = pubsub_cb.clone();
+
+                async move { ipfs.pubsub_sub(sub_topic, cb, regis).await }
+            });
+        }
+
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Chat Display Created");
+
         Self {
             props,
-            link,
+
+            msg_cb: link.callback(Msg::Origin),
+
+            pubsub_cb,
+            handle,
 
             img_gen,
 
             mod_db: ChatModerationCache::new(100, 100),
 
+            chat_element: None,
+
             chat_messages: VecDeque::with_capacity(20),
             next_id: 0,
-
-            drop_sig,
         }
     }
 
@@ -98,13 +114,27 @@ impl Component for Display {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if !Rc::ptr_eq(&self.props.beacon, &props.beacon)
-            || !Rc::ptr_eq(&self.props.mods, &props.mods)
-            || !Rc::ptr_eq(&self.props.bans, &props.bans)
-        {
+        if !Rc::ptr_eq(&self.props.beacon, &props.beacon) {
+            self.handle.abort();
+
             self.props = props;
 
-            return true;
+            if !self.props.beacon.topics.chat.is_empty() {
+                let (handle, regis) = AbortHandle::new_pair();
+
+                self.handle = handle;
+
+                spawn_local({
+                    let ipfs = self.props.ipfs.clone();
+                    let sub_topic = self.props.beacon.topics.chat.clone();
+                    let cb = self.pubsub_cb.clone();
+
+                    async move { ipfs.pubsub_sub(sub_topic, cb, regis).await }
+                });
+            }
+
+            #[cfg(debug_assertions)]
+            ConsoleService::info("Chat Display Changed");
         }
 
         false
@@ -112,21 +142,57 @@ impl Component for Display {
 
     fn view(&self) -> Html {
         html! {
-        <div class="chat_display">
-        {
-        for self.chat_messages.iter().map(|cm| html! {
-            <UIMessage key=cm.id.to_string() message_data=cm.clone() />
-        })
-        }
-        </div>
+            <div id="chat_display" class="box" style="overflow-y: scroll;height: 60vh;scroll-behavior: smooth;" >
+            {
+                for self.chat_messages.iter().map(|cm| html! {
+                    <UIMessage key=cm.id.to_string() message_data=cm.clone() />
+                })
+            }
+            </div>
         }
     }
 
-    fn destroy(&mut self) {
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Dropping Live Chat");
+    fn rendered(&mut self, first_render: bool) {
+        if !first_render {
+            if let Some(element) = self.chat_element.as_mut() {
+                element.set_scroll_top(element.scroll_height());
+            }
 
-        self.drop_sig.store(true, Ordering::Relaxed);
+            return;
+        }
+
+        let window = match web_sys::window() {
+            Some(window) => window,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Window Object");
+                return;
+            }
+        };
+
+        let document = match window.document() {
+            Some(document) => document,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Document Object");
+                return;
+            }
+        };
+
+        let element = match document.get_element_by_id("chat_display") {
+            Some(document) => document,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Element by Id");
+                return;
+            }
+        };
+
+        self.chat_element = Some(element);
+    }
+
+    fn destroy(&mut self) {
+        self.handle.abort()
     }
 }
 
@@ -171,7 +237,7 @@ impl Display {
 
     fn get_origin(&self, from: String, msg: Message) {
         spawn_local({
-            let cb = self.link.callback_once(Msg::Origin);
+            let cb = self.msg_cb.clone();
             let ipfs = self.props.ipfs.clone();
             let cid = msg.origin.link;
 
@@ -235,7 +301,7 @@ impl Display {
         match msg.msg_type {
             MessageType::Unsigned(msg) => self.update_display(&peer, &msg),
             MessageType::Ban(ban) => self.update_bans(&peer, ban),
-            MessageType::Mod(_) => false,
+            MessageType::Mod(_) => false, //TODO
         }
     }
 

@@ -1,4 +1,4 @@
-use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
+use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 /// Loading indicator.
 #[derive(Clone, Properties)]
@@ -22,7 +22,16 @@ impl Component for Loading {
 
     fn view(&self) -> Html {
         html! {
-            <div class="center_text"> { "Loading..." } </div>
+            <ybc::Container classes=classes!("has-text-centered") >
+                <ybc::Box>
+                    <div>
+                        { "Searching the decentralized web. Please wait..." }
+                    </div>
+                    <progress class="progress is-primary is-small">
+                        { "0%" }
+                    </progress>
+                </ybc::Box>
+            </ybc::Container>
         }
     }
 }

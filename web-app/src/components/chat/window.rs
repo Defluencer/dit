@@ -47,10 +47,10 @@ impl Component for ChatWindow {
 
     fn view(&self) -> Html {
         html! {
-        <div class="chat_window">
+        <>
             <Display ipfs=self.ipfs.clone() beacon=self.beacon.clone() bans=self.bans.clone() mods=self.mods.clone() />
             <Inputs ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() beacon=self.beacon.clone() />
-        </div>
+        </>
         }
     }
 }

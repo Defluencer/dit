@@ -15,22 +15,44 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Clone)]
 pub struct Web3Service {
-    client: Web3<Eip1193>,
+    client: Option<Web3<Eip1193>>,
 }
 
 impl Web3Service {
     pub fn new() -> Self {
+        let window = match web_sys::window() {
+            Some(window) => window,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Window Object");
+                return Self { client: None };
+            }
+        };
+
+        let ethereum = match window.get("ethereum") {
+            Some(document) => document,
+            None => {
+                #[cfg(debug_assertions)]
+                ConsoleService::error("No Ethereum Object");
+                return Self { client: None };
+            }
+        };
+
+        if ethereum.is_undefined() {
+            ConsoleService::error("Ethereum Object is Undefined");
+            return Self { client: None };
+        }
+
         let provider = match Provider::default() {
             Ok(provider) => provider,
             Err(e) => {
                 ConsoleService::error(&format!("{:#?}", e));
-                std::process::abort();
+                return Self { client: None };
             }
         };
 
         let transport = Eip1193::new(provider);
-
-        let client = Web3::new(transport);
+        let client = Some(Web3::new(transport));
 
         Self { client }
     }
@@ -39,12 +61,17 @@ impl Web3Service {
     where
         U: Into<Cow<'static, str>>,
     {
+        let client = match &self.client {
+            Some(clt) => clt,
+            None => return Err(NoWeb3.into()),
+        };
+
         let name = &format!("defluencer.{}.eth", name.into());
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("ENS get => {}", name));
 
-        let hash = self.client.ens().get_content_hash(name).await?;
+        let hash = client.ens().get_content_hash(name).await?;
 
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Hash => {:x?}", &hash));
@@ -67,7 +94,12 @@ impl Web3Service {
 
     //https://docs.rs/web3/0.15.0/web3/api/struct.Eth.html#method.request_accounts
     pub async fn get_eth_accounts(&self) -> Result<Address> {
-        let address = self.client.eth().request_accounts().await?;
+        let client = match &self.client {
+            Some(clt) => clt,
+            None => return Err(NoWeb3.into()),
+        };
+
+        let address = client.eth().request_accounts().await?;
 
         Ok(address[0])
     }
@@ -77,16 +109,26 @@ impl Web3Service {
     where
         T: Serialize,
     {
+        let client = match &self.client {
+            Some(clt) => clt,
+            None => return Err(NoWeb3.into()),
+        };
+
         let data = serde_json::to_vec(&content)?;
 
-        let sign = self.client.personal().sign(addrs, data.into()).await?;
+        let sign = client.personal().sign(addrs, data.into()).await?;
 
         Ok(sign.to_fixed_bytes())
     }
 
     //https://eips.ethereum.org/EIPS/eip-181
     pub async fn get_name(&self, addrs: Address) -> Result<String> {
-        let res = self.client.ens().get_canonical_name(addrs).await?;
+        let client = match &self.client {
+            Some(clt) => clt,
+            None => return Err(NoWeb3.into()),
+        };
+
+        let res = client.ens().get_canonical_name(addrs).await?;
 
         Ok(res)
     }
@@ -102,3 +144,14 @@ impl std::fmt::Display for NotIPFSStorage {
 }
 
 impl std::error::Error for NotIPFSStorage {}
+
+#[derive(Debug)]
+struct NoWeb3;
+
+impl std::fmt::Display for NoWeb3 {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "No Web3 client")
+    }
+}
+
+impl std::error::Error for NoWeb3 {}

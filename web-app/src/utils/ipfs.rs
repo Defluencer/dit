@@ -2,12 +2,13 @@ use core::fmt;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::utils::local_storage::LocalStorage;
 
+use futures::future::Abortable;
 use futures::join;
-use futures_util::{AsyncBufReadExt, StreamExt, TryStreamExt};
+use futures::stream::AbortRegistration;
+use futures_util::{AsyncBufReadExt, TryStreamExt};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -21,7 +22,7 @@ use cid::Cid;
 use reqwest::multipart::Form;
 use reqwest::{Client, Url};
 
-const DEFAULT_URI: &str = "http://127.0.0.1:5001/api/v0/";
+pub const DEFAULT_URI: &str = "http://127.0.0.1:5001/api/v0/";
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -113,7 +114,7 @@ impl IpfsService {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!(
             "Serde: Serialize => {}",
-            serde_json::to_string_pretty(node).unwrap()
+            serde_json::to_string(node).unwrap()
         ));
 
         let data = serde_json::to_string(node)?;
@@ -196,91 +197,17 @@ impl IpfsService {
         Ok((cid, node))
     }
 
-    /// Subscribe to a topic then deserialize output.
-    pub async fn pubsub_sub<U>(
-        &self,
-        topic: U,
-        cb: Callback<Result<(String, Vec<u8>)>>,
-        drop_sig: Rc<AtomicBool>,
-    ) where
-        U: Into<Cow<'static, str>>,
-    {
-        let url = match self.base_url.join("pubsub/sub") {
-            Ok(url) => url,
-            Err(e) => {
-                cb.emit(Err(e.into()));
-                return;
-            }
+    pub async fn ipfs_node_id(&self) -> Result<String> {
+        let url = self.base_url.join("id")?;
+
+        let res = self.client.post(url).send().await?;
+
+        let res = match res.json::<IdResponse>().await {
+            Ok(res) => res,
+            Err(e) => return Err(e.into()),
         };
 
-        let result = self
-            .client
-            .post(url)
-            .query(&[("arg", &topic.into())])
-            .send()
-            .await;
-
-        let stream = match result {
-            Ok(res) => res.bytes_stream(),
-            Err(e) => {
-                cb.emit(Err(e.into()));
-                return;
-            }
-        };
-
-        let mut line_stream = stream.err_into().into_async_read().lines();
-
-        while let Some(result) = line_stream.next().await {
-            if drop_sig.load(Ordering::Relaxed) {
-                // Hacky way I found to close the stream
-                return;
-            }
-
-            let line = match result {
-                Ok(line) => line,
-                Err(e) => {
-                    cb.emit(Err(e.into()));
-                    return;
-                }
-            };
-
-            let response = match serde_json::from_str::<PubsubSubResponse>(&line) {
-                Ok(node) => node,
-                Err(_) => match serde_json::from_str::<IPFSError>(&line) {
-                    Ok(e) => {
-                        cb.emit(Err(e.into()));
-                        return;
-                    }
-                    Err(e) => {
-                        cb.emit(Err(e.into()));
-                        return;
-                    }
-                },
-            };
-
-            let PubsubSubResponse { from, data } = response;
-
-            let from = match Base::decode(&Base::Base64Pad, from) {
-                Ok(from) => from,
-                Err(e) => {
-                    cb.emit(Err(e.into()));
-                    return;
-                }
-            };
-
-            //This is the most common encoding for PeerIds
-            let from = Base::encode(&Base::Base58Btc, from);
-
-            let data = match Base::decode(&Base::Base64Pad, data) {
-                Ok(from) => from,
-                Err(e) => {
-                    cb.emit(Err(e.into()));
-                    return;
-                }
-            };
-
-            cb.emit(Ok((from, data)))
-        }
+        Ok(res.id)
     }
 
     pub async fn pubsub_pub<U>(&self, topic: U, msg: U) -> Result<()>
@@ -298,17 +225,68 @@ impl IpfsService {
         Ok(())
     }
 
-    pub async fn ipfs_node_id(&self) -> Result<String> {
-        let url = self.base_url.join("id")?;
+    /// Subscribe to a topic then deserialize output.
+    pub async fn pubsub_sub<U>(
+        &self,
+        topic: U,
+        cb: Callback<Result<(String, Vec<u8>)>>,
+        regis: AbortRegistration,
+    ) where
+        U: Into<Cow<'static, str>>,
+    {
+        if let Err(e) = self.pubsub_stream(topic, cb.clone(), regis).await {
+            cb.emit(Err(e.into()));
+        }
 
-        let res = self.client.post(url).send().await?;
+        #[cfg(debug_assertions)]
+        ConsoleService::info("Stream Dropped");
+    }
 
-        let res = match res.json::<IdResponse>().await {
-            Ok(res) => res,
-            Err(e) => return Err(e.into()),
-        };
+    async fn pubsub_stream<U>(
+        &self,
+        topic: U,
+        cb: Callback<Result<(String, Vec<u8>)>>,
+        regis: AbortRegistration,
+    ) -> Result<()>
+    where
+        U: Into<Cow<'static, str>>,
+    {
+        let url = self.base_url.join("pubsub/sub")?;
 
-        Ok(res.id)
+        let response = self
+            .client
+            .post(url)
+            .query(&[("arg", &topic.into())])
+            .send()
+            .await?;
+
+        let stream = response.bytes_stream();
+
+        let line_stream = stream.err_into().into_async_read().lines();
+
+        let mut abortable_stream = Abortable::new(line_stream, regis);
+
+        while let Some(line) = abortable_stream.try_next().await? {
+            if let Ok(response) = serde_json::from_str::<PubsubSubResponse>(&line) {
+                let PubsubSubResponse { from, data } = response;
+
+                let from = Base::decode(&Base::Base64Pad, from)?;
+                let data = Base::decode(&Base::Base64Pad, data)?;
+
+                //This is the most common encoding for PeerIds
+                let from = Base::encode(&Base::Base58Btc, from);
+
+                cb.emit(Ok((from, data)));
+
+                continue;
+            }
+
+            let ipfs_error = serde_json::from_str::<IPFSError>(&line)?;
+
+            cb.emit(Err(ipfs_error.into()));
+        }
+
+        Ok(())
     }
 }
 

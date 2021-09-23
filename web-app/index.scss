@@ -1,0 +1,39 @@
+@charset "utf-8";
+
+// Set your brand colors
+$scheme-main: #0d1117;
+$scheme-main-bis: #161b22;
+$scheme-main-ter: #c83895;
+
+$border: #30363d;
+$border-light: #c9d1d9;
+$border-hover: #949596;
+
+$text-strong: #f0f6fc;
+$text: #c9d1d9;
+$text-light: #949596;
+
+$link: $scheme-main-ter;
+//$link-invert: ;
+//$link-hover: ;
+//$link-hover-border: ;
+//$link-focus: ;
+//$link-focus-hover: ;
+//$link-active: ;
+//$link-active-border: ;
+
+$background: $scheme-main-ter;
+$code-background: none;
+//$shadow: inset 0px -5px 5px 0px $scheme-main-ter;
+
+$primary: $scheme-main-ter;
+
+// Update some of Bulma's component variables
+
+$fa-font-path: "../webfonts";
+
+// Import the rest of Bulma
+@import "bulma/bulma.sass";
+@import "fontawesome/scss/fontawesome.scss";
+@import "fontawesome/scss/solid.scss";
+@import "fontawesome/scss/brands.scss";

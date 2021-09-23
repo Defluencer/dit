@@ -108,9 +108,9 @@ impl SetupAggregator {
             let v_codec = match variant.codecs {
                 Some(codec) => {
                     if v_name == "audio" {
-                        Some(format!(r#"audio/mp4; codecs="{}"#, codec))
+                        Some(format!(r#"audio/mp4; codecs="{}""#, codec))
                     } else {
-                        Some(format!(r#"video/mp4; codecs="{}"#, codec))
+                        Some(format!(r#"video/mp4; codecs="{}""#, codec))
                     }
                 }
                 None => None,
