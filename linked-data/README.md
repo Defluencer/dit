@@ -1,15 +1,26 @@
 # Linked Data
-Most of the code is annotated but here's the overview.
-
 Please refer to [this](https://ipld.io/docs/intro/hello-world/#diagram) for terminology.
 
-## Beacon
-Metadata and IPNS links.
-Should not change.
-Can be linked to a domain name.
-Can be use as an unique identifier.
+All schemas are represented per block with all their nodes.
 
-Beacon
+## Beacon 
+Main directory to a user content and metadata.
+Since this object should not change it can be used as a unique identifier.
+Resolve IPNS links and/or subscribe to get updates.
+Use friend lists to crawl the network for content.
+
+### IPLD Schemas
+- Beacon
+    - Display Name: name choosen at creation time.
+    - Topics: refers to the name of pubsub topics used for live streaming & chat.
+        - Video: Keccak256 hash of display name concatened with _video
+        - Chat: Keccak256 hash of display name concatened with _chat
+    - Peer ID: peer id of node used to live stream video as a Base58Btc string.
+    - Content Feed: IPNS link to content feed.
+    - Comments (Optional): IPNS link to comments.
+    - Friends List (Optional): IPNS link to friends.
+    - Chat Ban List (Optional): IPNS link to banned.
+    - Chat Moderator List (Optional): IPNS link to mods.
 ```
 {
     "display_name": "",
@@ -24,19 +35,13 @@ Beacon
     "mods": "",
 }
 ```
-- Display Name: User facing name.
-- Topics: refers to the name of pubsub topics used for live streaming & chat.
-    - Video: Keccak256 hash of display name concatened with _video
-    - Chat: Keccak256 hash of display name concatened with _chat
-- Peer ID: peer id of node used to live stream video as a Base58Btc string.
-- Content Feed: IPNS link to content.
-- Comments (Optional): IPNS link to comments.
-- Friends List (Optional): IPNS link to friends.
-- Chat Ban List (Optional): IPNS link to banned.
-- Chat Moderator List (Optional): IPNS link to mods.
-
 ## Content Feed
-Mutable content feed; create, updates or delete media.
+It's just a list of a user's content in cronological order.
+Always resolve the IPNS name to get the most up to date version of this object.
+You can also subscribe to the IPNS topic for live update.
+### IPLD Schemas
+- Feed Anchor
+    - Content: list of IPLD links to some media content.
 ```
 {
     "content": [
@@ -49,10 +54,13 @@ Mutable content feed; create, updates or delete media.
     ]
 }
 ```
-- Content: list of IPLD links to some media content.
-
 ## Comments
-Map of all comments.
+A map of a user comments keyed by content.
+
+### IPLD Schemas
+- Comments: Map,
+    - Keys: CIDs of the content being commented on.
+    - Values: list of IPLD link to comments.
 ```
 {
     "comments": [
@@ -79,14 +87,29 @@ Map of all comments.
     ]
 }
 ```
-- Comments: Map,
-    - Keys: CIDs of the content being commented on.
-    - Values: list of IPLD link to comments.
-
+- Comment
+    - Timestamp: number of second since 01/01/1970 00:00 UTC.
+    - Origin: CID of content being commented on.
+    - Reply: Optional CID of the comment being replied to.
+    - Comment: text message.
+```
+{
+    "timestamp": UNIX_TIME,
+    "origin": {
+        "/"; "CONTENT_CID"
+    },
+    "reply": {
+        "/": "COMMENT_CID"
+    },
+    "comment": "blabla"
+}
+```
 ## Friends
-List of ENS domain name or Beacon CIDs. Used to fetch your friends content and comments.
+Used to fetch your friends content and comments.
 
-Friend List
+### IPLD Schemas
+- Friend list
+    - Friend: Either a beacon CID OR a ENS domain name linked to a beacon CID.
 ```
 {
   "friends": [
@@ -101,11 +124,13 @@ Friend List
   ]
 }
 ```
-
 ## Chat Moderation
-Moderator send ban message to users via GossipSub. The message is signed as if a chat message. The beacon is updated with the new lists.
+Moderator can send ban/mod messages via PubSub.
+The message is crypto-signed.
 
-Banned List
+### IPLD Schemas
+- Banned List
+    - ETH_ADDR: ethereum address as 20 bytes.
 ```
 {
     "banned": [
@@ -114,8 +139,8 @@ Banned List
     ]
 }
 ```
-
-Moderator List
+- Moderator List
+    - ETH_ADDR: ethereum address as 20 bytes.
 ```
 {
     "mods": [
@@ -124,12 +149,13 @@ Moderator List
     ]
 }
 ```
-- ETH_ADDR: ethereum address as 20 bytes.
-
 ## Chat
 Display Name and GossipSub Peer ID are signed using Ethereum Keys then the address, name, id, and signature are added to IPFS returning a CID. When receiving a message the CID is used to fetch and verify that IDs matches and signature is correct.
 
-Message
+### IPLD Schemas
+- Message
+    - Msg Type: message to ban, mod a user or jost text.
+    - Origin: CID of crypto-signed Chat ID.
 ```
 {
     "msg_type": {
@@ -140,20 +166,23 @@ Message
     }
 }
 ```
-- Msg Type: could also be other stuff like a message to ban some user by a mod.
-
-Chat ID
+- Chat ID
 ```
 {
     "name": "NAME_HERE",
     "peer": "PEER_ID_HERE,
 }
 ```
-
 ## Streams
 A video node contains links to segments of videos of all quality. As video is streamed, new video nodes are created and linked to previous ones. A special node contains the stream setup data; codecs, qualities, initialization segments, etc...
 
-Video Node
+### IPLD Schemas
+- Video Node
+    - Tracks: Map
+        - Keys: name of the track egg "audio" or "1080p60"
+        - Values: CID of the video segment.
+    - Setup: CID of Setup Node
+    - Previous: CID of the previous Video Node
 ```
 {
     "tracks": [
@@ -176,8 +205,12 @@ Video Node
     }
 }
 ```
-
-Setup Node
+- Setup Node
+   - Tracks: List
+        - Name: name of the track. egg "audio" or "1080p60"
+        - Codec: mime type and codec. egg "video/mp4; codecs="avc1.4d002a""
+        - Initialization Segment: CID of the initialization segment.
+        - Bandwidth: number of bit per second for this track.
 ```
 {
     "tracks": [
@@ -204,7 +237,12 @@ Setup Node
 ## Videos
 Timecode nodes are created at specific intervals and linked together to form a structure around the video allowing it to be addressable by timecode. Video clips are subgraph of the whole.
 
-VideoMetadata
+### IPLD Schemas
+- VideoMetadata
+    - Timestamp: number of second since 01/01/1970 00:00 UTC.
+    - Video: CID of Timecode node.
+    - Image: CID of thumbnail image.
+    - Duration: float number of second elapsed at th end of the video.
 ```
 {
     "timestamp": UNIX_TIME,
@@ -218,8 +256,7 @@ VideoMetadata
     "duration": DURATION_FRAC
 }
 ```
-
-Timecode Node
+- Timecode Node
 ```
 {
     "time": {
@@ -227,8 +264,7 @@ Timecode Node
     }
 }
 ```
-
-Day Node
+- Day Node
 ```
 {
     "hour": {
@@ -236,8 +272,7 @@ Day Node
     }
 }
 ```
-
-Hour Node
+- Hour Node
 ```
 {
     "minute": {
@@ -245,8 +280,7 @@ Hour Node
     }
 }
 ```
-
-Minute Node
+- Minute Node
 ```
 {
     "second": {
@@ -254,8 +288,7 @@ Minute Node
     }
 }
 ```
-
-Second Node
+- Second Node
 ```
 {
     "video": {
@@ -271,19 +304,24 @@ Second Node
     ]
 }
 ```
-
 ## Blog
 Micro-blogging & long form via markdown files. 
 
-MicroPost
+### IPLD Schemas
+- MicroPost
+    - Timestamp: number of second since 01/01/1970 00:00 UTC.
+    - Content: text message.
 ```
 {
     "timestamp": UNIX_TIME,
     "content": "MESSAGE_HERE"
 }
 ```
-
-FullPost
+- FullPost
+    - Timestamp: number of second since 01/01/1970 00:00 UTC.
+    - Content: CID of markdown file.
+    - Image: CID of banner and thumbnail image.
+    - Title: title of the article.
 ```
 {
     "timestamp": UNIX_TIME,
