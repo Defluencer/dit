@@ -1,13 +1,11 @@
-use crate::components::Navbar;
-use crate::utils::{IpfsService, LocalStorage};
+use std::rc::Rc;
 
-use wasm_bindgen_futures::spawn_local;
+use crate::components::Navbar;
+use crate::utils::LocalStorage;
 
 use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 use yew::services::ConsoleService;
 use yew::{Callback, ChangeData, MouseEvent};
-
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /* #[derive(PartialEq)]
 pub enum NodeType {
@@ -24,11 +22,7 @@ pub enum OsType {
 /// Page with app settings and options.
 pub struct Settings {
     storage: LocalStorage,
-    ipfs: IpfsService,
-
-    peer_id: Option<String>,
-    peer_id_cb: Callback<Result<String>>,
-
+    peer_id: Rc<Option<String>>,
     origin: String,
 
     address: String,
@@ -43,14 +37,13 @@ pub struct Settings {
 pub enum Msg {
     //NodeType(ChangeData),
     Addrs(ChangeData),
-    PeerID(Result<String>),
     OsType(OsType),
 }
 
 #[derive(Properties, Clone)]
 pub struct Props {
-    pub ipfs: IpfsService,
     pub storage: LocalStorage,
+    pub peer_id: Rc<Option<String>>,
 }
 
 impl Component for Settings {
@@ -58,7 +51,7 @@ impl Component for Settings {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let Props { storage, ipfs } = props;
+        let Props { storage, peer_id } = props;
 
         let address = match storage.get_local_ipfs_addrs() {
             Some(addrs) => addrs,
@@ -82,13 +75,9 @@ impl Component for Settings {
             }
         }
 
-        let comp = Self {
+        Self {
             storage,
-            ipfs,
-
-            peer_id_cb: link.callback(Msg::PeerID),
-            peer_id: None,
-
+            peer_id,
             origin,
 
             address,
@@ -98,18 +87,13 @@ impl Component for Settings {
             window_cb: link.callback(|__event: MouseEvent| Msg::OsType(OsType::Windows)),
             unix_cb: link.callback(|_event: MouseEvent| Msg::OsType(OsType::Unix)),
             os_type: OsType::Unix,
-        };
-
-        comp.check_ipfs();
-
-        comp
+        }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Addrs(msg) => self.on_addrs(msg),
             //Msg::NodeType(msg) => self.on_node_type(msg),
-            Msg::PeerID(msg) => self.on_peer_id(msg),
             Msg::OsType(os_type) => {
                 let changed = self.os_type != os_type;
 
@@ -122,7 +106,13 @@ impl Component for Settings {
         }
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if !Rc::ptr_eq(&props.peer_id, &self.peer_id) {
+            self.peer_id = props.peer_id;
+
+            return true;
+        }
+
         false
     }
 
@@ -260,29 +250,6 @@ impl Settings {
                 </ybc::Block>
             </>
         }
-    }
-
-    fn check_ipfs(&self) {
-        spawn_local({
-            let cb = self.peer_id_cb.clone();
-            let ipfs = self.ipfs.clone();
-
-            async move { cb.emit(ipfs.ipfs_node_id().await) }
-        });
-    }
-
-    fn on_peer_id(&mut self, response: Result<String>) -> bool {
-        let id = match response {
-            Ok(id) => id,
-            Err(e) => {
-                ConsoleService::error(&format!("{:?}", e));
-                return true;
-            }
-        };
-
-        self.peer_id = Some(id);
-
-        true
     }
 
     fn on_addrs(&mut self, msg: ChangeData) -> bool {

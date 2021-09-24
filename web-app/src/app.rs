@@ -48,6 +48,9 @@ pub enum AppRoute {
 pub struct App {
     props: Props,
 
+    peer_id: Rc<Option<String>>,
+    peer_id_cb: Callback<Result<String>>,
+
     name_cb: Callback<(String, Result<Cid>)>,
 
     beacon_set: HashSet<Cid>,
@@ -79,6 +82,7 @@ pub struct App {
 
 #[allow(clippy::large_enum_variant)]
 pub enum AppMsg {
+    PeerID(Result<String>),
     ENSResolve((String, Result<Cid>)),
     Beacon((Cid, Result<Beacon>)),
     Feed((String, Cid, Result<(Cid, FeedAnchor)>)),
@@ -103,6 +107,9 @@ impl Component for App {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let app = Self {
             props,
+
+            peer_id: Rc::from(None),
+            peer_id_cb: link.callback(AppMsg::PeerID),
 
             name_cb: link.callback(AppMsg::ENSResolve),
 
@@ -131,6 +138,7 @@ impl Component for App {
             friends_cb: link.callback(AppMsg::Friends),
         };
 
+        app.check_ipfs();
         app.get_beacon(&app.props.beacon);
 
         app
@@ -138,6 +146,7 @@ impl Component for App {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            AppMsg::PeerID(result) => self.on_peer_id(result),
             AppMsg::ENSResolve(result) => self.on_name(result),
             AppMsg::Beacon(result) => self.on_beacon(result),
             AppMsg::Feed(result) => self.on_feed(result),
@@ -153,6 +162,7 @@ impl Component for App {
     }
 
     fn view(&self) -> Html {
+        let peer_id = self.peer_id.clone();
         let web3 = self.props.web3.clone();
         let ipfs = self.props.ipfs.clone();
         let storage = self.props.storage.clone();
@@ -168,9 +178,9 @@ impl Component for App {
                     render = Router::render(move |switch: AppRoute| {
                         match switch {
                             AppRoute::Content(cid) => html! { <Content ipfs=ipfs.clone() cid=cid content=content.clone() /> },
-                            AppRoute::Settings => html! { <Settings storage=storage.clone() ipfs=ipfs.clone() /> },
-                            AppRoute::Live => html! { <Live ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() beacon=beacon.clone() bans=bans.clone() mods=mods.clone() /> },
-                            AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() content=content.clone()  /> },
+                            AppRoute::Settings => html! { <Settings storage=storage.clone() peer_id=peer_id.clone() /> },
+                            AppRoute::Live => html! { <Live peer_id=peer_id.clone() ipfs=ipfs.clone() web3=web3.clone() storage=storage.clone() beacon=beacon.clone() bans=bans.clone() mods=mods.clone() /> },
+                            AppRoute::Feed => html! { <ContentFeed ipfs=ipfs.clone() storage=storage.clone() content=content.clone() peer_id=peer_id.clone() /> },
                             AppRoute::Home => html! { <Home /> },
                         }
                     })
@@ -181,6 +191,29 @@ impl Component for App {
 }
 
 impl App {
+    fn check_ipfs(&self) {
+        spawn_local({
+            let cb = self.peer_id_cb.clone();
+            let ipfs = self.props.ipfs.clone();
+
+            async move { cb.emit(ipfs.ipfs_node_id().await) }
+        });
+    }
+
+    fn on_peer_id(&mut self, response: Result<String>) -> bool {
+        let id = match response {
+            Ok(id) => id,
+            Err(e) => {
+                ConsoleService::error(&format!("{:?}", e));
+                return false;
+            }
+        };
+
+        self.peer_id = Rc::from(Some(id));
+
+        true
+    }
+
     /// Resolve ENS name and check local storage for a beacon.
     fn get_beacon(&self, beacon: &str) {
         if let Ok(cid) = Cid::try_from(beacon) {

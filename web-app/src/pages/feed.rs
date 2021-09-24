@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::components::{Loading, Navbar, Thumbnail};
+use crate::components::{IPFSConnectionError, Loading, Navbar, Thumbnail};
 use crate::utils::{IpfsService, LocalStorage};
 
 use wasm_bindgen_futures::spawn_local;
@@ -16,6 +16,12 @@ use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+pub enum MachineState {
+    Connecting,
+    Loading,
+    Loaded,
+}
+
 #[derive(PartialEq)]
 pub enum FilterType {
     None,
@@ -27,6 +33,8 @@ pub enum FilterType {
 /// Page displaying content thumbnails from you and your friends.
 pub struct ContentFeed {
     props: Props,
+
+    state: MachineState,
 
     media_cb: Callback<(Cid, Result<Media>)>,
     content_set: HashSet<Cid>,
@@ -49,6 +57,7 @@ pub struct Props {
     pub ipfs: IpfsService,
     pub storage: LocalStorage,
     pub content: Rc<ContentCache>,
+    pub peer_id: Rc<Option<String>>,
 }
 
 impl Component for ContentFeed {
@@ -58,6 +67,8 @@ impl Component for ContentFeed {
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let mut feed = Self {
             props,
+
+            state: MachineState::Connecting,
 
             media_cb: link.callback(Msg::Metadata),
             content_set: HashSet::with_capacity(100),
@@ -92,6 +103,12 @@ impl Component for ContentFeed {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        if !Rc::ptr_eq(&props.peer_id, &self.props.peer_id) {
+            if props.peer_id.is_some() {
+                self.state = MachineState::Loading;
+            }
+        }
+
         if !Rc::ptr_eq(&props.content, &self.props.content) {
             self.props = props;
 
@@ -102,10 +119,10 @@ impl Component for ContentFeed {
     }
 
     fn view(&self) -> Html {
-        let content = if self.content.is_empty() {
-            html! {  <Loading /> }
-        } else {
-            self.render_thumbnails()
+        let content = match self.state {
+            MachineState::Connecting => html! { <IPFSConnectionError /> },
+            MachineState::Loading => html! {  <Loading /> },
+            MachineState::Loaded => self.render_thumbnails(),
         };
 
         html! {
@@ -216,6 +233,8 @@ impl ContentFeed {
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Feed Metadata Updated");
+
+        self.state = MachineState::Loaded;
 
         true
     }

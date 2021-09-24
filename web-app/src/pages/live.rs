@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::components::{ChatWindow, Navbar, VideoPlayer};
+use crate::components::{ChatWindow, IPFSConnectionError, Navbar, VideoPlayer};
 use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
@@ -16,6 +16,7 @@ use either::Either;
 /// Page displaying live video and chat.
 #[derive(Properties, Clone)]
 pub struct Live {
+    pub peer_id: Rc<Option<String>>,
     pub ipfs: IpfsService,
     pub web3: Web3Service,
     pub storage: LocalStorage,
@@ -43,6 +44,7 @@ impl Component for Live {
         if !Rc::ptr_eq(&props.beacon, &self.beacon)
             || !Rc::ptr_eq(&props.bans, &self.bans)
             || !Rc::ptr_eq(&props.mods, &self.mods)
+            || !Rc::ptr_eq(&props.peer_id, &self.peer_id)
         {
             *self = props;
 
@@ -60,16 +62,24 @@ impl Component for Live {
             <>
                 <Navbar />
                 <ybc::Section>
-                    <ybc::Columns>
-                        <ybc::Column>
-                            <ybc::Box>
-                                <VideoPlayer ipfs=self.ipfs.clone() beacon_or_metadata=Either::Left(self.beacon.clone()) />
-                            </ybc::Box>
-                        </ybc::Column>
-                        <ybc::Column classes=classes!("is-one-fifth") >
-                            <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() beacon=self.beacon.clone() bans=self.bans.clone() mods=self.mods.clone() />
-                        </ybc::Column>
-                    </ybc::Columns>
+                {
+                    if self.peer_id.is_none() {
+                        html! { <IPFSConnectionError /> }
+                    } else {
+                        html! {
+                        <ybc::Columns>
+                            <ybc::Column>
+                                <ybc::Box>
+                                    <VideoPlayer ipfs=self.ipfs.clone() beacon_or_metadata=Either::Left(self.beacon.clone()) />
+                                </ybc::Box>
+                            </ybc::Column>
+                            <ybc::Column classes=classes!("is-one-fifth") >
+                                <ChatWindow ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() beacon=self.beacon.clone() bans=self.bans.clone() mods=self.mods.clone() />
+                            </ybc::Column>
+                        </ybc::Columns>
+                        }
+                    }
+                }
                 </ybc::Section>
             </>
         }

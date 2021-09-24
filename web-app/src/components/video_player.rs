@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::str;
 use std::str::FromStr;
 
+use crate::components::IPFSPubSubError;
 use crate::utils::seconds_to_timecode;
 use crate::utils::{ExponentialMovingAverage, IpfsService};
 
@@ -60,6 +61,8 @@ struct LiveStream {
 /// Video player for live streams and on demand.
 pub struct VideoPlayer {
     ipfs: IpfsService,
+
+    error: bool,
 
     player_type: Either<LiveStream, Rc<VideoMetadata>>,
 
@@ -165,6 +168,9 @@ impl Component for VideoPlayer {
 
         Self {
             ipfs,
+
+            error: false,
+
             player_type,
 
             media_element: None,
@@ -200,7 +206,7 @@ impl Component for VideoPlayer {
             Msg::SetupNode(result) => self.add_source_buffer(result),
             Msg::Append(result) => self.append_buffers(result),
             Msg::AppendVideo(result) => self.append_video_buffer(result),
-            Msg::PubSub(result) => self.on_pubsub_update(result),
+            Msg::PubSub(result) => return self.on_pubsub_update(result),
         }
 
         false
@@ -246,6 +252,10 @@ impl Component for VideoPlayer {
     }
 
     fn view(&self) -> Html {
+        if self.error {
+            return html! { <IPFSPubSubError /> };
+        }
+
         html! {
             <ybc::Image size=ybc::ImageSize::Is16by9>
                 <video class=classes!("has-ratio") src=self.object_url.clone() width=640 height=360 id="video_player" autoplay="true" controls=true />
@@ -348,12 +358,13 @@ impl VideoPlayer {
     }
 
     /// Callback when GossipSub receive an update.
-    fn on_pubsub_update(&mut self, result: Result<(String, Vec<u8>)>) {
+    fn on_pubsub_update(&mut self, result: Result<(String, Vec<u8>)>) -> bool {
         let res = match result {
             Ok(res) => res,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
-                return;
+                self.error = true;
+                return true;
             }
         };
 
@@ -367,7 +378,7 @@ impl VideoPlayer {
             _ => {
                 #[cfg(debug_assertions)]
                 ConsoleService::error("No Live Stream");
-                return;
+                return false;
             }
         };
 
@@ -377,14 +388,14 @@ impl VideoPlayer {
         if from != live.beacon.peer_id {
             #[cfg(debug_assertions)]
             ConsoleService::warn("Unauthorized Sender");
-            return;
+            return false;
         }
 
         let data = match str::from_utf8(&data) {
             Ok(data) => data,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
-                return;
+                return false;
             }
         };
 
@@ -395,7 +406,7 @@ impl VideoPlayer {
             Ok(cid) => cid,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
-                return;
+                return false;
             }
         };
 
@@ -409,6 +420,8 @@ impl VideoPlayer {
                 async move { cb.emit(ipfs.dag_get(cid, Some("/setup/")).await) }
             });
         }
+
+        false
     }
 
     /// Callback when source buffer is done updating.

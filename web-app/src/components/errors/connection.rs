@@ -1,10 +1,12 @@
+use crate::app::AppRoute;
+
 use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
 
 /// Error indicator.
 #[derive(Clone, Properties)]
-pub struct Error {}
+pub struct IPFSConnectionError {}
 
-impl Component for Error {
+impl Component for IPFSConnectionError {
     type Message = ();
     type Properties = Self;
 
@@ -23,12 +25,15 @@ impl Component for Error {
     fn view(&self) -> Html {
         html! {
             <ybc::Container classes=classes!("has-text-centered") >
-                <ybc::Box>
-                {
-                    "An Error was encounted.
-                    Please verify your connection to the Ethereum and IPFS networks"
-                }
-                </ybc::Box>
+                <ybc::Title size=ybc::HeaderSize::Is5 >
+                    { "An Error was encounted." }
+                </ybc::Title>
+                <ybc::Subtitle size=ybc::HeaderSize::Is6 >
+                { "Please verify your connection to IPFS" }
+                </ybc::Subtitle>
+                <ybc::ButtonRouter<AppRoute> route=AppRoute::Settings classes=classes!("is-primary") >
+                    {"Go to settings"}
+                </ybc::ButtonRouter<AppRoute>>
             </ybc::Container>
         }
     }

@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::str;
 
 use crate::components::chat::message::{MessageData, UIMessage};
+use crate::components::IPFSPubSubError;
 use crate::utils::IpfsService;
 
 use futures::future::AbortHandle;
@@ -26,6 +27,8 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct Display {
     props: Props,
+
+    error: bool,
 
     msg_cb: Callback<(PeerId, Message, Result<SignedMessage<ChatId>>)>,
 
@@ -90,6 +93,8 @@ impl Component for Display {
         Self {
             props,
 
+            error: false,
+
             msg_cb: link.callback(Msg::Origin),
 
             pubsub_cb,
@@ -141,6 +146,10 @@ impl Component for Display {
     }
 
     fn view(&self) -> Html {
+        if self.error {
+            return html! { <IPFSPubSubError /> };
+        }
+
         html! {
             <div id="chat_display" class="box" style="overflow-y: scroll;height: 60vh;scroll-behavior: smooth;" >
             {
@@ -203,7 +212,8 @@ impl Display {
             Ok(res) => res,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
-                return false;
+                self.error = true;
+                return true;
             }
         };
 

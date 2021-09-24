@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::components::{Error, Image, Loading, Markdown, Navbar, VideoPlayer};
+use crate::components::{IPFSConnectionError, Image, Loading, Markdown, Navbar, VideoPlayer};
 use crate::utils::{timestamp_to_datetime, IpfsService};
 
 use wasm_bindgen_futures::spawn_local;
@@ -123,7 +123,7 @@ impl Component for Content {
                             Media::Blog(blog) => self.render_blog(dt, blog),
                             Media::Statement(twit) => self.render_microblog(dt, twit),
                         }},
-                        State::Error => html! { <Error /> },
+                        State::Error => html! { <IPFSConnectionError /> },
                     }
                 }
                 </ybc::Section>
