@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::components::{IPFSConnectionError, Image, Loading, Markdown, Navbar, VideoPlayer};
+use crate::components::{
+    CidClipboard, IPFSConnectionError, Image, Loading, Markdown, Navbar, VideoPlayer,
+};
 use crate::utils::{timestamp_to_datetime, IpfsService};
 
 use wasm_bindgen_futures::spawn_local;
@@ -112,20 +114,22 @@ impl Component for Content {
             <>
                 <Navbar />
                 <ybc::Section>
-                {
-                    match &self.state {
-                        State::Loading => html! { <Loading /> },
-                        State::Ready(media) => {
-                            let dt = timestamp_to_datetime(media.timestamp());
+                    <ybc::Container>
+                    {
+                        match &self.state {
+                            State::Loading => html! { <Loading /> },
+                            State::Ready(media) => {
+                                let dt = timestamp_to_datetime(media.timestamp());
 
-                            match media {
-                            Media::Video(video) => self.render_video(dt, video),
-                            Media::Blog(blog) => self.render_blog(dt, blog),
-                            Media::Statement(twit) => self.render_microblog(dt, twit),
-                        }},
-                        State::Error => html! { <IPFSConnectionError /> },
+                                match media {
+                                Media::Video(video) => self.render_video(dt, video),
+                                Media::Blog(blog) => self.render_blog(dt, blog),
+                                Media::Statement(twit) => self.render_microblog(dt, twit),
+                            }},
+                            State::Error => html! { <IPFSConnectionError /> },
+                        }
                     }
-                }
+                    </ybc::Container>
                 </ybc::Section>
                 <ybc::Section>
                     <ybc::Container>
@@ -144,92 +148,98 @@ impl Component for Content {
 impl Content {
     fn render_video(&self, dt: String, metadata: &VideoMetadata) -> Html {
         html! {
-            <ybc::Container>
-                <ybc::Box classes=classes!("has-text-centered")>
-                    <ybc::Title>
-                        { &metadata.title }
-                    </ybc::Title>
-                    <ybc::Level>
-                        <ybc::LevelLeft>
+            <ybc::Box>
+                <ybc::Title>
+                    { &metadata.title }
+                </ybc::Title>
+                <VideoPlayer ipfs=self.props.ipfs.clone() beacon_or_metadata=Either::Right(Rc::from(metadata.clone()))/*TODO find a way to fix this weird clonning issue*/ />
+                <ybc::Level>
+                    <ybc::LevelLeft>
+                        <ybc::LevelItem>
                             <span class="icon-text">
                                 <span class="icon"><i class="fas fa-user"></i></span>
                                 <span> { &*self.author } </span>
                             </span>
-                        </ybc::LevelLeft>
-                        <ybc::LevelRight>
+                        </ybc::LevelItem>
+                    </ybc::LevelLeft>
+                    <ybc::LevelRight>
+                        <ybc::LevelItem>
                             <span class="icon-text">
                                 <span class="icon"><i class="fas fa-clock"></i></span>
                                 <span> { dt } </span>
                             </span>
-                        </ybc::LevelRight>
-                    </ybc::Level>
-                    <VideoPlayer ipfs=self.props.ipfs.clone() beacon_or_metadata=Either::Right(Rc::from(metadata.clone()))/*TODO find a way to fix this weird clonning issue*/ />
-                </ybc::Box>
-            </ybc::Container>
+                        </ybc::LevelItem>
+                        <ybc::LevelItem>
+                            <CidClipboard cid=self.props.cid />
+                        </ybc::LevelItem>
+                    </ybc::LevelRight>
+                </ybc::Level>
+            </ybc::Box>
         }
     }
 
     fn render_blog(&self, dt: String, metadata: &FullPost) -> Html {
         html! {
-            <ybc::Container>
-                <ybc::Box classes=classes!("has-text-centered") >
-                    <ybc::Title>
-                        { &metadata.title }
-                    </ybc::Title>
-                    <ybc::Image size=ybc::ImageSize::Is16by9 >
-                        <Image image_cid=metadata.image.link ipfs=self.props.ipfs.clone() />
-                    </ybc::Image>
-                    <ybc::Level>
-                        <ybc::LevelLeft>
+            <ybc::Box>
+                <ybc::Title>
+                    { &metadata.title }
+                </ybc::Title>
+                <ybc::Image size=ybc::ImageSize::Is16by9 >
+                    <Image image_cid=metadata.image.link ipfs=self.props.ipfs.clone() />
+                </ybc::Image>
+                <ybc::Level>
+                    <ybc::LevelLeft>
+                        <ybc::LevelItem>
                             <span class="icon-text">
                                 <span class="icon"><i class="fas fa-user"></i></span>
                                 <span> { &*self.author } </span>
                             </span>
-                        </ybc::LevelLeft>
-                        <ybc::LevelRight>
+                        </ybc::LevelItem>
+                    </ybc::LevelLeft>
+                    <ybc::LevelRight>
+                        <ybc::LevelItem>
                             <span class="icon-text">
                                 <span class="icon"><i class="fas fa-clock"></i></span>
                                 <span> { dt } </span>
                             </span>
-                        </ybc::LevelRight>
-                    </ybc::Level>
-                </ybc::Box>
-                <ybc::Box>
-                    <ybc::Content>
-                        <Markdown ipfs=self.props.ipfs.clone() markdown_cid=metadata.content.link />
-                    </ybc::Content>
-                </ybc::Box>
-            </ybc::Container>
+                        </ybc::LevelItem>
+                        <ybc::LevelItem>
+                            <CidClipboard cid=self.props.cid />
+                        </ybc::LevelItem>
+                    </ybc::LevelRight>
+                </ybc::Level>
+                <ybc::Content>
+                    <Markdown ipfs=self.props.ipfs.clone() markdown_cid=metadata.content.link />
+                </ybc::Content>
+            </ybc::Box>
         }
     }
 
     fn render_microblog(&self, dt: String, metadata: &MicroPost) -> Html {
         html! {
-            <ybc::Container>
-                <ybc::Box>
-                    <ybc::Media>
-                        <ybc::MediaLeft>
-                            <ybc::Block>
-                                <span class="icon-text">
-                                    <span class="icon"><i class="fas fa-user"></i></span>
-                                    <span> { &*self.author } </span>
-                                </span>
-                            </ybc::Block>
-                            <ybc::Block>
-                                <span class="icon-text">
-                                    <span class="icon"><i class="fas fa-clock"></i></span>
-                                    <span> { dt } </span>
-                                </span>
-                            </ybc::Block>
-                        </ybc::MediaLeft>
-                        <ybc::MediaContent>
-                            <ybc::Content classes=classes!("has-text-centered")>
-                                { &metadata.content }
-                            </ybc::Content>
-                        </ybc::MediaContent>
-                    </ybc::Media>
-                </ybc::Box>
-            </ybc::Container>
+            <ybc::Box>
+                <ybc::Media>
+                    <ybc::MediaLeft>
+                        <ybc::Block>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-user"></i></span>
+                                <span> { &*self.author } </span>
+                            </span>
+                        </ybc::Block>
+                        <ybc::Block>
+                            <span class="icon-text">
+                                <span class="icon"><i class="fas fa-clock"></i></span>
+                                <span> { dt } </span>
+                            </span>
+                        </ybc::Block>
+                    </ybc::MediaLeft>
+                    <ybc::MediaContent>
+                        <ybc::Content classes=classes!("has-text-centered")>
+                            { &metadata.content }
+                        </ybc::Content>
+                    </ybc::MediaContent>
+                </ybc::Media>
+            </ybc::Box>
         }
     }
 

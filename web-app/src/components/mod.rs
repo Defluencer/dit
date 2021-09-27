@@ -1,4 +1,5 @@
 mod chat;
+mod cid_clipboard;
 mod comment;
 mod errors;
 mod image;
@@ -9,6 +10,7 @@ mod thumbnail;
 mod video_player;
 
 pub use chat::ChatWindow;
+pub use cid_clipboard::CidClipboard;
 pub use comment::Comment;
 pub use errors::{IPFSConnectionError, IPFSPubSubError};
 pub use image::Image;

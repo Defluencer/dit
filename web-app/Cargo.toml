@@ -30,6 +30,8 @@ web-sys = { version = "0.3.55", default-features = false, features = [
     "TimeRanges",
     "Performance",
     "Storage",
+    "Clipboard",
+    "Navigator",
 ]}
 ybc = { version = "0.2", default-features = false, features = ["router"] }
 yew = { version = "0.18", default-features = false, features = ["web_sys"] }
