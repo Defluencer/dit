@@ -456,7 +456,7 @@ where
         }
     };
 
-    let cid = Cid::try_from(link).expect("Serialize CID");
+    let cid = Cid::try_from(link).expect("Cannot Serialize CID");
 
     update_ipns(ipfs, key, &T::default()).await?;
 

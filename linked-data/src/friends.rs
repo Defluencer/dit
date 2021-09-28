@@ -40,10 +40,10 @@ mod tests {
             friend: Either::Right(Cid::default().into()),
         });
 
-        let json = serde_json::to_string_pretty(&old_friends).expect("Serialize");
+        let json = serde_json::to_string_pretty(&old_friends).expect("Cannot Serialize");
         println!("{}", json);
 
-        let new_friends = serde_json::from_str(&json).expect("Deserialize");
+        let new_friends = serde_json::from_str(&json).expect("Cannot Deserialize");
         println!("{:?}", new_friends);
 
         assert_eq!(old_friends, new_friends);

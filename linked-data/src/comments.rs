@@ -72,10 +72,10 @@ mod tests {
             .comments
             .insert(cid, vec![Cid::default().into()]);
 
-        let json = serde_json::to_string_pretty(&old_comments).expect("Serialize");
+        let json = serde_json::to_string_pretty(&old_comments).expect("Cannot Serialize");
         println!("{}", json);
 
-        let new_comments = serde_json::from_str(&json).expect("Deserialize");
+        let new_comments = serde_json::from_str(&json).expect("Cannot Deserialize");
         println!("{:?}", new_comments);
 
         assert_eq!(old_comments, new_comments);

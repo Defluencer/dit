@@ -294,8 +294,8 @@ async fn replace_mod_list(args: ReplaceModList) -> Result<(), Error> {
 
 fn parse_address(addrs: &str) -> [u8; 20] {
     if let Some(end) = addrs.strip_prefix("0x") {
-        return <[u8; 20]>::from_hex(end).expect("Valid Ethereum Address");
+        return <[u8; 20]>::from_hex(end).expect("Invalid Ethereum Address");
     }
 
-    <[u8; 20]>::from_hex(&addrs).expect("Valid Ethereum Address")
+    <[u8; 20]>::from_hex(&addrs).expect("Invalid Ethereum Address")
 }

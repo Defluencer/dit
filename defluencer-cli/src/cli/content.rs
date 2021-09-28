@@ -385,7 +385,7 @@ async fn repair_content() -> Result<(), Error> {
 
     for cid in pins.keys.into_keys() {
         if let Ok(media) = ipfs_dag_get_node_async::<Media>(&ipfs, &cid).await {
-            let cid = Cid::try_from(cid).expect("Valid Cid");
+            let cid = Cid::try_from(cid).expect("Invalid Cid");
             content.push((cid, media));
         }
     }

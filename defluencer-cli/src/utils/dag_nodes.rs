@@ -23,11 +23,11 @@ where
         serde_json::to_string_pretty(node).unwrap()
     );
 
-    let json_string = serde_json::to_string(node).expect("Serialization");
+    let json_string = serde_json::to_string(node).expect("Cannot Serialize");
 
     let response = ipfs.dag_put(Cursor::new(json_string)).await?;
 
-    let cid = Cid::try_from(response.cid.cid_string).expect("Valid Cid");
+    let cid = Cid::try_from(response.cid.cid_string).expect("Invalid Cid");
 
     #[cfg(debug_assertions)]
     println!("IPFS: dag put => {}", &cid);
@@ -52,10 +52,10 @@ where
     #[cfg(debug_assertions)]
     println!(
         "Serde: Deserialize => {}",
-        std::str::from_utf8(&data).expect("UTF8 Data")
+        std::str::from_utf8(&data).expect("Not UTF-8 Data")
     );
 
-    let node = serde_json::from_slice::<T>(&data).expect("Deserialization");
+    let node = serde_json::from_slice::<T>(&data).expect("Cannot Deserialize");
 
     Ok(node)
 }
@@ -89,13 +89,17 @@ where
     T: ?Sized + DeserializeOwned,
 {
     let res = ipfs.key_list().await?;
-    let keypair = search_keypairs(key, &res).expect("Key Found");
+
+    let keypair = match search_keypairs(key, &res) {
+        Some(keypair) => keypair,
+        None => return Err(Error::Uncategorized("Key Not Found".into())),
+    };
 
     #[cfg(debug_assertions)]
     println!("IPNS: key => {} {}", &keypair.name, &keypair.id);
 
     let res = ipfs.name_resolve(Some(&keypair.id), false, false).await?;
-    let cid = Cid::try_from(res.path).expect("Valid Cid");
+    let cid = Cid::try_from(res.path).expect("Invalid Cid");
 
     let node = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
 

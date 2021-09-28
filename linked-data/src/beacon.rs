@@ -76,10 +76,10 @@ mod tests {
             mods: None,
         };
 
-        let json = serde_json::to_string_pretty(&old_beacon).expect("Serialize");
+        let json = serde_json::to_string_pretty(&old_beacon).expect("Cannot serialize");
         println!("{}", json);
 
-        let new_beacon = serde_json::from_str(&json).expect("Deserialize");
+        let new_beacon = serde_json::from_str(&json).expect("Cannot Deserialize");
         println!("{:?}", new_beacon);
 
         assert_eq!(old_beacon, new_beacon);
