@@ -69,7 +69,9 @@ where
 
     let cid = cid.to_string();
 
-    ipfs.pin_add(&cid, false).await?;
+    if let Err(e) = ipfs.pin_add(&cid, false).await {
+        eprintln!("❗ IPFS could not pin {}. Error: {}", cid, e);
+    }
 
     if cfg!(debug_assertions) {
         ipfs.name_publish(&cid, true, None, None, Some(key)).await?;

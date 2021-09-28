@@ -83,7 +83,10 @@ async fn add_friend(command: AddFriend) -> Result<(), Error> {
 
     println!("Unpinning Old List...");
 
-    ipfs.pin_rm(&old_friends_cid.to_string(), false).await?;
+    let ofc = old_friends_cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&ofc, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", ofc, e);
+    }
 
     println!("✅ Friend Added");
 
@@ -132,7 +135,10 @@ async fn remove_friend(command: RemoveFriend) -> Result<(), Error> {
 
     println!("Unpinning Old List...");
 
-    ipfs.pin_rm(&old_friends_cid.to_string(), false).await?;
+    let ofc = old_friends_cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&ofc, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", ofc, e);
+    }
 
     println!("✅ Friend Removed");
 

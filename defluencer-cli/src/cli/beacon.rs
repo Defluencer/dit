@@ -88,7 +88,7 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let mut config = match Configuration::from_file().await {
         Ok(conf) => conf,
         Err(e) => {
-            eprintln!("❗ Config get error: {:#?}", e);
+            eprintln!("❗ Cannot get configuration file. Error: {:#?}", e);
             eprintln!("Using Default...");
             Configuration::default()
         }
@@ -129,7 +129,9 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     let cid = ipfs_dag_put_node_async(&ipfs, &beacon).await?;
 
-    ipfs.pin_add(&cid.to_string(), false).await?;
+    if let Err(e) = ipfs.pin_add(&cid.to_string(), false).await {
+        eprintln!("❗ IPFS could not pin {}. Error: {}", cid.to_string(), e);
+    }
 
     println!("✅ Created Beacon {}", &cid);
 

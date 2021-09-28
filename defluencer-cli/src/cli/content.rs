@@ -192,7 +192,10 @@ async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {
 
     reload_feed(&ipfs, cid, &metadata, &mut feed).await?;
 
-    ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
+    let ofc = old_feed_cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&ofc, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", ofc, e);
+    }
 
     println!("✅ Comments Cleared & Updated Weblog");
 
@@ -234,7 +237,10 @@ async fn update_blog(command: UpdatePost) -> Result<(), Error> {
 
     reload_feed(&ipfs, cid, &metadata, &mut feed).await?;
 
-    ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
+    let ofc = old_feed_cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&ofc, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", ofc, e);
+    }
 
     println!("✅ Comments Cleared & Updated Weblog");
 
@@ -281,7 +287,10 @@ async fn update_video(command: UpdateVideo) -> Result<(), Error> {
 
     reload_feed(&ipfs, cid, &metadata, &mut feed).await?;
 
-    ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
+    let ofc = old_feed_cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&ofc, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", ofc, e);
+    }
 
     println!("✅ Comments Cleared & Updated Video");
 
@@ -317,25 +326,34 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
     if let Some(comments) = list.comments.remove(&content.link) {
         //TODO find a way to do that concurently
         for comment in comments.iter() {
-            ipfs.pin_rm(&comment.link.to_string(), false).await?;
+            let cid = comment.link.to_string();
+
+            if let Err(e) = ipfs.pin_rm(&cid, false).await {
+                eprintln!("❗ IPFS could not unpin {}. Error: {}", cid, e);
+            }
         }
     }
 
     let content_cid = content.link.to_string();
     let old_feed_cid = old_feed_cid.to_string();
-
     let old_comments_cid = old_comments_cid.to_string();
 
     tokio::try_join!(
         update_ipns(&ipfs, FEED_KEY, &feed),
-        update_ipns(&ipfs, COMMENTS_KEY, &list),
-        ipfs.pin_rm(&content_cid, true)
+        update_ipns(&ipfs, COMMENTS_KEY, &list)
     )?;
 
-    tokio::try_join!(
-        ipfs.pin_rm(&old_feed_cid, false),
-        ipfs.pin_rm(&old_comments_cid, false),
-    )?;
+    if let Err(e) = ipfs.pin_rm(&content_cid, true).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", content_cid, e);
+    }
+
+    if let Err(e) = ipfs.pin_rm(&old_feed_cid, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", old_feed_cid, e);
+    }
+
+    if let Err(e) = ipfs.pin_rm(&old_comments_cid, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", old_comments_cid, e);
+    }
 
     println!("✅ Comments Cleared & Deleted Content {}", cid);
 
@@ -349,10 +367,18 @@ async fn add_content_to_feed<T>(ipfs: &IpfsClient, metadata: &T) -> Result<Cid, 
 where
     T: Serialize,
 {
+    println!("Creating...");
+
     let content_cid = ipfs_dag_put_node_async(ipfs, metadata).await?;
 
     println!("Pinning...");
-    ipfs.pin_add(&content_cid.to_string(), true).await?;
+    if let Err(e) = ipfs.pin_add(&content_cid.to_string(), true).await {
+        eprintln!(
+            "❗ IPFS could not pin {}. Error: {}",
+            content_cid.to_string(),
+            e
+        );
+    }
 
     println!("Updating Content Feed...");
     let (old_feed_cid, mut feed) = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
@@ -361,7 +387,10 @@ where
 
     update_ipns(ipfs, FEED_KEY, &feed).await?;
 
-    ipfs.pin_rm(&old_feed_cid.to_string(), false).await?;
+    let ofc = old_feed_cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&ofc, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", ofc, e);
+    }
 
     Ok(content_cid)
 }
@@ -376,9 +405,12 @@ where
     let (old_feed_cid, feed) = get_from_ipns::<FeedAnchor>(ipfs, FEED_KEY).await?;
 
     println!("Unpinning...");
-    ipfs.pin_rm(&cid.to_string(), true).await?;
+    let cid = cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&cid, true).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", cid, e);
+    }
 
-    let metadata: T = ipfs_dag_get_node_async(ipfs, &cid.to_string()).await?;
+    let metadata: T = ipfs_dag_get_node_async(ipfs, &cid).await?;
 
     Ok((old_feed_cid, feed, metadata))
 }
@@ -397,7 +429,13 @@ where
     println!("New Content => {}", new_cid);
 
     println!("Pinning...");
-    ipfs.pin_add(&new_cid.to_string(), true).await?;
+    if let Err(e) = ipfs.pin_add(&new_cid.to_string(), true).await {
+        eprintln!(
+            "❗ IPFS could not pin {}. Error: {}",
+            new_cid.to_string(),
+            e
+        );
+    }
 
     println!("Updating Content Feed...");
 

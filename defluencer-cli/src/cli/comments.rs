@@ -67,7 +67,10 @@ async fn add_comment(command: AddComment) -> Result<(), Error> {
 
     println!("Pinning...");
 
-    ipfs.pin_add(&comment_cid.to_string(), false).await?;
+    let cc = comment_cid.to_string();
+    if let Err(e) = ipfs.pin_add(&cc, false).await {
+        eprintln!("❗ IPFS could not pin {}. Error: {}", cc, e);
+    }
 
     println!("Updating Comment List...");
 
@@ -84,7 +87,10 @@ async fn add_comment(command: AddComment) -> Result<(), Error> {
 
     println!("Unpinning Old List...");
 
-    ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
+    let occ = old_comments_cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&occ, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", occ, e);
+    }
 
     println!("✅ Added Comment {}", comment_cid);
 
@@ -127,7 +133,10 @@ async fn remove_comment(command: RemoveComment) -> Result<(), Error> {
 
     println!("Unpinning Old List...");
 
-    ipfs.pin_rm(&old_comments_cid.to_string(), false).await?;
+    let occ = old_comments_cid.to_string();
+    if let Err(e) = ipfs.pin_rm(&occ, false).await {
+        eprintln!("❗ IPFS could not unpin {}. Error: {}", occ, e);
+    }
 
     println!("✅ Removed Comment {}", comment);
 
