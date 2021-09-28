@@ -127,6 +127,10 @@ async fn remove_comment(command: RemoveComment) -> Result<(), Error> {
 
     vec.remove(index);
 
+    if vec.is_empty() {
+        list.comments.remove(&origin);
+    }
+
     println!("Updating Comment List...");
 
     update_ipns(&ipfs, COMMENTS_KEY, &list).await?;
