@@ -4,10 +4,12 @@ Please refer to [this](https://ipld.io/docs/intro/hello-world/#diagram) for term
 All schemas are represented per block with all their nodes.
 
 ## Beacon 
-Main directory to a user content and metadata.
+Directory of user content and metadata.
 Since this object should not change it can be used as a unique identifier.
 Resolve IPNS links and/or subscribe to get updates.
-Use friend lists to crawl the network for content.
+Use friends list to crawl the network for content.
+Always resolve the IPNS links to get the most up to date content.
+If using IPNS over PubSUb, you can also subscribe to a IPNS link's topic for live update.
 
 ### IPLD Schemas
 - Beacon
@@ -18,9 +20,9 @@ Use friend lists to crawl the network for content.
     - Peer ID: peer id of node used to live stream video as a Base58Btc string.
     - Content Feed: IPNS link to content feed.
     - Comments (Optional): IPNS link to comments.
-    - Friends List (Optional): IPNS link to friends.
-    - Chat Ban List (Optional): IPNS link to banned.
-    - Chat Moderator List (Optional): IPNS link to mods.
+    - Friends List (Optional): IPNS link to friends list.
+    - Chat Ban List (Optional): IPNS link to banned users list.
+    - Chat Moderator List (Optional): IPNS link to moderators list.
 ```
 {
     "display_name": "",
@@ -36,9 +38,7 @@ Use friend lists to crawl the network for content.
 }
 ```
 ## Content Feed
-It's just a list of a user's content in cronological order.
-Always resolve the IPNS name to get the most up to date version of this object.
-You can also subscribe to the IPNS topic for live update.
+A list of links to a user's content in chronological order.
 ### IPLD Schemas
 - Feed Anchor
     - Content: list of IPLD links to some media content.
@@ -55,7 +55,7 @@ You can also subscribe to the IPNS topic for live update.
 }
 ```
 ## Comments
-A map of a user comments keyed by content.
+A map of links to a user's comments keyed by content.
 
 ### IPLD Schemas
 - Comments: Map,
@@ -105,7 +105,7 @@ A map of a user comments keyed by content.
 }
 ```
 ## Friends
-Used to fetch your friends content and comments.
+A list of friends you follow.
 
 ### IPLD Schemas
 - Friend list
@@ -150,7 +150,8 @@ The message is crypto-signed.
 }
 ```
 ## Chat
-Display Name and GossipSub Peer ID are signed using Ethereum Keys then the address, name, id, and signature are added to IPFS returning a CID. When receiving a message the CID is used to fetch and verify that IDs matches and signature is correct.
+Display Name and GossipSub Peer ID are signed using Ethereum Keys then the address, name, id, and signature are added to IPFS returning a CID.
+When receiving a message the CID is used to fetch and verify that IDs matches and signature is correct.
 
 ### IPLD Schemas
 - Message
@@ -174,7 +175,8 @@ Display Name and GossipSub Peer ID are signed using Ethereum Keys then the addre
 }
 ```
 ## Streams
-A video node contains links to segments of videos of all quality. As video is streamed, new video nodes are created and linked to previous ones. A special node contains the stream setup data; codecs, qualities, initialization segments, etc...
+A video node contains links to segments of videos of all quality. As video is streamed, new video nodes are created and linked to previous ones.
+A special node contains the stream setup data; codecs, qualities, initialization segments, etc...
 
 ### IPLD Schemas
 - Video Node
@@ -235,7 +237,8 @@ A video node contains links to segments of videos of all quality. As video is st
 ```
 
 ## Videos
-Timecode nodes are created at specific intervals and linked together to form a structure around the video allowing it to be addressable by timecode. Video clips are subgraph of the whole.
+Timecode nodes are created at specific intervals and linked together to form a structure around the video allowing it to be addressable by timecode.
+Video clips are subgraph of the whole.
 
 ### IPLD Schemas
 - VideoMetadata
