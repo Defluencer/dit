@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use crate::utils::dag_nodes::{
     get_from_ipns, ipfs_dag_get_node_async, ipfs_dag_put_node_async, update_ipns,
 };
@@ -10,7 +12,7 @@ use ipfs_api::IpfsClient;
 
 use linked_data::blog::{FullPost, MicroPost};
 use linked_data::comments::Commentary;
-use linked_data::feed::FeedAnchor;
+use linked_data::feed::{FeedAnchor, Media};
 use linked_data::video::{DayNode, HourNode, MinuteNode, VideoMetadata};
 
 use cid::Cid;
@@ -36,6 +38,9 @@ enum Command {
 
     /// Delete content from your feed.
     Delete(DeleteContent),
+
+    /// Search for pinned media objects, order them chronologicaly then recreate content feed.
+    Repair,
 }
 
 pub async fn content_feed_cli(cli: Content) {
@@ -51,6 +56,7 @@ pub async fn content_feed_cli(cli: Content) {
             UpdateContent::Video(video) => update_video(video).await,
         },
         Command::Delete(delete) => delete_content(delete).await,
+        Command::Repair => repair_content().await,
     };
 
     if let Err(e) = res {
@@ -356,6 +362,47 @@ async fn delete_content(command: DeleteContent) -> Result<(), Error> {
     }
 
     println!("✅ Comments Cleared & Deleted Content {}", cid);
+
+    Ok(())
+}
+
+async fn repair_content() -> Result<(), Error> {
+    let ipfs = IpfsClient::default();
+
+    if let Ok((old_feed_cid, _)) = get_from_ipns::<FeedAnchor>(&ipfs, FEED_KEY).await {
+        println!("Unpinnig Old Content Feed...");
+
+        let ofc = old_feed_cid.to_string();
+        if let Err(e) = ipfs.pin_rm(&ofc, false).await {
+            eprintln!("❗ IPFS could not unpin {}. Error: {}", ofc, e);
+        }
+    }
+
+    println!("Searching...");
+    let pins = ipfs.pin_ls(None, Some("recursive")).await?;
+
+    let mut content = Vec::with_capacity(100);
+
+    for cid in pins.keys.into_keys() {
+        if let Ok(media) = ipfs_dag_get_node_async::<Media>(&ipfs, &cid).await {
+            let cid = Cid::try_from(cid).expect("Valid Cid");
+            content.push((cid, media));
+        }
+    }
+
+    println!("Found {} Media Objects", content.len());
+
+    println!("Sorting...");
+    content.sort_unstable_by_key(|(_, media)| media.timestamp());
+
+    let content = content.into_iter().map(|(cid, _)| cid.into()).collect();
+
+    let content_feed = FeedAnchor { content };
+
+    println!("Updating Content Feed...");
+    update_ipns(&ipfs, FEED_KEY, &content_feed).await?;
+
+    println!("✅ Repaired Content Feed");
 
     Ok(())
 }
