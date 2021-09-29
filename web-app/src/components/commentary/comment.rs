@@ -1,9 +1,14 @@
 use std::rc::Rc;
 
+use crate::components::ExploreCid;
+
 use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, ShouldRender};
+
+use cid::Cid;
 
 #[derive(Clone, Properties)]
 pub struct Comment {
+    pub cid: Cid,
     pub name: Rc<str>,
     pub comment: Rc<linked_data::comments::Comment>,
 }
@@ -48,6 +53,9 @@ impl Component for Comment {
                                 <span class="icon"><i class="fas fa-clock"></i></span>
                                 <span> { dt } </span>
                             </span>
+                        </ybc::Block>
+                        <ybc::Block>
+                            <ExploreCid cid=self.cid />
                         </ybc::Block>
                     </ybc::MediaLeft>
                     <ybc::MediaContent>

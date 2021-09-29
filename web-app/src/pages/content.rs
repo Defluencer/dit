@@ -1,8 +1,7 @@
-use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::components::{
-    CidClipboard, IPFSConnectionError, Image, Loading, Markdown, Navbar, VideoPlayer,
+    CommentSection, ExploreCid, IPFSConnectionError, Image, Loading, Markdown, Navbar, VideoPlayer,
 };
 use crate::utils::{timestamp_to_datetime, IpfsService};
 
@@ -13,7 +12,6 @@ use yew::services::ConsoleService;
 use yew::Callback;
 
 use linked_data::blog::{FullPost, MicroPost};
-use linked_data::comments::Comment;
 use linked_data::feed::{ContentCache, Media};
 use linked_data::video::VideoMetadata;
 
@@ -35,13 +33,9 @@ pub struct Content {
     props: Props,
 
     content_cb: Callback<Result<Media>>,
-    comments_cb: Callback<(Cid, Result<Comment>)>,
 
     state: State,
     author: Rc<str>,
-
-    comments_set: HashSet<Cid>,
-    comments: Vec<(Rc<str>, Rc<Comment>)>,
 }
 
 #[derive(Clone, Properties)]
@@ -55,7 +49,6 @@ pub struct Props {
 
 pub enum Msg {
     Metadata(Result<Media>),
-    Comment((Cid, Result<Comment>)),
 }
 
 impl Component for Content {
@@ -67,17 +60,12 @@ impl Component for Content {
             props,
 
             content_cb: link.callback(Msg::Metadata),
-            comments_cb: link.callback(Msg::Comment),
 
             state: State::Loading,
             author: Rc::from(String::default()),
-
-            comments_set: HashSet::with_capacity(10),
-            comments: Vec::with_capacity(10),
         };
 
         comp.get_content();
-        comp.get_comments();
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Content Page Created");
@@ -88,7 +76,6 @@ impl Component for Content {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Metadata(result) => self.on_metadata(result),
-            Msg::Comment(result) => self.on_comment(result),
         }
     }
 
@@ -103,7 +90,6 @@ impl Component for Content {
             self.props = props;
 
             self.get_content();
-            self.get_comments();
         }
 
         false
@@ -131,15 +117,7 @@ impl Component for Content {
                     }
                     </ybc::Container>
                 </ybc::Section>
-                <ybc::Section>
-                    <ybc::Container>
-                    {
-                        for self.comments.iter().rev().map(|(name, comment)| {
-                            html! { <crate::components::Comment name=name.clone() comment=comment.clone() /> }
-                        })
-                    }
-                    </ybc::Container>
-                </ybc::Section>
+                <CommentSection ipfs=self.props.ipfs.clone() cid=self.props.cid content=self.props.content.clone() />
             </>
         }
     }
@@ -161,16 +139,16 @@ impl Content {
                                 <span> { &*self.author } </span>
                             </span>
                         </ybc::LevelItem>
-                    </ybc::LevelLeft>
-                    <ybc::LevelRight>
                         <ybc::LevelItem>
                             <span class="icon-text">
                                 <span class="icon"><i class="fas fa-clock"></i></span>
                                 <span> { dt } </span>
                             </span>
                         </ybc::LevelItem>
+                    </ybc::LevelLeft>
+                    <ybc::LevelRight>
                         <ybc::LevelItem>
-                            <CidClipboard cid=self.props.cid />
+                            <ExploreCid cid=self.props.cid />
                         </ybc::LevelItem>
                     </ybc::LevelRight>
                 </ybc::Level>
@@ -195,16 +173,16 @@ impl Content {
                                 <span> { &*self.author } </span>
                             </span>
                         </ybc::LevelItem>
-                    </ybc::LevelLeft>
-                    <ybc::LevelRight>
                         <ybc::LevelItem>
                             <span class="icon-text">
                                 <span class="icon"><i class="fas fa-clock"></i></span>
                                 <span> { dt } </span>
                             </span>
                         </ybc::LevelItem>
+                    </ybc::LevelLeft>
+                    <ybc::LevelRight>
                         <ybc::LevelItem>
-                            <CidClipboard cid=self.props.cid />
+                            <ExploreCid cid=self.props.cid />
                         </ybc::LevelItem>
                     </ybc::LevelRight>
                 </ybc::Level>
@@ -232,6 +210,9 @@ impl Content {
                                 <span> { dt } </span>
                             </span>
                         </ybc::Block>
+                        <ybc::Block>
+                            <ExploreCid cid=self.props.cid />
+                        </ybc::Block>
                     </ybc::MediaLeft>
                     <ybc::MediaContent>
                         <ybc::Content classes=classes!("has-text-centered")>
@@ -258,21 +239,6 @@ impl Content {
         };
     }
 
-    /// IPFS dag get all comments starting by newest.
-    fn get_comments(&mut self) {
-        for ipld in self.props.content.iter_comments(&self.props.cid) {
-            if self.comments_set.insert(ipld.link) {
-                spawn_local({
-                    let ipfs = self.props.ipfs.clone();
-                    let cb = self.comments_cb.clone();
-                    let cid = ipld.link;
-
-                    async move { cb.emit((cid, ipfs.dag_get(cid, Option::<String>::None).await)) }
-                });
-            }
-        }
-    }
-
     fn on_metadata(&mut self, response: Result<Media>) -> bool {
         self.state = match response {
             Ok(md) => State::Ready(md),
@@ -284,38 +250,6 @@ impl Content {
 
         #[cfg(debug_assertions)]
         ConsoleService::info("Content Metadata Updated");
-
-        true
-    }
-
-    fn on_comment(&mut self, response: (Cid, Result<Comment>)) -> bool {
-        let (cid, comment) = match response {
-            (cid, Ok(node)) => (cid, node),
-            (_, Err(e)) => {
-                ConsoleService::error(&format!("{:?}", e));
-                return false;
-            }
-        };
-
-        /* if !signed_comment.verify() {
-            return false;
-        } */
-
-        let name = match self.props.content.get_comment_author(&cid) {
-            Some(name) => name,
-            None => return false,
-        };
-
-        let index = self
-            .comments
-            .binary_search_by(|(_, probe)| probe.timestamp.cmp(&comment.timestamp))
-            .unwrap_or_else(|x| x);
-
-        self.comments
-            .insert(index, (Rc::from(name), Rc::from(comment)));
-
-        #[cfg(debug_assertions)]
-        ConsoleService::info("Content Comments Updated");
 
         true
     }
