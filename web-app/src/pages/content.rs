@@ -82,10 +82,12 @@ impl Component for Content {
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if !Rc::ptr_eq(&props.content, &self.props.content) {
             #[cfg(debug_assertions)]
-            ConsoleService::info("Content Page Changed");
+            {
+                ConsoleService::info("Content Page Changed");
 
-            ConsoleService::info(&format!("Old {:?}", self.props.content));
-            ConsoleService::info(&format!("New {:?}", props.content));
+                ConsoleService::info(&format!("Old {:?}", self.props.content));
+                ConsoleService::info(&format!("New {:?}", props.content));
+            }
 
             self.props = props;
 
