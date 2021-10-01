@@ -15,8 +15,8 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use linked_data::beacon::Beacon;
 use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
+use linked_data::live::Live;
 use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
 use linked_data::signature::SignedMessage;
 use linked_data::PeerId;
@@ -54,7 +54,7 @@ pub enum Msg {
 #[derive(Properties, Clone)]
 pub struct Props {
     pub ipfs: IpfsService,
-    pub beacon: Rc<Beacon>,
+    pub live: Rc<Live>,
     pub mods: Rc<Moderators>,
     pub bans: Rc<Bans>,
 }
@@ -77,10 +77,10 @@ impl Component for Display {
         let pubsub_cb = link.callback(Msg::PubSub);
         let (handle, regis) = AbortHandle::new_pair();
 
-        if !props.beacon.topics.chat.is_empty() {
+        if !props.live.chat_topic.is_empty() {
             spawn_local({
                 let ipfs = props.ipfs.clone();
-                let sub_topic = props.beacon.topics.chat.clone();
+                let sub_topic = props.live.chat_topic.clone();
                 let cb = pubsub_cb.clone();
 
                 async move { ipfs.pubsub_sub(sub_topic, cb, regis).await }
@@ -119,19 +119,19 @@ impl Component for Display {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if !Rc::ptr_eq(&self.props.beacon, &props.beacon) {
+        if !Rc::ptr_eq(&self.props.live, &props.live) {
             self.handle.abort();
 
             self.props = props;
 
-            if !self.props.beacon.topics.chat.is_empty() {
+            if !self.props.live.chat_topic.is_empty() {
                 let (handle, regis) = AbortHandle::new_pair();
 
                 self.handle = handle;
 
                 spawn_local({
                     let ipfs = self.props.ipfs.clone();
-                    let sub_topic = self.props.beacon.topics.chat.clone();
+                    let sub_topic = self.props.live.chat_topic.clone();
                     let cb = self.pubsub_cb.clone();
 
                     async move { ipfs.pubsub_sub(sub_topic, cb, regis).await }

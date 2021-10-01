@@ -39,13 +39,13 @@ pub async fn comments_cli(cli: Comments) {
 
 #[derive(Debug, StructOpt)]
 pub struct AddComment {
+    /// Beacon CID of the author.
+    #[structopt(short, long)]
+    author: Cid,
+
     /// CID of content being commented on.
     #[structopt(short, long)]
     origin: Cid,
-
-    /// CID of comment being replied to.
-    #[structopt(short, long)]
-    reply: Option<Cid>,
 
     /// Content of your comment.
     #[structopt(short, long)]
@@ -56,13 +56,12 @@ async fn add_comment(command: AddComment) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
     let AddComment {
+        author,
         origin,
-        reply,
         comment,
     } = command;
 
-    let reply = reply.map(|rep| rep.into());
-    let comment = Comment::create(origin.into(), reply, comment);
+    let comment = Comment::create(author.into(), origin.into(), comment);
     let comment_cid = ipfs_dag_put_node_async(&ipfs, &comment).await?;
 
     println!("Pinning...");

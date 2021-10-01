@@ -4,6 +4,8 @@ pub mod chat;
 pub mod comments;
 pub mod feed;
 pub mod friends;
+pub mod identity;
+pub mod live;
 pub mod moderation;
 pub mod signature;
 pub mod video;

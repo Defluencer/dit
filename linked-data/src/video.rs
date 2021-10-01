@@ -14,32 +14,36 @@ pub struct VideoMetadata {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
 
-    /// Link to TimecodeNode.
-    pub video: IPLDLink,
+    /// Duration in seconds.
+    pub duration: f64,
 
     /// Link to Raw node of thumbnail image.
     pub image: IPLDLink,
 
+    /// Link to TimecodeNode.
+    pub video: IPLDLink,
+
+    /// Link to the author's beacon.
+    pub author: IPLDLink,
+
     /// Title of this video.
     pub title: String,
-
-    /// Duration in seconds.
-    pub duration: f64,
 }
 
 impl VideoMetadata {
-    pub fn create(title: String, duration: f64, image: Cid, video: Cid) -> Self {
+    pub fn create(title: String, duration: f64, image: Cid, video: Cid, author: Cid) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("SystemTime after UNIX EPOCH!")
             .as_secs();
 
         Self {
-            title,
-            duration,
+            timestamp,
+            duration: duration.into(),
             image: image.into(),
             video: video.into(),
-            timestamp,
+            title: title.into(),
+            author: author.into(),
         }
     }
 
@@ -50,6 +54,11 @@ impl VideoMetadata {
         video: Option<Cid>,
         duration: Option<f64>,
     ) {
+        self.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime after UNIX EPOCH!")
+            .as_secs();
+
         if let Some(title) = title {
             self.title = title;
         }
@@ -63,13 +72,8 @@ impl VideoMetadata {
         }
 
         if let Some(dur) = duration {
-            self.duration = dur;
+            self.duration = dur.into();
         }
-
-        self.timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("SystemTime after UNIX EPOCH!")
-            .as_secs();
     }
 }
 

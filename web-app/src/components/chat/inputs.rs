@@ -10,8 +10,8 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
-use linked_data::beacon::Beacon;
 use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
+use linked_data::live::Live;
 use linked_data::signature::SignedMessage;
 
 use web3::types::Address;
@@ -62,7 +62,7 @@ pub struct Props {
     pub ipfs: IpfsService,
     pub web3: Web3Service,
     pub storage: LocalStorage,
-    pub beacon: Rc<Beacon>,
+    pub live: Rc<Live>,
 }
 
 impl Component for Inputs {
@@ -112,7 +112,7 @@ impl Component for Inputs {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if !Rc::ptr_eq(&self.props.beacon, &props.beacon) {
+        if !Rc::ptr_eq(&self.props.live, &props.live) {
             self.props = props;
 
             #[cfg(debug_assertions)]
@@ -232,7 +232,7 @@ impl Inputs {
 
         spawn_local({
             let ipfs = self.props.ipfs.clone();
-            let topic = self.props.beacon.topics.chat.clone();
+            let topic = self.props.live.chat_topic.clone();
 
             async move {
                 if let Err(e) = ipfs.pubsub_pub(topic, json_string).await {

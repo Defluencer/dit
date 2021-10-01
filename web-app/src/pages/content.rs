@@ -235,7 +235,7 @@ impl Content {
             async move { cb.emit(ipfs.dag_get(cid, Option::<String>::None).await) }
         });
 
-        self.author = match self.props.content.get_content_author(&self.props.cid) {
+        self.author = match self.props.content.media_content_author(&self.props.cid) {
             Some(auth) => Rc::from(auth),
             None => Rc::from(String::default()),
         };

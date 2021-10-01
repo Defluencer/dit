@@ -2,8 +2,6 @@ use crate::{keccak256, Address};
 
 use serde::{Deserialize, Serialize};
 
-//DAG-JOSE instead of custom?
-
 use libsecp256k1::recover;
 use libsecp256k1::{Message, RecoveryId, Signature};
 

@@ -1,45 +1,38 @@
-use crate::{IPNSLink, PeerId};
+use crate::IPNSLink;
 
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
-pub struct Topics {
-    pub video: String,
-    pub chat: String,
-}
-
-/// Mostly static links to content.
+/// Static links to content.
 /// Direct pin.
 #[serde_as]
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]
 pub struct Beacon {
-    /// GossipSub Topics.
-    pub topics: Topics,
-
-    /// IPFS Peer ID. Base58btc.
-    pub peer_id: PeerId,
-
-    /// Your choosen name.
-    pub display_name: String,
+    /// Link to avatar, name, etc...
+    #[serde_as(as = "DisplayFromStr")]
+    pub identity: IPNSLink,
 
     /// Link to list of content metadata.
-    #[serde_as(as = "DisplayFromStr")]
-    pub content_feed: IPNSLink,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub content_feed: Option<IPNSLink>,
 
     /// Link to list of comments.
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub comments: Option<IPNSLink>,
 
+    /// Link to topics and Peer Id for streming live.
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub live: Option<IPNSLink>,
+
     /// Link to list of your friend's beacons.
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub friends: Option<IPNSLink>,
 
-    /// Link to all banned addresses.
+    /// Link to all chat banned addresses.
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub bans: Option<IPNSLink>,
 
-    /// Link to all moderator addresses.
+    /// Link to all chat moderator addresses.
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub mods: Option<IPNSLink>,
 }
@@ -56,23 +49,12 @@ mod tests {
             Cid::from_str("bafyreibjo4xmgaevkgud7mbifn3dzp4v4lyaui4yvqp3f2bqwtxcjrdqg4").unwrap();
 
         let old_beacon = Beacon {
-            topics: Topics {
-                video: "gdgdgd".to_owned(),
-                chat: "dhhdhd".to_owned(),
-            },
-
-            peer_id: "uhduhdjhdh".to_owned(),
-
-            display_name: "Name".to_owned(),
-
-            content_feed: cid,
-
-            comments: Some(Cid::default()),
-
+            identity: cid,
+            content_feed: Some(Cid::default()),
+            comments: None,
             friends: None,
-
+            live: None,
             bans: None,
-
             mods: None,
         };
 
