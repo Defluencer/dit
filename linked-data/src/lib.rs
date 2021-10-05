@@ -6,6 +6,7 @@ pub mod feed;
 pub mod friends;
 pub mod identity;
 pub mod live;
+pub mod mime_type;
 pub mod moderation;
 pub mod signature;
 pub mod video;

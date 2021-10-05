@@ -234,7 +234,7 @@ impl IpfsService {
     ) where
         U: Into<Cow<'static, str>>,
     {
-        if let Err(e) = self.pubsub_stream(topic, cb.clone(), regis).await {
+        if let Err(e) = self.pubsub_stream(&topic.into(), cb.clone(), regis).await {
             cb.emit(Err(e.into()));
         }
 
@@ -242,21 +242,18 @@ impl IpfsService {
         ConsoleService::info("Stream Dropped");
     }
 
-    async fn pubsub_stream<U>(
+    async fn pubsub_stream(
         &self,
-        topic: U,
+        topic: &str,
         cb: Callback<Result<(String, Vec<u8>)>>,
         regis: AbortRegistration,
-    ) -> Result<()>
-    where
-        U: Into<Cow<'static, str>>,
-    {
+    ) -> Result<()> {
         let url = self.base_url.join("pubsub/sub")?;
 
         let response = self
             .client
             .post(url)
-            .query(&[("arg", &topic.into())])
+            .query(&[("arg", topic)])
             .send()
             .await?;
 

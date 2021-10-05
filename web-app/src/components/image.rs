@@ -6,7 +6,8 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use cid::multibase::Base;
+use linked_data::mime_type::MimeTyped;
+
 use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -14,13 +15,13 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub struct Image {
     pub image_cid: Cid,
     pub ipfs: IpfsService,
-    pub image_cb: Callback<Result<Vec<u8>>>,
+    pub image_cb: Callback<Result<MimeTyped>>,
 
     pub url: String,
 }
 
 pub enum Msg {
-    Data(Result<Vec<u8>>),
+    Data(Result<MimeTyped>),
 }
 
 /// Image from IPFS.
@@ -60,8 +61,6 @@ impl Component for Image {
             self.image_cid = props.image_cid;
 
             self.get_image_data();
-
-            return true;
         }
 
         false
@@ -69,7 +68,7 @@ impl Component for Image {
 
     fn view(&self) -> Html {
         html! {
-            <img  src=self.url.clone() />
+            <img src=self.url.clone() />
         }
     }
 }
@@ -81,24 +80,20 @@ impl Image {
             let ipfs = self.ipfs.clone();
             let cid = self.image_cid;
 
-            async move { cb.emit(ipfs.cid_cat(cid).await) }
+            async move { cb.emit(ipfs.dag_get(cid, Option::<&str>::None).await) }
         });
     }
 
-    fn on_image_data(&mut self, result: Result<Vec<u8>>) -> bool {
-        let data = match result {
-            Ok(data) => data,
+    fn on_image_data(&mut self, result: Result<MimeTyped>) -> bool {
+        let mime_type = match result {
+            Ok(mt) => mt,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
                 return false;
             }
         };
 
-        let mut encoded = Base::Base64.encode(data);
-
-        encoded.insert_str(0, "data:image/jpg;base64,");
-
-        self.url = encoded;
+        self.url = mime_type.data_url();
 
         true
     }

@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use cid::multibase::Base;
+use linked_data::mime_type::MimeTyped;
 
 #[derive(Clone)]
 pub struct MessageData {
@@ -14,9 +14,7 @@ pub struct MessageData {
 
 impl MessageData {
     pub fn new(id: usize, img_data: &[u8], name: &str, message: &str) -> Self {
-        let base = Base::Base64;
-        let encoded = base.encode(img_data);
-        let url = format!("data:image/png;base64,{}", encoded);
+        let url = MimeTyped::new("image/png", img_data).data_url();
 
         Self {
             id,
