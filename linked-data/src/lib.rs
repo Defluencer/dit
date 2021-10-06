@@ -22,8 +22,7 @@ pub type Address = [u8; 20];
 /// GossipSub Peer ID
 pub type PeerId = String;
 
-/// IPNS link
-pub type IPNSLink = Cid;
+pub type IPNSAddress = Cid;
 
 #[serde_as]
 #[derive(

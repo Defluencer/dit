@@ -16,7 +16,7 @@ pub struct Commentary {
     /// Content cids mapped to lists of links to comments ordered from oldest to newest.
     #[serde_as(as = "HashMap<DisplayFromStr, Vec<_>>")]
     pub comments: HashMap<Cid, Vec<IPLDLink>>,
-    // Since the amount of comments could be very big you need a hash map to search efficiently.
+    //Could use different indexing method. chrono, keywords, etc...
 }
 
 /// Comment metadata and text.

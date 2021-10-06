@@ -1,4 +1,4 @@
-use crate::IPNSLink;
+use crate::IPNSAddress;
 
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
@@ -10,31 +10,31 @@ use serde_with::{serde_as, DisplayFromStr};
 pub struct Beacon {
     /// Link to avatar, name, etc...
     #[serde_as(as = "DisplayFromStr")]
-    pub identity: IPNSLink,
+    pub identity: IPNSAddress,
 
     /// Link to list of content metadata.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub content_feed: Option<IPNSLink>,
+    pub content_feed: Option<IPNSAddress>,
 
     /// Link to list of comments.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub comments: Option<IPNSLink>,
+    pub comments: Option<IPNSAddress>,
 
     /// Link to topics and Peer Id for streming live.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub live: Option<IPNSLink>,
+    pub live: Option<IPNSAddress>,
 
     /// Link to list of your friend's beacons.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub friends: Option<IPNSLink>,
+    pub friends: Option<IPNSAddress>,
 
     /// Link to all chat banned addresses.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub bans: Option<IPNSLink>,
+    pub bans: Option<IPNSAddress>,
 
     /// Link to all chat moderator addresses.
     #[serde_as(as = "Option<DisplayFromStr>")]
-    pub mods: Option<IPNSLink>,
+    pub mods: Option<IPNSAddress>,
 }
 
 #[cfg(test)]

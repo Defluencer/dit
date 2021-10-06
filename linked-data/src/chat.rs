@@ -3,6 +3,8 @@ use crate::{IPLDLink, PeerId};
 use crate::moderation::{Ban, Moderator};
 use serde::{Deserialize, Serialize};
 
+//TODO Think about archiving the messages and update accordingly.
+
 /// Unsigned chat message.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UnsignedMessage {
