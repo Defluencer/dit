@@ -18,9 +18,9 @@ type Beacon struct {
     friends optional IPNS
     bans optional IPNS
     mods optional IPNS
-} representation map
+}
 
-type IPNS string # IPNS address as cid v1 base 32
+type IPNS string # IPNS address
 ```
 ## Identity
 
@@ -28,7 +28,7 @@ A user name and avatar.
 
 ### IPLD Schemas
 ```
-type Identity {
+type Identity struct {
     display_name String # Your choosen name
     avatar Link # Link to an image
 }
@@ -42,7 +42,7 @@ A list of links to a user's content in chronological order.
 ```
 type FeedAnchor struct {
     content [Media] # List of links in chronological order
-} representation map
+}
 
 type Media union {
     | &MicroPost link
@@ -58,14 +58,14 @@ A map of links to a user's comments keyed by content.
 ```
 type Commentary struct {
     "comments": {String:[&Comment]} # Keys are CIDs of the content being commented on.
-} representation map
+}
 
 type Comment struct {
     timestamp Int # Unix Time
     author &Beacon
     origin Link # CID of content being commented on.
     comment String
-} representation map
+}
 ```
 ## Friends
 
@@ -75,15 +75,15 @@ A list of friends you follow.
 ```
 type Friendlies struct {
   friends [Friend] 
-} representation map
+}
 
 type Friend union {
     | ENS string # ENS domain name linked to Beacon
     | Beacon link # Link to Beacon
 } representation kinded
 
-type ENS String
-type Beacon Link
+type ENS string
+type Beacon link
 ```
 ## Chat Moderation
 
@@ -94,11 +94,11 @@ The message is crypto-signed.
 ```
 type Bans struct {
     banned [ETHAddress]
-} representation map
+}
 
 type Moderators struct {
     "mods": [ETHAddress]
-} representation map
+}
 
 type ETHAddress bytes # Ethereum address are 20 bytes.
 ```
@@ -119,18 +119,18 @@ type VideoNode struct {
     tracks {String:Link} # Name of the track egg "audio" or "1080p60" & link to video segment data
     setup optional &SetupNode
     previous optional &VideoNode
-} representation map
+}
 
 type SetupNode struct {
     tracks [Track] # Sorted from lowest to highest bitrate.
-} representation map
+}
 
 type Track struct {
     name String
     codec String
     init_seg Link
     bandwidth Int
-} representation map
+}
 ```
 
 ## Videos
@@ -146,28 +146,28 @@ type VideoMetadata struct {
     video &TimeCodeNode
     author &Beacon
     title String
-} representation map
+}
 
 type TimeCodeNode struct {
     time &DayNode
-} representation map
+}
 
 type DayNode struct {
     hour [&HourNode]
-} representation map
+}
 
 type HourNode struct {
     minute [&MinuteNode]
-} representation map
+}
 
 type MinuteNode struct {
     second [&SecondNode]
-} representation map
+}
 
 type SecondNode struct {
     video &VideoNode
     chat [&ChatMessage]
-} representation map
+}
 ```
 ## Blog
 Micro-blogging & long form via markdown files.
@@ -178,7 +178,7 @@ type MicroPost struct {
     timestamp Int # Unix Time
     author &Beacon
     content String
-} representation map
+}
 
 type FullPost struct {
     timestamp Int # Unix Time
@@ -186,5 +186,5 @@ type FullPost struct {
     content Link # Link to markdown file
     image Link
     title String
-} representation map
+}
 ```
