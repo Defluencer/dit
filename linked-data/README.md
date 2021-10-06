@@ -5,8 +5,8 @@
 Directory of user content and metadata.
 Since this object should not change it can be used as a unique identifier.
 Always resolve the IPNS address to get the most up to date content.
-If using IPNS over PubSub, you can also subscribe to a IPNS address topic for live update.
-Use friend list to crawl the network.
+If using IPNS over PubSub, you can also subscribe to a IPNS topic for live update.
+Use friend list to crawl the social web.
 
 ### IPLD Schemas
 ```
@@ -36,12 +36,14 @@ type Identity struct {
 
 ## Content Feed
 
-A list of links to a user's content in chronological order.
+An anchor for a user's content.
+Chronological order is used.
+Other indexing methods could be used.
 
 ### IPLD Schemas
 ```
 type FeedAnchor struct {
-    content [Media] # List of links in chronological order
+    content [Media]
 }
 
 type Media union {
@@ -52,7 +54,9 @@ type Media union {
 ```
 ## Comments
 
-A map of links to a user's comments keyed by content.
+An anchor for a user's comments.
+Indexed by the content they commented on.
+Other indexing methods could be used.
 
 ### IPLD Schemas
 ```
