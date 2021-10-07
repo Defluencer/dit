@@ -107,13 +107,39 @@ type Moderators struct {
 type ETHAddress bytes # Ethereum address are 20 bytes.
 ```
 ## Chat
+
 Display Name and GossipSub Peer ID are signed using Ethereum Keys then the address, name, id, and signature are added to IPFS returning a CID.
-When receiving a message the CID is used to fetch and verify that IDs matches and signature is correct.
+When receiving a message this CID is used to fetch and verify that IDs matches and signature is correct.
 
 ### IPLD Schemas
-//TODO
+```
+type Message struct {
+    msg MessageType
+
+    sig Link # Link to crypto-signed ChatID
+}
+
+type MessageType union {
+    | ChatMessage string
+    | Ban map   # ETH address and peer Id of the person to ban.
+    | ETHAddress bytes # The ETH address of the new moderator.
+} representation kinded
+
+type ChatMessage string
+
+type Ban struct {
+    address ETHAddress
+    peer_id String
+}
+
+type ChatID struct {
+    name String
+    peer_id String
+}
+```
 
 ## Streams
+
 A video node contains links to segments of videos of all quality. As video is streamed, new video nodes are created and linked to previous ones.
 A special node contains the stream setup data; codecs, qualities, initialization segments, etc...
 
@@ -132,12 +158,13 @@ type SetupNode struct {
 type Track struct {
     name String
     codec String
-    init_seg Link
+    init_seg Link # Link to the initialization segment data
     bandwidth Int
 }
 ```
 
 ## Videos
+
 Timecode nodes are created at specific intervals and linked together to form a structure around the video allowing it to be addressable by timecode.
 Video clips are subgraph of the whole.
 
@@ -174,6 +201,7 @@ type SecondNode struct {
 }
 ```
 ## Blog
+
 Micro-blogging & long form via markdown files.
 
 ### IPLD Schemas

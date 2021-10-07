@@ -10,7 +10,7 @@ use yew::services::ConsoleService;
 
 use cid::Cid;
 
-use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
+use linked_data::chat::{ChatId, Message, MessageType};
 use linked_data::live::Live;
 use linked_data::signature::SignedMessage;
 
@@ -214,9 +214,9 @@ impl Inputs {
         };
 
         let msg = Message {
-            msg_type: MessageType::Unsigned(UnsignedMessage { message }),
+            msg: MessageType::Chat(message),
 
-            origin: cid.into(),
+            sig: cid.into(),
         };
 
         let json_string = match serde_json::to_string(&msg) {
@@ -350,7 +350,7 @@ impl Inputs {
             }
         };
 
-        let peer = match self.peer_id.take() {
+        let peer_id = match self.peer_id.take() {
             Some(peer) => peer,
             None => {
                 #[cfg(debug_assertions)]
@@ -368,7 +368,7 @@ impl Inputs {
             }
         };
 
-        let data = ChatId { name, peer };
+        let data = ChatId { name, peer_id };
 
         spawn_local({
             let cb = self.link.callback_once(Msg::Signed);

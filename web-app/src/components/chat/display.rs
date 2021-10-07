@@ -15,7 +15,7 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
+use linked_data::chat::{ChatId, Message, MessageType};
 use linked_data::live::Live;
 use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
 use linked_data::signature::SignedMessage;
@@ -237,7 +237,7 @@ impl Display {
             }
         };
 
-        if !self.mod_db.is_verified(&from, &msg.origin.link) {
+        if !self.mod_db.is_verified(&from, &msg.sig.link) {
             self.get_origin(from, msg);
             return false;
         }
@@ -249,7 +249,7 @@ impl Display {
         spawn_local({
             let cb = self.msg_cb.clone();
             let ipfs = self.props.ipfs.clone();
-            let cid = msg.origin.link;
+            let cid = msg.sig.link;
 
             async move { cb.emit((from, msg, ipfs.dag_get(cid, Option::<String>::None).await)) }
         });
@@ -276,13 +276,13 @@ impl Display {
         let trusted = sign_msg.verify();
 
         self.mod_db.add_peer(
-            &sign_msg.data.peer,
-            msg.origin.link,
+            &sign_msg.data.peer_id,
+            msg.sig.link,
             sign_msg.address,
             Some(sign_msg.data.name),
         );
 
-        if peer != sign_msg.data.peer {
+        if peer != sign_msg.data.peer_id {
             self.mod_db.ban_peer(&peer);
             return false;
         }
@@ -308,16 +308,16 @@ impl Display {
     }
 
     fn process_msg(&mut self, peer: PeerId, msg: Message) -> bool {
-        match msg.msg_type {
-            MessageType::Unsigned(msg) => self.update_display(&peer, &msg),
+        match msg.msg {
+            MessageType::Chat(msg) => self.update_display(&peer, &msg),
             MessageType::Ban(ban) => self.update_bans(&peer, ban),
             MessageType::Mod(_) => false, //TODO
         }
     }
 
-    fn update_display(&mut self, peer: &str, msg: &UnsignedMessage) -> bool {
+    fn update_display(&mut self, peer: &str, msg: &str) -> bool {
         #[cfg(debug_assertions)]
-        ConsoleService::info(&format!("Message => {}", &msg.message));
+        ConsoleService::info(&format!("Message => {}", msg));
 
         let address = match self.mod_db.get_address(peer) {
             Some(addrs) => addrs,
@@ -343,7 +343,7 @@ impl Display {
             ConsoleService::error(&format!("{:?}", e));
         }
 
-        let msg_data = MessageData::new(self.next_id, &data, name, &msg.message);
+        let msg_data = MessageData::new(self.next_id, &data, name, msg);
 
         self.chat_messages.push_back(msg_data);
 
