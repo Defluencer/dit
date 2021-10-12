@@ -78,6 +78,10 @@ enum AddContent {
 
 #[derive(Debug, StructOpt)]
 pub struct AddMicroPost {
+    /// Beacon CID of the author.
+    #[structopt(short, long)]
+    author: Cid,
+
     /// The micro post content.
     #[structopt(short, long)]
     content: String,
@@ -86,9 +90,9 @@ pub struct AddMicroPost {
 async fn add_micro_blog(command: AddMicroPost) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let AddMicroPost { content } = command;
+    let AddMicroPost { author, content } = command;
 
-    let metadata = MicroPost::create(content);
+    let metadata = MicroPost::create(author, content);
 
     let cid = add_content_to_feed(&ipfs, &metadata).await?;
 
@@ -99,6 +103,10 @@ async fn add_micro_blog(command: AddMicroPost) -> Result<(), Error> {
 
 #[derive(Debug, StructOpt)]
 pub struct AddPost {
+    /// Beacon CID of the author.
+    #[structopt(short, long)]
+    author: Cid,
+
     /// The blog post title.
     #[structopt(short, long)]
     title: String,
@@ -116,12 +124,13 @@ async fn add_blog(command: AddPost) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
     let AddPost {
+        author,
         title,
         image,
         content,
     } = command;
 
-    let metadata = FullPost::create(title, image, content);
+    let metadata = FullPost::create(title, image, content, author);
 
     let cid = add_content_to_feed(&ipfs, &metadata).await?;
 
@@ -132,6 +141,10 @@ async fn add_blog(command: AddPost) -> Result<(), Error> {
 
 #[derive(Debug, StructOpt)]
 pub struct AddVideo {
+    /// Beacon CID of the author.
+    #[structopt(short, long)]
+    author: Cid,
+
     /// The new video title.
     #[structopt(short, long)]
     title: String,
@@ -149,13 +162,14 @@ async fn add_video(command: AddVideo) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
     let AddVideo {
+        author,
         title,
         image,
         video,
     } = command;
 
     let duration = get_video_duration(&ipfs, &video).await?;
-    let metadata = VideoMetadata::create(title, duration, image, video);
+    let metadata = VideoMetadata::create(title, duration, image, video, author);
 
     let cid = add_content_to_feed(&ipfs, &metadata).await?;
 
@@ -184,7 +198,7 @@ pub struct UpdateMicroPost {
 
     /// The new content.
     #[structopt(short, long)]
-    content: Option<String>,
+    content: String,
 }
 
 async fn update_micro_blog(command: UpdateMicroPost) -> Result<(), Error> {

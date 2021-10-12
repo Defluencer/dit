@@ -193,7 +193,7 @@ impl ContentFeed {
 
     /// IPFS dag get all metadata from content feed starting by newest.
     fn get_content(&mut self) {
-        for cid in self.props.content.iter_content() {
+        for cid in self.props.content.iter_media_content() {
             if self.content_set.insert(*cid) {
                 spawn_local({
                     let cb = self.media_cb.clone();
@@ -221,12 +221,12 @@ impl ContentFeed {
             .binary_search_by(|(_, _, probe, _)| probe.timestamp().cmp(&metadata.timestamp()))
             .unwrap_or_else(|x| x);
 
-        let name = match self.props.content.get_content_author(&cid) {
+        let name = match self.props.content.media_content_author(&cid) {
             Some(name) => name,
             None => return false,
         };
 
-        let count = self.props.content.get_comments_count(&cid);
+        let count = self.props.content.comments_count(&cid);
 
         self.content
             .insert(index, (cid, Rc::from(name), Rc::from(metadata), count));

@@ -11,7 +11,7 @@ use tokio_stream::StreamExt;
 use ipfs_api::response::{Error, PubsubSubResponse};
 use ipfs_api::IpfsClient;
 
-use linked_data::chat::{ChatId, Message, MessageType, UnsignedMessage};
+use linked_data::chat::{ChatId, Message, MessageType};
 use linked_data::moderation::{Ban, Bans, ChatModerationCache, Moderators};
 use linked_data::signature::SignedMessage;
 use linked_data::PeerId;
@@ -124,7 +124,7 @@ impl ChatAggregator {
             }
         };
 
-        if !self.mod_db.is_verified(&peer, &msg.origin.link) {
+        if !self.mod_db.is_verified(&peer, &msg.sig.link) {
             return self.get_origin(peer, msg).await;
         }
 
@@ -133,7 +133,7 @@ impl ChatAggregator {
 
     async fn get_origin(&mut self, peer: PeerId, msg: Message) {
         let sign_msg: SignedMessage<ChatId> =
-            match ipfs_dag_get_node_async(&self.ipfs, &msg.origin.link.to_string()).await {
+            match ipfs_dag_get_node_async(&self.ipfs, &msg.sig.link.to_string()).await {
                 Ok(msg) => msg,
                 Err(e) => {
                     eprintln!("❗ IPFS: dag get failed {}", e);
@@ -142,9 +142,9 @@ impl ChatAggregator {
             };
 
         self.mod_db
-            .add_peer(&peer, msg.origin.link, sign_msg.address, None);
+            .add_peer(&peer, msg.sig.link, sign_msg.address, None);
 
-        if peer != sign_msg.data.peer {
+        if peer != sign_msg.data.peer_id {
             self.mod_db.ban_peer(&peer);
             return;
         }
@@ -163,14 +163,14 @@ impl ChatAggregator {
     }
 
     async fn process_msg(&mut self, peer: &str, msg: Message) {
-        match msg.msg_type {
-            MessageType::Unsigned(unmsg) => self.mint_and_archive(unmsg).await,
+        match msg.msg {
+            MessageType::Chat(unmsg) => self.mint_and_archive(&unmsg).await,
             MessageType::Ban(ban) => self.update_bans(peer, ban),
             MessageType::Mod(_) => {}
         }
     }
 
-    async fn mint_and_archive(&mut self, msg: UnsignedMessage) {
+    async fn mint_and_archive(&mut self, msg: &str) {
         let cid = match ipfs_dag_put_node_async(&self.ipfs, &msg).await {
             Ok(cid) => cid,
             Err(e) => {

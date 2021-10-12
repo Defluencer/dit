@@ -16,6 +16,7 @@ pub struct Commentary {
     /// Content cids mapped to lists of links to comments ordered from oldest to newest.
     #[serde_as(as = "HashMap<DisplayFromStr, Vec<_>>")]
     pub comments: HashMap<Cid, Vec<IPLDLink>>,
+    //Could use different indexing method. chrono, keywords, etc...
 }
 
 /// Comment metadata and text.
@@ -26,17 +27,18 @@ pub struct Comment {
     /// Timestamp at the time of publication in Unix time.
     pub timestamp: u64,
 
-    /// Link to the original content.
+    /// Link to the author's beacon.
+    pub author: IPLDLink,
+
+    /// Link to the content being commented on.
     pub origin: IPLDLink,
 
-    /// Link to the comment being replied to.
-    pub reply: Option<IPLDLink>,
-
+    /// Text as content of the comment.
     pub comment: String,
 }
 
 impl Comment {
-    pub fn create(origin: IPLDLink, reply: Option<IPLDLink>, comment: String) -> Self {
+    pub fn create(author: Cid, origin: Cid, comment: String) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("SystemTime before UNIX EPOCH!")
@@ -44,8 +46,8 @@ impl Comment {
 
         Self {
             timestamp,
-            origin,
-            reply,
+            author: author.into(),
+            origin: origin.into(),
             comment,
         }
     }

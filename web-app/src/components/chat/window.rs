@@ -6,7 +6,7 @@ use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRender};
 
-use linked_data::beacon::Beacon;
+use linked_data::live::Live;
 use linked_data::moderation::{Bans, Moderators};
 
 /// Live chat widget
@@ -15,7 +15,7 @@ pub struct ChatWindow {
     pub web3: Web3Service,
     pub ipfs: IpfsService,
     pub storage: LocalStorage,
-    pub beacon: Rc<Beacon>,
+    pub live: Rc<Live>,
     pub mods: Rc<Moderators>,
     pub bans: Rc<Bans>,
 }
@@ -33,7 +33,7 @@ impl Component for ChatWindow {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        if !Rc::ptr_eq(&self.beacon, &props.beacon)
+        if !Rc::ptr_eq(&self.live, &props.live)
             || !Rc::ptr_eq(&self.mods, &props.mods)
             || !Rc::ptr_eq(&self.bans, &props.bans)
         {
@@ -48,8 +48,8 @@ impl Component for ChatWindow {
     fn view(&self) -> Html {
         html! {
         <>
-            <Display ipfs=self.ipfs.clone() beacon=self.beacon.clone() bans=self.bans.clone() mods=self.mods.clone() />
-            <Inputs ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() beacon=self.beacon.clone() />
+            <Display ipfs=self.ipfs.clone() live=self.live.clone() bans=self.bans.clone() mods=self.mods.clone() />
+            <Inputs ipfs=self.ipfs.clone() web3=self.web3.clone() storage=self.storage.clone() live=self.live.clone() />
         </>
         }
     }

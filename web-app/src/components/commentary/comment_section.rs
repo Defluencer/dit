@@ -97,15 +97,17 @@ impl Component for CommentSection {
 impl CommentSection {
     /// IPFS dag get all comments starting by newest.
     fn get_comments(&mut self) {
-        for ipld in self.props.content.iter_comments(&self.props.cid) {
-            if self.comments_set.insert(ipld.link) {
-                spawn_local({
-                    let ipfs = self.props.ipfs.clone();
-                    let cb = self.comments_cb.clone();
-                    let cid = ipld.link;
+        if let Some(iterator) = self.props.content.iter_comments(&self.props.cid) {
+            for ipld in iterator {
+                if self.comments_set.insert(*ipld) {
+                    spawn_local({
+                        let ipfs = self.props.ipfs.clone();
+                        let cb = self.comments_cb.clone();
+                        let cid = *ipld;
 
-                    async move { cb.emit((cid, ipfs.dag_get(cid, Option::<String>::None).await)) }
-                });
+                        async move { cb.emit((cid, ipfs.dag_get(cid, Option::<String>::None).await)) }
+                    });
+                }
             }
         }
     }
@@ -123,7 +125,7 @@ impl CommentSection {
             return false;
         } */
 
-        let name = match self.props.content.get_comment_author(&cid) {
+        let name = match self.props.content.comment_author(&cid) {
             Some(name) => name,
             None => return false,
         };

@@ -6,7 +6,8 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use cid::multibase::Base;
+use linked_data::mime_type::MimeTyped;
+
 use cid::Cid;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -14,13 +15,13 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub struct Image {
     pub image_cid: Cid,
     pub ipfs: IpfsService,
-    pub image_cb: Callback<Result<Vec<u8>>>,
+    pub image_cb: Callback<Result<String>>,
 
     pub url: String,
 }
 
 pub enum Msg {
-    Data(Result<Vec<u8>>),
+    Data(Result<String>),
 }
 
 /// Image from IPFS.
@@ -51,7 +52,7 @@ impl Component for Image {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Data(result) => self.on_image_data(result),
+            Msg::Data(result) => self.on_data_url(result),
         }
     }
 
@@ -60,8 +61,6 @@ impl Component for Image {
             self.image_cid = props.image_cid;
 
             self.get_image_data();
-
-            return true;
         }
 
         false
@@ -69,7 +68,7 @@ impl Component for Image {
 
     fn view(&self) -> Html {
         html! {
-            <img  src=self.url.clone() />
+            <img src=self.url.clone() />
         }
     }
 }
@@ -81,24 +80,41 @@ impl Image {
             let ipfs = self.ipfs.clone();
             let cid = self.image_cid;
 
-            async move { cb.emit(ipfs.cid_cat(cid).await) }
+            async move {
+                let mime_type = match ipfs
+                    .dag_get::<_, MimeTyped>(cid, Option::<&str>::None)
+                    .await
+                {
+                    Ok(mt) => mt,
+                    Err(e) => {
+                        cb.emit(Err(e));
+                        return;
+                    }
+                };
+
+                let data = match ipfs.cid_cat(mime_type.data.link).await {
+                    Ok(mt) => mt,
+                    Err(e) => {
+                        cb.emit(Err(e));
+                        return;
+                    }
+                };
+
+                cb.emit(Ok(mime_type.data_url(&data)))
+            }
         });
     }
 
-    fn on_image_data(&mut self, result: Result<Vec<u8>>) -> bool {
-        let data = match result {
-            Ok(data) => data,
+    fn on_data_url(&mut self, result: Result<String>) -> bool {
+        let data_url = match result {
+            Ok(url) => url,
             Err(e) => {
                 ConsoleService::error(&format!("{:?}", e));
                 return false;
             }
         };
 
-        let mut encoded = Base::Base64.encode(data);
-
-        encoded.insert_str(0, "data:image/jpg;base64,");
-
-        self.url = encoded;
+        self.url = data_url;
 
         true
     }

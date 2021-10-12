@@ -19,7 +19,7 @@ use yew::prelude::{classes, html, Component, ComponentLink, Html, Properties, Sh
 use yew::services::ConsoleService;
 use yew::Callback;
 
-use linked_data::beacon::Beacon;
+use linked_data::live::Live;
 use linked_data::video::{SetupNode, Track, VideoMetadata};
 
 use either::Either;
@@ -50,7 +50,7 @@ struct MediaBuffers {
 }
 
 struct LiveStream {
-    beacon: Rc<Beacon>,
+    data: Rc<Live>,
 
     pubsub_cb: Callback<Result<(String, Vec<u8>)>>,
     buffer: VecDeque<Cid>,
@@ -104,7 +104,7 @@ pub enum Msg {
 #[derive(Clone, Properties)]
 pub struct Props {
     pub ipfs: IpfsService,
-    pub beacon_or_metadata: Either<Rc<Beacon>, Rc<VideoMetadata>>,
+    pub beacon_or_metadata: Either<Rc<Live>, Rc<VideoMetadata>>,
 }
 
 impl Component for VideoPlayer {
@@ -141,20 +141,20 @@ impl Component for VideoPlayer {
         let source_open_closure = Some(closure);
 
         let player_type = match beacon_or_metadata {
-            Either::Left(beacon) => {
+            Either::Left(data) => {
                 let (handle, regis) = AbortHandle::new_pair();
 
                 let live = LiveStream {
-                    beacon,
+                    data,
                     pubsub_cb: link.callback(Msg::PubSub),
                     buffer: VecDeque::with_capacity(5),
                     handle,
                 };
 
-                if !live.beacon.topics.video.is_empty() {
+                if !live.data.video_topic.is_empty() {
                     spawn_local({
                         let ipfs = ipfs.clone();
-                        let topic = live.beacon.topics.video.clone();
+                        let topic = live.data.video_topic.clone();
                         let cb = live.pubsub_cb.clone();
 
                         async move { ipfs.pubsub_sub(topic, cb, regis).await }
@@ -218,27 +218,27 @@ impl Component for VideoPlayer {
             _ => return false,
         };
 
-        let beacon = match props.beacon_or_metadata {
-            Either::Left(beacon) => beacon,
+        let data = match props.beacon_or_metadata {
+            Either::Left(data) => data,
             _ => return false,
         };
 
-        if Rc::ptr_eq(&live.beacon, &beacon) {
+        if Rc::ptr_eq(&live.data, &data) {
             return false;
         }
 
         live.handle.abort();
 
-        live.beacon = beacon;
+        live.data = data;
 
-        if !live.beacon.topics.video.is_empty() {
+        if !live.data.video_topic.is_empty() {
             let (handle, regis) = AbortHandle::new_pair();
 
             live.handle = handle;
 
             spawn_local({
                 let ipfs = self.ipfs.clone();
-                let topic = live.beacon.topics.video.clone();
+                let topic = live.data.video_topic.clone();
                 let cb = live.pubsub_cb.clone();
 
                 async move { ipfs.pubsub_sub(topic, cb, regis).await }
@@ -385,7 +385,7 @@ impl VideoPlayer {
         #[cfg(debug_assertions)]
         ConsoleService::info(&format!("Sender => {}", from));
 
-        if from != live.beacon.peer_id {
+        if from != live.data.peer_id {
             #[cfg(debug_assertions)]
             ConsoleService::warn("Unauthorized Sender");
             return false;

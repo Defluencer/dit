@@ -16,11 +16,13 @@ use ipfs_api::response::{Error, PinAddResponse, PinRmResponse};
 use ipfs_api::IpfsClient;
 use ipfs_api::KeyType;
 
-use linked_data::beacon::{Beacon, Topics};
+use linked_data::beacon::Beacon;
 use linked_data::comments::Commentary;
 use linked_data::feed::FeedAnchor;
 use linked_data::friends::Friendlies;
+use linked_data::identity::Identity;
 use linked_data::keccak256;
+use linked_data::live::Live;
 use linked_data::moderation::{Bans, Moderators};
 
 use structopt::StructOpt;
@@ -66,22 +68,19 @@ pub struct Create {
     /// Your choosen display name.
     #[structopt(short, long)]
     display_name: String,
+
+    /// Link to an image avatar.
+    #[structopt(short, long)]
+    avatar: Cid,
 }
 
 async fn create_beacon(args: Create) -> Result<(), Error> {
     let ipfs = IpfsClient::default();
 
-    let Create { display_name } = args;
-
-    let key_list = ipfs.key_list().await?;
-
-    let (bans, mods, content_feed, comments, friends) = tokio::try_join!(
-        create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &key_list),
-        create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &key_list),
-        create_ipns_link::<FeedAnchor>(&ipfs, "Content Feed", FEED_KEY, &key_list),
-        create_ipns_link::<Commentary>(&ipfs, "Comments", COMMENTS_KEY, &key_list),
-        create_ipns_link::<Friendlies>(&ipfs, "Friends", FRIENDS_KEY, &key_list)
-    )?;
+    let Create {
+        display_name,
+        avatar,
+    } = args;
 
     println!("Creating Beacon...");
 
@@ -105,26 +104,43 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
 
     config.save_to_file().await?;
 
-    let topics = Topics {
-        video: config.video.pubsub_topic,
-        chat: config.chat.topic,
-    };
-
     let res = ipfs.id(None).await?;
     let peer_id = res.id;
 
     #[cfg(debug_assertions)]
     println!("IPFS: peer id => {}", &peer_id);
 
-    let beacon = linked_data::beacon::Beacon {
-        topics,
+    let live = Live {
+        video_topic: config.video.pubsub_topic,
+        chat_topic: config.chat.topic,
         peer_id,
+    };
+
+    let identity = Identity {
         display_name,
-        bans: Some(bans),
-        mods: Some(mods),
-        content_feed,
+        avatar: avatar.into(),
+    };
+
+    let key_list = ipfs.key_list().await?;
+
+    let (identity, content_feed, comments, live, friends, bans, mods) = tokio::try_join!(
+        create_ipns_link::<Identity>(&ipfs, "Identity", "identity", &key_list, Some(identity)),
+        create_ipns_link::<FeedAnchor>(&ipfs, "Content Feed", FEED_KEY, &key_list, None),
+        create_ipns_link::<Commentary>(&ipfs, "Comments", COMMENTS_KEY, &key_list, None),
+        create_ipns_link::<Live>(&ipfs, "Live", "live", &key_list, Some(live)),
+        create_ipns_link::<Friendlies>(&ipfs, "Friends", FRIENDS_KEY, &key_list, None),
+        create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &key_list, None),
+        create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &key_list, None),
+    )?;
+
+    let beacon = linked_data::beacon::Beacon {
+        identity,
+        content_feed: Some(content_feed),
         comments: Some(comments),
         friends: Some(friends),
+        live: Some(live),
+        bans: Some(bans),
+        mods: Some(mods),
     };
 
     let cid = ipfs_dag_put_node_async(&ipfs, &beacon).await?;
@@ -155,12 +171,11 @@ async fn pin_beacon(args: Pin) -> Result<(), Error> {
     let beacon = ipfs_dag_get_node_async(&ipfs, &cid.to_string()).await?;
 
     let Beacon {
-        topics: _,
-        peer_id: _,
-        display_name: _,
+        identity,
         content_feed,
         comments,
         friends,
+        live,
         bans,
         mods,
     } = beacon;
@@ -175,32 +190,36 @@ async fn pin_beacon(args: Pin) -> Result<(), Error> {
     });
     handles.push(handle);
 
-    if let Ok(res) = ipfs
-        .name_resolve(Some(&content_feed.to_string()), false, false)
-        .await
-    {
-        println!("Getting Content Feed...");
+    if let Some(content_feed) = content_feed {
+        if let Ok(res) = ipfs
+            .name_resolve(Some(&content_feed.to_string()), false, false)
+            .await
+        {
+            println!("Getting Content Feed...");
 
-        let handle = tokio::spawn({
-            let ipfs = ipfs.clone();
-            let cid = res.path.clone();
-
-            async move { ipfs.pin_add(&cid, false).await }
-        });
-        handles.push(handle);
-
-        if let Ok(feed) = ipfs_dag_get_node_async::<FeedAnchor>(&ipfs, &res.path).await {
-            for ipld in feed.content.into_iter() {
+            let handle = tokio::spawn({
                 let ipfs = ipfs.clone();
+                let cid = res.path.clone();
 
-                let handle =
-                    tokio::spawn(async move { ipfs.pin_add(&ipld.link.to_string(), true).await });
+                async move { ipfs.pin_add(&cid, false).await }
+            });
+            handles.push(handle);
 
-                handles.push(handle);
+            if let Ok(feed) = ipfs_dag_get_node_async::<FeedAnchor>(&ipfs, &res.path).await {
+                for ipld in feed.content.into_iter() {
+                    let ipfs = ipfs.clone();
+
+                    let handle =
+                        tokio::spawn(
+                            async move { ipfs.pin_add(&ipld.link.to_string(), true).await },
+                        );
+
+                    handles.push(handle);
+                }
             }
+        } else {
+            println!("Cannot Resolve Content Feed");
         }
-    } else {
-        println!("Cannot Resolve Content Feed");
     }
 
     if let Some(comments) = comments {
@@ -237,7 +256,9 @@ async fn pin_beacon(args: Pin) -> Result<(), Error> {
         }
     }
 
+    pin(&ipfs, Some(identity), &mut handles);
     pin(&ipfs, friends, &mut handles);
+    pin(&ipfs, live, &mut handles);
     pin(&ipfs, bans, &mut handles);
     pin(&ipfs, mods, &mut handles);
 
@@ -281,12 +302,11 @@ async fn unpin_beacon(args: Unpin) -> Result<(), Error> {
     let beacon = ipfs_dag_get_node_async(&ipfs, &cid.to_string()).await?;
 
     let Beacon {
-        topics: _,
-        peer_id: _,
-        display_name: _,
+        identity,
         content_feed,
         comments,
         friends,
+        live,
         bans,
         mods,
     } = beacon;
@@ -303,32 +323,36 @@ async fn unpin_beacon(args: Unpin) -> Result<(), Error> {
 
     println!("Resolving Content Feed...");
 
-    if let Ok(res) = ipfs
-        .name_resolve(Some(&content_feed.to_string()), false, false)
-        .await
-    {
-        let handle = tokio::spawn({
-            let ipfs = ipfs.clone();
-            let cid = res.path.clone();
-
-            async move { ipfs.pin_rm(&cid, false).await }
-        });
-        handles.push(handle);
-
-        println!("Getting Content Feed...");
-
-        if let Ok(feed) = ipfs_dag_get_node_async::<FeedAnchor>(&ipfs, &res.path).await {
-            for ipld in feed.content.into_iter() {
+    if let Some(content_feed) = content_feed {
+        if let Ok(res) = ipfs
+            .name_resolve(Some(&content_feed.to_string()), false, false)
+            .await
+        {
+            let handle = tokio::spawn({
                 let ipfs = ipfs.clone();
+                let cid = res.path.clone();
 
-                let handle =
-                    tokio::spawn(async move { ipfs.pin_rm(&ipld.link.to_string(), true).await });
+                async move { ipfs.pin_rm(&cid, false).await }
+            });
+            handles.push(handle);
 
-                handles.push(handle);
+            println!("Getting Content Feed...");
+
+            if let Ok(feed) = ipfs_dag_get_node_async::<FeedAnchor>(&ipfs, &res.path).await {
+                for ipld in feed.content.into_iter() {
+                    let ipfs = ipfs.clone();
+
+                    let handle =
+                        tokio::spawn(
+                            async move { ipfs.pin_rm(&ipld.link.to_string(), true).await },
+                        );
+
+                    handles.push(handle);
+                }
             }
+        } else {
+            println!("Cannot Resolve Content Feed");
         }
-    } else {
-        println!("Cannot Resolve Content Feed");
     }
 
     if let Some(comments) = comments {
@@ -365,7 +389,9 @@ async fn unpin_beacon(args: Unpin) -> Result<(), Error> {
         }
     }
 
+    unpin(&ipfs, Some(identity), &mut handles);
     unpin(&ipfs, friends, &mut handles);
+    unpin(&ipfs, live, &mut handles);
     unpin(&ipfs, bans, &mut handles);
     unpin(&ipfs, mods, &mut handles);
 
@@ -439,6 +465,7 @@ async fn create_ipns_link<T>(
     name: &str,
     key: &str,
     key_list: &ipfs_api::response::KeyPairList,
+    data: Option<T>,
 ) -> Result<Cid, Error>
 where
     T: Default + Serialize,
@@ -458,7 +485,11 @@ where
 
     let cid = Cid::try_from(link).expect("Cannot Serialize CID");
 
-    update_ipns(ipfs, key, &T::default()).await?;
+    if let Some(data) = data {
+        update_ipns(ipfs, key, &data).await?;
+    } else {
+        update_ipns(ipfs, key, &T::default()).await?;
+    }
 
     println!("✅ {} IPNS Link => {}", name, &cid);
 

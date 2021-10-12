@@ -4,6 +4,9 @@ pub mod chat;
 pub mod comments;
 pub mod feed;
 pub mod friends;
+pub mod identity;
+pub mod live;
+pub mod mime_type;
 pub mod moderation;
 pub mod signature;
 pub mod video;
@@ -19,8 +22,7 @@ pub type Address = [u8; 20];
 /// GossipSub Peer ID
 pub type PeerId = String;
 
-/// IPNS link
-pub type IPNSLink = Cid;
+pub type IPNSAddress = Cid;
 
 #[serde_as]
 #[derive(
