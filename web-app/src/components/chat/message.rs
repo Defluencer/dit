@@ -4,6 +4,8 @@ use yew::prelude::{html, Component, ComponentLink, Html, Properties, ShouldRende
 
 use linked_data::mime_type::MimeTyped;
 
+use cid::Cid;
+
 #[derive(Clone)]
 pub struct MessageData {
     pub id: usize,
@@ -14,7 +16,7 @@ pub struct MessageData {
 
 impl MessageData {
     pub fn new(id: usize, img_data: &[u8], name: &str, message: &str) -> Self {
-        let url = MimeTyped::new("image/png", img_data).data_url();
+        let url = MimeTyped::new("image/png", Cid::default()).data_url(img_data);
 
         Self {
             id,
