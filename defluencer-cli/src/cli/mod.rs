@@ -1,7 +1,8 @@
 pub mod beacon;
 pub mod comments;
 pub mod content;
-pub mod file;
+pub mod daemon;
 pub mod friends;
+pub mod identity;
+pub mod live;
 pub mod moderation;
-pub mod stream;
