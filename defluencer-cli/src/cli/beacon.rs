@@ -2,6 +2,8 @@ use std::convert::TryFrom;
 
 use crate::cli::content::{COMMENTS_KEY, FEED_KEY};
 use crate::cli::friends::FRIENDS_KEY;
+use crate::cli::identity::IDENTITY_KEY;
+use crate::cli::live::LIVE_KEY;
 use crate::cli::moderation::{BANS_KEY, MODS_KEY};
 use crate::utils::config::Configuration;
 use crate::utils::dag_nodes::{
@@ -124,10 +126,10 @@ async fn create_beacon(args: Create) -> Result<(), Error> {
     let key_list = ipfs.key_list().await?;
 
     let (identity, content_feed, comments, live, friends, bans, mods) = tokio::try_join!(
-        create_ipns_link::<Identity>(&ipfs, "Identity", "identity", &key_list, Some(identity)),
+        create_ipns_link::<Identity>(&ipfs, "Identity", IDENTITY_KEY, &key_list, Some(identity)),
         create_ipns_link::<FeedAnchor>(&ipfs, "Content Feed", FEED_KEY, &key_list, None),
         create_ipns_link::<Commentary>(&ipfs, "Comments", COMMENTS_KEY, &key_list, None),
-        create_ipns_link::<Live>(&ipfs, "Live", "live", &key_list, Some(live)),
+        create_ipns_link::<Live>(&ipfs, "Live", LIVE_KEY, &key_list, Some(live)),
         create_ipns_link::<Friendlies>(&ipfs, "Friends", FRIENDS_KEY, &key_list, None),
         create_ipns_link::<Bans>(&ipfs, "Bans", BANS_KEY, &key_list, None),
         create_ipns_link::<Moderators>(&ipfs, "Mods", MODS_KEY, &key_list, None),

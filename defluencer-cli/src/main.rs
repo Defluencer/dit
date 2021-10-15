@@ -6,10 +6,12 @@ mod utils;
 use crate::cli::beacon::{beacon_cli, BeaconCLI};
 use crate::cli::comments::{comments_cli, Comments};
 use crate::cli::content::{content_feed_cli, Content};
-use crate::cli::file::{file_cli, File};
+use crate::cli::daemon::file::{file_cli, File};
+use crate::cli::daemon::stream::{stream_cli, Stream};
 use crate::cli::friends::{friends_cli, Friends};
+use crate::cli::identity::{identity_cli, IdentityCLI};
+use crate::cli::live::{live_cli, LiveCLI};
 use crate::cli::moderation::{moderation_cli, Moderation};
-use crate::cli::stream::{stream_cli, Stream};
 
 use structopt::StructOpt;
 
@@ -38,6 +40,12 @@ enum CommandLineInterface {
 
     /// Manage your friends list.
     Friends(Friends),
+
+    /// Manage your identity.
+    Identity(IdentityCLI),
+
+    /// Manage streaming metadata
+    Live(LiveCLI),
 }
 
 #[tokio::main]
@@ -50,5 +58,7 @@ async fn main() {
         CommandLineInterface::Content(feed) => content_feed_cli(feed).await,
         CommandLineInterface::Comments(comments) => comments_cli(comments).await,
         CommandLineInterface::Friends(friends) => friends_cli(friends).await,
+        CommandLineInterface::Identity(id) => identity_cli(id).await,
+        CommandLineInterface::Live(live) => live_cli(live).await,
     }
 }
