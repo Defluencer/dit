@@ -10,7 +10,7 @@ use crate::utils::{IpfsService, LocalStorage, Web3Service};
 
 /// ENS Domain name with "defluencer" as subdomain. egg. defluencer.sionois.eth
 /// OR a beacon CID.
-const BEACON: &str = "bafyreia54drccgxtadnrlqpnlxn2lvndslkiw76ihwvuxi23fjtqcfwx6i";
+const BEACON: &str = "bafyreieoextjee6sm5hpaxdhkseypz3by6vzcwddhxa673ozmxxjwv3hv4";
 
 fn main() {
     let web3 = Web3Service::new();
